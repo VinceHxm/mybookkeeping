@@ -1,0 +1,26 @@
+# 飞牛单应用：前后端打进同一个镜像，只跑这一个服务。
+# MySQL / Redis / MinIO 均走 .env 里的外置地址，不在此编排。
+#
+# 使用前：
+#   cp .env.example .env   # 或直接用与 backend/.env 相同内容
+#   docker compose up -d --build
+#
+# 访问：http://飞牛IP:9002
+
+services:
+  mybookkeeping:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: mybookkeeping:latest
+    container_name: mybookkeeping
+    restart: unless-stopped
+    ports:
+      - "9002:8080"
+    env_file:
+      - .env
+    environment:
+      CONFIG_FILE: /app/.env
+      SERVER_ADDR: ":8080"
+    volumes:
+      - ./.env:/app/.env:ro

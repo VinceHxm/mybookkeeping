@@ -1,0 +1,11 @@
+.git
+**/node_modules
+**/dist
+**/.tmp
+frontend/dist
+frontend/node_modules
+backend/.env
+**/*.md
+**/.vscode
+**/agent-tools
+**/.DS_Store

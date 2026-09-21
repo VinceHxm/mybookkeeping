@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!--
+      移动端适配要点：
+      - width=device-width + initial-scale=1：避免桌面页被缩小塞进手机
+      - viewport-fit=cover：刘海/挖孔/Home 条区域可铺满，再用 safe-area 内边距
+      - interactive-widget=resizes-content：Android Chrome 弹出键盘时收缩布局（iOS 忽略）
+      - 不禁用缩放（无 maximum-scale），兼顾无障碍
+    -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
+    />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#1B7F5A" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0E1612" media="(prefers-color-scheme: dark)" />
+    <meta name="format-detection" content="telephone=no, email=no, address=no" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="我的账本" />
+    <title>我的账本</title>
+    <script>
+      (function () {
+        try {
+          var pref = localStorage.getItem('mbk_theme') || 'system'
+          var dark = pref === 'dark' || (pref === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+          document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+        } catch (e) {}
+
+        // 稳定可视高度：规避 iOS/Android 地址栏显隐导致的 100vh 跳动
+        function setAppHeight() {
+          var h = window.visualViewport ? window.visualViewport.height : window.innerHeight
+          document.documentElement.style.setProperty('--app-height', h + 'px')
+        }
+        setAppHeight()
+        window.addEventListener('resize', setAppHeight)
+        if (window.visualViewport) {
+          window.visualViewport.addEventListener('resize', setAppHeight)
+          window.visualViewport.addEventListener('scroll', setAppHeight)
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
