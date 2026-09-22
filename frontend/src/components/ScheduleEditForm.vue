@@ -1,66 +1,118 @@
 <template>
-  <div class="form-fields">
-    <v-text-field v-model="form.name" label="名称" variant="outlined" hide-details class="field" />
-    <v-select
-      v-model="form.type"
-      :items="[
-        { title: '支出', value: 'expense' },
-        { title: '收入', value: 'income' },
-        { title: '转账', value: 'transfer' },
-      ]"
-      label="类型"
-      variant="outlined"
-      hide-details
-      class="field"
-    />
-    <v-text-field v-model="amountYuan" label="金额（元）" type="number" inputmode="decimal" variant="outlined" hide-details class="field" />
-    <v-select
-      v-model="form.accountId"
-      :items="accounts.list"
-      item-title="name"
-      item-value="id"
-      label="账户"
-      variant="outlined"
-      hide-details
-      class="field"
-    />
-    <v-select
-      v-if="form.type === 'transfer'"
-      v-model="form.toAccountId"
-      :items="accounts.list"
-      item-title="name"
-      item-value="id"
-      label="转入账户"
-      variant="outlined"
-      hide-details
-      class="field"
-    />
-    <v-select
-      v-else
-      v-model="form.categoryId"
-      :items="form.type === 'expense' ? categories.expenseOptions : categories.incomeOptions"
-      item-title="name"
-      item-value="id"
-      label="分类"
-      variant="outlined"
-      hide-details
-      class="field"
-    />
-    <v-select v-model="form.frequency" :items="freqItems" label="频率" variant="outlined" hide-details class="field" />
-    <v-text-field
-      v-if="form.frequency === 'every_n_days'"
-      v-model.number="form.intervalN"
-      label="每隔几天"
-      type="number"
-      variant="outlined"
-      hide-details
-      class="field"
-    />
-    <div class="field">
-      <NativeDateField v-model="nextLocal" label="下次执行时间" type="datetime-local" variant="outlined" hide-details />
-    </div>
-    <v-text-field v-model="form.remark" label="备注" variant="outlined" hide-details class="field" />
-    <v-switch v-if="scheduleId" v-model="formEnabled" label="启用" color="primary" hide-details class="field" />
+  <div class="form-sections">
+    <section class="form-section">
+      <header class="form-section__head">
+        <h3 class="form-section__title">基本信息</h3>
+      </header>
+      <div class="form-section__body">
+        <v-text-field v-model="form.name" label="名称" variant="outlined" hide-details class="field" />
+        <v-select
+          v-model="form.type"
+          :items="[
+            { title: '支出', value: 'expense' },
+            { title: '收入', value: 'income' },
+            { title: '转账', value: 'transfer' },
+          ]"
+          label="类型"
+          variant="outlined"
+          hide-details
+          class="field"
+        />
+        <v-text-field
+          v-model="amountYuan"
+          label="金额（元）"
+          type="number"
+          inputmode="decimal"
+          variant="outlined"
+          hide-details
+          class="field field--last"
+        />
+      </div>
+    </section>
+
+    <section class="form-section">
+      <header class="form-section__head">
+        <h3 class="form-section__title">{{ form.type === 'transfer' ? '账户' : '账户与分类' }}</h3>
+      </header>
+      <div class="form-section__body">
+        <v-select
+          v-model="form.accountId"
+          :items="accounts.list"
+          item-title="name"
+          item-value="id"
+          :label="form.type === 'transfer' ? '转出账户' : '账户'"
+          variant="outlined"
+          hide-details
+          class="field"
+        />
+        <v-select
+          v-if="form.type === 'transfer'"
+          v-model="form.toAccountId"
+          :items="accounts.list"
+          item-title="name"
+          item-value="id"
+          label="转入账户"
+          variant="outlined"
+          hide-details
+          class="field field--last"
+        />
+        <v-select
+          v-else
+          v-model="form.categoryId"
+          :items="form.type === 'expense' ? categories.expenseOptions : categories.incomeOptions"
+          item-title="name"
+          item-value="id"
+          label="分类"
+          variant="outlined"
+          hide-details
+          class="field field--last"
+        />
+      </div>
+    </section>
+
+    <section class="form-section">
+      <header class="form-section__head">
+        <h3 class="form-section__title">周期</h3>
+      </header>
+      <div class="form-section__body">
+        <v-select v-model="form.frequency" :items="freqItems" label="频率" variant="outlined" hide-details class="field" />
+        <v-text-field
+          v-if="form.frequency === 'every_n_days'"
+          v-model.number="form.intervalN"
+          label="每隔几天"
+          type="number"
+          variant="outlined"
+          hide-details
+          class="field"
+        />
+        <div class="field field--last">
+          <NativeDateField v-model="nextLocal" label="下次执行时间" type="datetime-local" variant="outlined" hide-details />
+        </div>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <header class="form-section__head">
+        <h3 class="form-section__title">其他</h3>
+      </header>
+      <div class="form-section__body">
+        <v-text-field
+          v-model="form.remark"
+          label="备注"
+          variant="outlined"
+          hide-details
+          :class="scheduleId ? 'field' : 'field field--last'"
+        />
+        <v-switch
+          v-if="scheduleId"
+          v-model="formEnabled"
+          label="启用"
+          color="primary"
+          hide-details
+          class="field field--last"
+        />
+      </div>
+    </section>
 
     <div v-if="scheduleId" class="danger-zone">
       <div class="danger-title">危险操作</div>
@@ -171,16 +223,3 @@ async function save() {
 
 defineExpose({ save, saving })
 </script>
-
-<style scoped>
-.form-fields .field { margin-bottom: 14px; }
-.danger-zone {
-  margin-top: 16px;
-  padding: 16px;
-  border-radius: 14px;
-  border: 1px solid rgba(198, 40, 40, 0.35);
-  background: rgba(198, 40, 40, 0.08);
-}
-.danger-title { font-weight: 700; color: #c62828; margin-bottom: 6px; }
-.danger-tip { margin: 0 0 12px; font-size: 0.8rem; color: var(--muted); line-height: 1.4; }
-</style>

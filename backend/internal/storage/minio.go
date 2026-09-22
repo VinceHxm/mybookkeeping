@@ -68,11 +68,16 @@ func (m *MinIO) PublicURL(objectKey string) string {
 	return fmt.Sprintf("%s/%s/%s", m.publicURL, m.bucket, strings.Join(parts, "/"))
 }
 
-// AccessURL 优先返回预签名 GET（私有桶也能在浏览器里打开）；失败则回退直链。
+// AccessURL 返回浏览器可访问的地址。
+// 优先用 MINIO_PUBLIC_URL 拼直链（桶已放开匿名 GetObject；且可指向 HTTPS 反代，避免 HTTPS 站点 Mixed Content）。
+// 未配置 publicURL 时再回退预签名（签名 Host 来自 MINIO_ENDPOINT，通常是内网/HTTP，不宜直接给浏览器）。
 func (m *MinIO) AccessURL(ctx context.Context, objectKey string) (string, error) {
+	if m.publicURL != "" {
+		return m.PublicURL(objectKey), nil
+	}
 	u, err := m.client.PresignedGetObject(ctx, m.bucket, objectKey, 7*24*time.Hour, nil)
 	if err != nil {
-		return m.PublicURL(objectKey), nil
+		return "", err
 	}
 	return u.String(), nil
 }

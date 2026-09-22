@@ -46,11 +46,12 @@
     </p>
     <p v-else class="mode-hint mb-3">账户之间挪钱（还信用卡 / 花呗请用「还款」）。</p>
 
-    <section v-if="!isEdit && uiMode === 'flow' && flowKind === 'expense'" class="meta-block fare-block mb-3">
+    <section v-if="!isEdit && uiMode === 'flow' && flowKind === 'expense'" class="form-section mb-3">
+      <div class="form-section__body">
       <div class="meta-head">
         <div class="meta-title-row">
           <v-icon size="20" color="primary">mdi-ticket-percent-outline</v-icon>
-          <div>
+          <div class="meta-copy">
             <div class="meta-title">计费规则</div>
             <div class="meta-sub">主要用于累计折扣标记；金额以手填为准</div>
           </div>
@@ -67,7 +68,7 @@
           variant="outlined"
           density="compact"
           hide-details
-          class="mb-2"
+          class="field"
           @update:model-value="onFareRulePicked"
         />
         <div class="fare-actions">
@@ -77,6 +78,7 @@
           <span v-if="fareHint" class="fare-hint">{{ fareHint }}</span>
         </div>
       </template>
+      </div>
     </section>
 
     <v-text-field
@@ -86,16 +88,17 @@
       inputmode="decimal"
       variant="outlined"
       hide-details
-      class="amount-field mb-4"
+      class="amount-field mb-3"
       prefix="¥"
       @update:model-value="onAmountManualEdit"
     />
 
-    <section v-if="showCreditExtras" class="meta-block credit-extra mb-3">
+    <section v-if="showCreditExtras" class="form-section mb-3">
+      <div class="form-section__body">
       <div class="meta-head">
         <div class="meta-title-row">
           <v-icon size="20" color="primary">mdi-credit-card-clock-outline</v-icon>
-          <div>
+          <div class="meta-copy">
             <div class="meta-title">{{ isCreditExpense ? '刷卡分期 / 利息' : '还款分期 / 利息' }}</div>
             <div class="meta-sub">
               {{ isCreditExpense
@@ -108,24 +111,29 @@
 
       <div v-if="repayStatement" class="repay-stmt mb-2">
         <div class="repay-stmt-row">
-          <span>本期应还</span><strong>¥{{ fenToYuan(repayStatement.dueAmount) }}</strong>
-        </div>
-        <div class="repay-stmt-row">
           <span>本期已还</span><strong>¥{{ fenToYuan(repayStatement.repaidAmount) }}</strong>
         </div>
         <div class="repay-stmt-row">
           <span>本期待还</span><strong>¥{{ fenToYuan(repayStatement.periodRemaining) }}</strong>
         </div>
         <div class="repay-stmt-row">
-          <span>还后待还</span><strong class="warn">¥{{ fenToYuan(repayStatement.remainingAfterPay) }}</strong>
+          <span>{{ repayStatement.periodRemaining === 0 && (repayStatement.remainingAfterPay || 0) > 0 ? '下期待还' : '还后待还' }}</span>
+          <strong class="warn">¥{{ fenToYuan(repayStatement.remainingAfterPay) }}</strong>
         </div>
         <div class="repay-stmt-row">
           <span>整体待还</span><strong>¥{{ fenToYuan(repayTotalOutstanding) }}</strong>
         </div>
-        <div class="repay-stmt-hint">还后待还 = 整体待还 − 已出账；默认按本期待还，提前还款可加载整体待还</div>
+        <div class="repay-stmt-hint">
+          <template v-if="repayStatement.periodRemaining === 0 && (repayStatement.remainingAfterPay || 0) > 0">
+            本期已还清；剩余已用为下期/未出账。默认按本期待还，提前还款可加载整体待还
+          </template>
+          <template v-else>
+            默认按本期待还预填；提前还款可加载整体待还
+          </template>
+        </div>
       </div>
 
-      <div class="field-row mb-2">
+      <div class="field mb-2">
         <v-text-field
           v-model.number="form.installmentPeriods"
           :label="isCreditExpense ? '分期期数' : '还款分几期'"
@@ -135,7 +143,6 @@
           variant="outlined"
           density="compact"
           hide-details
-          class="flex1"
           hint="1 = 一次还清 / 不分期"
           persistent-hint
           @update:model-value="onRepayPlanChanged"
@@ -170,8 +177,14 @@
           @click="applyEarlyRepay"
         >提前还款</v-btn>
       </div>
+      </div>
     </section>
 
+    <section class="form-section mb-3">
+      <header class="form-section__head">
+        <h3 class="form-section__title">明细</h3>
+      </header>
+      <div class="form-section__body">
     <v-select
       v-model="form.accountId"
       :items="accounts.list"
@@ -179,7 +192,8 @@
       item-value="id"
       :label="form.type === 'transfer' ? '转出账户' : '账户'"
       variant="outlined"
-      class="mb-2"
+      hide-details
+      class="field"
     />
     <v-select
       v-if="form.type === 'transfer'"
@@ -189,9 +203,10 @@
       item-value="id"
       :label="isRepayMode || isCreditRepay ? '信用卡账户' : '转入账户'"
       variant="outlined"
-      class="mb-2"
+      hide-details
+      class="field"
     />
-    <div v-else class="field-row mb-2">
+    <div v-else class="form-field-row field">
       <v-select
         v-model="form.categoryId"
         :items="form.type === 'expense' ? categories.expenseOptions : categories.incomeOptions"
@@ -211,7 +226,7 @@
       />
     </div>
 
-    <div class="field-row mb-2">
+    <div class="form-field-row field">
       <v-select
         v-model="form.tagIds"
         :items="tags.list"
@@ -234,14 +249,17 @@
       />
     </div>
 
-    <v-text-field v-model="form.remark" label="备注" variant="outlined" class="mb-2" />
-    <NativeDateField v-model="happenedLocal" label="时间" type="datetime-local" variant="outlined" class="mb-2" />
+    <v-text-field v-model="form.remark" label="备注" variant="outlined" hide-details class="field" />
+    <NativeDateField v-model="happenedLocal" label="时间" type="datetime-local" variant="outlined" hide-details class="field field--last" />
+      </div>
+    </section>
 
-    <section v-if="isEdit" class="meta-block fare-block mb-3">
+    <section v-if="isEdit" class="form-section mb-3">
+      <div class="form-section__body">
       <div class="meta-head">
         <div class="meta-title-row">
           <v-icon size="20" color="primary">mdi-ticket-percent-outline</v-icon>
-          <div>
+          <div class="meta-copy">
             <div class="meta-title">计费规则</div>
             <div class="meta-sub">累计折扣标记；金额以手填为准</div>
           </div>
@@ -258,7 +276,7 @@
           variant="outlined"
           density="compact"
           hide-details
-          class="mb-2"
+          class="field"
           @update:model-value="onFareRulePicked"
         />
         <div class="fare-actions">
@@ -268,17 +286,19 @@
           <span v-if="fareHint" class="fare-hint">{{ fareHint }}</span>
         </div>
       </template>
+      </div>
     </section>
 
     <AttachmentUpload v-model="attachmentIds" :existing="existingAttachments" />
 
-    <section class="meta-block loc-block mb-4">
+    <section class="form-section mb-4">
+      <div class="form-section__body">
       <div class="meta-head">
         <div class="meta-title-row">
           <v-icon size="20" color="primary">
             {{ form.geoMode === 'route' ? 'mdi-map-marker-path' : 'mdi-map-marker-outline' }}
           </v-icon>
-          <div>
+          <div class="meta-copy">
             <div class="meta-title">地点</div>
             <div class="meta-sub">消费位置或路费起终点，可选</div>
           </div>
@@ -313,6 +333,7 @@
             清除
           </v-btn>
         </div>
+      </div>
       </div>
     </section>
 
@@ -1146,8 +1167,7 @@ async function onDelete() {
 .toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .toolbar h1 { font-size: 1.15rem; margin: 0; }
 .w100 { width: 100%; }
-.flex1 { flex: 1; }
-.field-row { display: flex; align-items: flex-start; gap: 8px; }
+.flex1 { flex: 1; min-width: 0; }
 .ai-row { display: flex; gap: 8px; }
 .amount-field :deep(input) {
   font-size: 2rem;
@@ -1171,12 +1191,15 @@ async function onDelete() {
   font-size: 0.8rem;
   line-height: 1.45;
   color: var(--muted);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .repay-stmt {
   padding: 10px 12px;
   border-radius: 12px;
   background: var(--primary-soft, rgba(27, 127, 90, 0.1));
   border: 1px solid var(--surface-border);
+  min-width: 0;
 }
 .repay-stmt-row {
   display: flex;
@@ -1184,11 +1207,14 @@ async function onDelete() {
   gap: 8px;
   font-size: 0.8rem;
   line-height: 1.6;
+  min-width: 0;
 }
-.repay-stmt-row span { color: var(--muted); }
+.repay-stmt-row span { color: var(--muted); flex-shrink: 0; }
 .repay-stmt-row strong {
   font-family: var(--font-display);
   font-variant-numeric: tabular-nums;
+  text-align: right;
+  overflow-wrap: anywhere;
 }
 .repay-stmt-row .warn { color: #c45c3e; }
 .repay-stmt-hint {
@@ -1196,6 +1222,7 @@ async function onDelete() {
   font-size: 0.72rem;
   color: var(--muted);
   line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 .repay-actions {
   display: flex;
@@ -1214,37 +1241,50 @@ async function onDelete() {
 }
 .preview img { max-width: 100%; max-height: 240px; object-fit: contain; }
 
-.meta-block {
-  background: var(--surface);
-  border: 1px solid var(--surface-border);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-soft);
-  padding: 14px;
-}
 .meta-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
+  min-width: 0;
 }
 .meta-title-row {
   display: flex;
   align-items: flex-start;
   gap: 10px;
+  min-width: 0;
+  flex: 1;
 }
-.meta-title { font-weight: 700; font-size: 0.98rem; line-height: 1.2; }
-.meta-sub { color: var(--muted); font-size: 0.8rem; margin-top: 2px; }
+.meta-copy { min-width: 0; flex: 1; }
+.meta-title { font-weight: 700; font-size: 0.98rem; line-height: 1.2; overflow-wrap: anywhere; }
+.meta-sub {
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin-top: 2px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.meta-head > .v-switch,
+.meta-head > .v-chip {
+  flex-shrink: 0;
+}
 .fare-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 .fare-hint {
   font-size: 0.75rem;
   color: var(--muted);
   line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 0;
+  flex: 1 1 140px;
 }
 
 .loc-empty {
@@ -1260,6 +1300,7 @@ async function onDelete() {
   text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  min-width: 0;
 }
 .loc-empty-text {
   flex: 1;
@@ -1268,8 +1309,13 @@ async function onDelete() {
   flex-direction: column;
   gap: 2px;
 }
-.loc-empty-text strong { font-size: 0.95rem; }
-.loc-empty-text span { font-size: 0.78rem; color: var(--muted); }
+.loc-empty-text strong { font-size: 0.95rem; overflow-wrap: anywhere; }
+.loc-empty-text span {
+  font-size: 0.78rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 
 .loc-filled { display: flex; flex-direction: column; gap: 12px; }
 .loc-preview {

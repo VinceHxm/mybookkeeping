@@ -22,27 +22,43 @@
       <v-card>
         <v-card-title>{{ editing ? '编辑标签' : '新建标签' }}</v-card-title>
         <v-card-text>
-          <v-text-field v-model="form.name" label="名称" variant="outlined" hide-details class="mb-3" />
-          <div class="color-row mb-3">
-            <v-text-field v-model="form.color" label="颜色" type="color" variant="outlined" hide-details />
-            <div class="swatches">
-              <button
-                v-for="c in swatches"
-                :key="c"
-                type="button"
-                class="swatch"
-                :class="{ active: form.color === c }"
-                :style="{ background: c }"
-                @click="form.color = c"
-              />
-            </div>
-          </div>
-          <v-text-field v-model.number="form.sort" label="排序" type="number" variant="outlined" hide-details class="mb-6" />
+          <div class="form-sections">
+            <section class="form-section">
+              <header class="form-section__head">
+                <h3 class="form-section__title">标签信息</h3>
+              </header>
+              <div class="form-section__body">
+                <v-text-field v-model="form.name" label="名称" variant="outlined" hide-details class="field" />
+                <div class="color-row field">
+                  <v-text-field v-model="form.color" label="颜色" type="color" variant="outlined" hide-details />
+                  <div class="swatches">
+                    <button
+                      v-for="c in swatches"
+                      :key="c"
+                      type="button"
+                      class="swatch"
+                      :class="{ active: form.color === c }"
+                      :style="{ background: c }"
+                      @click="form.color = c"
+                    />
+                  </div>
+                </div>
+                <v-text-field
+                  v-model.number="form.sort"
+                  label="排序"
+                  type="number"
+                  variant="outlined"
+                  hide-details
+                  class="field field--last"
+                />
+              </div>
+            </section>
 
-          <div v-if="editing" class="danger-zone">
-            <div class="danger-title">危险操作</div>
-            <p class="danger-tip">删除标签不可恢复，已关联流水会失去该标签。</p>
-            <v-btn color="error" variant="outlined" block @click="askDelete(editing)">删除此标签</v-btn>
+            <div v-if="editing" class="danger-zone">
+              <div class="danger-title">危险操作</div>
+              <p class="danger-tip">删除标签不可恢复，已关联流水会失去该标签。</p>
+              <v-btn color="error" variant="outlined" block @click="askDelete(editing)">删除此标签</v-btn>
+            </div>
           </div>
         </v-card-text>
         <v-card-actions>
@@ -121,20 +137,11 @@ async function doDelete() {
 <style scoped>
 .toolbar { display: flex; align-items: center; justify-content: space-between; }
 .toolbar h1 { font-size: 1.15rem; margin: 0; }
-.color-row { display: grid; gap: 10px; }
+.color-row { display: grid; gap: 10px; min-width: 0; }
 .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
 .swatch {
   width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent;
   cursor: pointer; padding: 0;
 }
 .swatch.active { border-color: rgb(var(--v-theme-on-surface)); box-shadow: 0 0 0 2px var(--primary-soft); }
-.danger-zone {
-  margin-top: 8px;
-  padding: 16px;
-  border-radius: 14px;
-  border: 1px solid rgba(198, 40, 40, 0.35);
-  background: rgba(198, 40, 40, 0.08);
-}
-.danger-title { font-weight: 700; color: #c62828; margin-bottom: 6px; }
-.danger-tip { margin: 0 0 12px; font-size: 0.8rem; color: var(--muted); line-height: 1.4; }
 </style>

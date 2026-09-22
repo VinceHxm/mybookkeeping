@@ -7,14 +7,14 @@
     </div>
 
     <div v-if="pageLoading" class="loading-tip">加载中…</div>
-    <div v-else class="edit-body hide-scrollbar">
+    <div v-else class="edit-body hide-scrollbar form-sections">
 
           <v-alert
             v-if="saveError"
             type="warning"
             variant="tonal"
             density="compact"
-            class="mb-3"
+            class="mb-0"
             closable
             @click:close="saveError = ''"
           >
@@ -24,78 +24,87 @@
           <p class="guide-line">只需打开你用得到的优惠；关掉的模块保存时不会写入。</p>
 
           <!-- 场景起步 -->
-          <section v-if="!editing" class="block">
-            <h3 class="block-title">快速起步（可选）</h3>
-            <p class="field-note alone">点一下填入示例，再按实际改数字即可。</p>
-            <div class="scenario-grid">
-              <button
-                v-for="p in presets"
-                :key="p.id"
-                type="button"
-                class="scenario-card"
-                @click="applyPreset(p)"
-              >
-                <span class="scenario-title">{{ p.title }}</span>
-                <span class="scenario-hint">{{ p.hint }}</span>
-              </button>
+          <section v-if="!editing" class="form-section">
+            <header class="form-section__head">
+              <h3 class="form-section__title">快速起步（可选）</h3>
+            </header>
+            <div class="form-section__body">
+              <p class="form-section__tip form-section__tip--alone">点一下填入示例，再按实际改数字即可。</p>
+              <div class="scenario-grid">
+                <button
+                  v-for="p in presets"
+                  :key="p.id"
+                  type="button"
+                  class="scenario-card"
+                  @click="applyPreset(p)"
+                >
+                  <span class="scenario-title">{{ p.title }}</span>
+                  <span class="scenario-hint">{{ p.hint }}</span>
+                </button>
+              </div>
             </div>
           </section>
 
           <!-- 基础：始终可见 -->
-          <section class="block core-block">
-            <h3 class="block-title">基础</h3>
-            <IconPicker v-model="form.icon" title="规则图标" fallback="mdi-ticket-percent" />
-            <v-text-field v-model="form.name" label="名称" variant="outlined" hide-details class="mb-3" />
-            <v-switch v-model="form.enabled" label="启用此规则" color="primary" hide-details class="mb-3" />
+          <section class="form-section form-section--soft">
+            <header class="form-section__head">
+              <h3 class="form-section__title">基础</h3>
+            </header>
+            <div class="form-section__body">
+              <IconPicker v-model="form.icon" title="规则图标" fallback="mdi-ticket-percent" />
+              <v-text-field v-model="form.name" label="名称" variant="outlined" hide-details class="field" />
+              <v-switch v-model="form.enabled" label="启用此规则" color="primary" hide-details class="field" />
 
-            <v-text-field
-              v-model="form.baseYuan"
-              label="默认原价（元，可空）"
-              type="number"
-              inputmode="decimal"
-              variant="outlined"
-              hide-details
-              class="mb-1"
-            />
-            <p class="field-note">地铁等票价不固定时可留空，记一笔时再填原价。</p>
-
-            <v-text-field
-              v-model="form.cardZhe"
-              label="刷卡折扣（折）"
-              type="number"
-              inputmode="decimal"
-              variant="outlined"
-              hide-details
-              class="mb-1"
-            />
-            <p class="field-note">10 = 不打折；9 = 九折。多数「刷卡优惠」只配这一项即可。</p>
-
-            <v-select
-              v-model="form.cycleType"
-              :items="cycleItems"
-              label="累计周期"
-              variant="outlined"
-              hide-details
-              class="mb-1"
-            />
-            <p class="field-note">金额/次数阶梯按此周期清零重计。一般用自然月。</p>
-            <v-text-field
-              v-if="form.cycleType === 'from_day'"
-              v-model.number="form.cycleStartDay"
-              label="周期起始日（1–28）"
-              type="number"
-              min="1"
-              max="28"
-              variant="outlined"
-              hide-details
-              class="mt-3"
-            />
+              <v-text-field
+                v-model="form.baseYuan"
+                label="默认原价（元，可空）"
+                type="number"
+                inputmode="decimal"
+                variant="outlined"
+                hide-details
+                class="field"
+              />
+              <v-text-field
+                v-model="form.cardZhe"
+                label="刷卡折扣（折）"
+                type="number"
+                inputmode="decimal"
+                variant="outlined"
+                hide-details
+                class="field"
+              />
+              <v-select
+                v-model="form.cycleType"
+                :items="cycleItems"
+                label="累计周期"
+                variant="outlined"
+                hide-details
+                :class="form.cycleType === 'from_day' ? 'field' : 'field field--last'"
+              />
+              <v-text-field
+                v-if="form.cycleType === 'from_day'"
+                v-model.number="form.cycleStartDay"
+                label="周期起始日（1–28）"
+                type="number"
+                min="1"
+                max="28"
+                variant="outlined"
+                hide-details
+                class="field field--last"
+              />
+              <p class="form-section__tip">
+                默认原价可空（记一笔再填）。刷卡折扣：10=不打折，9=九折。累计周期决定金额/次数阶梯清零节奏，一般用自然月。
+              </p>
+            </div>
           </section>
 
           <!-- 模块开关 -->
-          <section class="block">
-            <h3 class="block-title">优惠模块</h3>
-            <p class="field-note alone">打开后出现配置区；例：周末免费 →「免费日」，花满一定金额再打折 →「金额阶梯」。</p>
+          <section class="form-section">
+            <header class="form-section__head">
+              <h3 class="form-section__title">优惠模块</h3>
+            </header>
+            <div class="form-section__body">
+            <p class="form-section__tip form-section__tip--alone">打开后出现配置区；例：周末免费 →「免费日」，花满一定金额再打折 →「金额阶梯」。</p>
 
             <div
               v-for="m in moduleDefs"
@@ -113,7 +122,7 @@
                   color="primary"
                   hide-details
                   density="compact"
-                  @update:model-value="(v: boolean) => onModuleToggle(m.key, v)"
+                  @update:model-value="(v: boolean | null) => onModuleToggle(m.key, !!v)"
                 />
               </div>
 
@@ -123,7 +132,7 @@
                   <span class="inner-label">免费日配置</span>
                   <v-btn size="small" variant="tonal" color="primary" prepend-icon="mdi-plus" @click="addFree">添加</v-btn>
                 </div>
-                <p v-if="!form.freePeriods.length" class="field-note alone">可点添加；默认示例常为「每周六日」。</p>
+                <p v-if="!form.freePeriods.length" class="form-section__tip form-section__tip--alone">可点添加；默认示例常为「每周六日」。</p>
                 <div v-for="(p, i) in form.freePeriods" :key="'f'+i" class="item-card">
                   <div class="item-card-head">
                     <span>规则 {{ i + 1 }}</span>
@@ -163,11 +172,8 @@
                   label="法定放假日免费"
                   color="primary"
                   hide-details
-                  class="mb-1"
+                  class="mb-2"
                 />
-                <p class="field-note">
-                  依赖系统已入库数据；调休上班日不免费。平时只看当年；12 月同时展示明年。
-                </p>
                 <div class="holiday-actions">
                   <v-btn
                     size="small"
@@ -191,7 +197,10 @@
                     管理员刷新入库
                   </v-btn>
                 </div>
-                <p v-if="holidayMeta" class="field-note alone mt-2">{{ holidayMeta }}</p>
+                <p class="form-section__tip">
+                  依赖系统已入库数据；调休上班日不免费。平时只看当年；12 月同时展示明年。
+                  <template v-if="holidayMeta"> {{ holidayMeta }}</template>
+                </p>
                 <div v-if="holidayYearBlocks.length" class="holiday-legend">
                   <span class="leg past"><i />已过</span>
                   <span class="leg now"><i />进行中</span>
@@ -226,7 +235,7 @@
                   <span class="inner-label">时段配置</span>
                   <v-btn size="small" variant="tonal" color="primary" prepend-icon="mdi-plus" @click="addTimeWin">添加</v-btn>
                 </div>
-                <p class="field-note alone">例：工作日 00:00–07:00 七折。结束时刻不含；可跨午夜。</p>
+                <p class="form-section__tip form-section__tip--alone">例：工作日 00:00–07:00 七折。结束时刻不含；可跨午夜。</p>
                 <div v-for="(w, i) in form.timeWindows" :key="'w'+i" class="item-card">
                   <div class="item-card-head">
                     <span>窗口 {{ i + 1 }}</span>
@@ -262,7 +271,7 @@
                   <span class="inner-label">金额档位</span>
                   <v-btn size="small" variant="tonal" color="primary" prepend-icon="mdi-plus" @click="addTier">添加档位</v-btn>
                 </div>
-                <p class="field-note alone">累计「超过 A、不超过 B」时用该档。全价=原价×折；票卡=原价×刷卡折×折。</p>
+                <p class="form-section__tip form-section__tip--alone">累计「超过 A、不超过 B」时用该档。全价=原价×折；票卡=原价×刷卡折×折。</p>
                 <div v-for="(t, i) in form.tiers" :key="'t'+i" class="item-card">
                   <div class="item-card-head">
                     <span>档位 {{ i + 1 }}</span>
@@ -285,7 +294,7 @@
                   <span class="inner-label">乘次档位</span>
                   <v-btn size="small" variant="tonal" color="primary" prepend-icon="mdi-plus" @click="addCountTier">添加</v-btn>
                 </div>
-                <p class="field-note alone">本趟序号 = 本周期已乘次数 + 1。第 40 次免费：超过 39、至 40、勾选免费。</p>
+                <p class="form-section__tip form-section__tip--alone">本趟序号 = 本周期已乘次数 + 1。第 40 次免费：超过 39、至 40、勾选免费。</p>
                 <div v-for="(t, i) in form.countTiers" :key="'c'+i" class="item-card">
                   <div class="item-card-head">
                     <span>次数档 {{ i + 1 }}</span>
@@ -306,102 +315,113 @@
                 </div>
               </div>
             </div>
+            </div>
           </section>
 
           <!-- 更多选项 -->
-          <section class="block">
-            <button type="button" class="more-toggle" @click="mod.more = !mod.more">
-              <span>{{ mod.more ? '收起' : '展开' }}更多选项</span>
-              <span class="more-sub">地市 · 立减 · 叠加策略 · 生效期 · 备注</span>
-              <v-icon size="18">{{ mod.more ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
-            </button>
-            <div v-if="mod.more" class="more-body">
-              <v-text-field
-                v-model="form.city"
-                label="限定地市（可空）"
-                placeholder="不限"
-                variant="outlined"
-                hide-details
-                class="mb-1"
-              />
-              <p class="field-note">有地市时，模板仅在匹配城市自动选用。</p>
-              <v-text-field
-                v-model="form.amountOffYuan"
-                label="每次立减（元，可空）"
-                type="number"
-                inputmode="decimal"
-                variant="outlined"
-                hide-details
-                class="mb-1"
-              />
-              <p class="field-note">计价后固定减去，可模拟换乘减额。</p>
-              <v-select
-                v-model="form.stackMode"
-                :items="stackItems"
-                label="多优惠同时命中时"
-                variant="outlined"
-                hide-details
-                class="mb-1"
-              />
-              <p class="field-note">一般用「优先」即可；多种优惠要取更便宜时用「就低」。</p>
-              <div class="pair mb-3 mt-3">
-                <NativeDateField v-model="form.validFrom" label="生效起（可空）" variant="outlined" hide-details />
-                <NativeDateField v-model="form.validTo" label="生效止（可空）" variant="outlined" hide-details />
+          <section class="form-section">
+            <div class="form-section__body">
+              <button type="button" class="more-toggle" @click="mod.more = !mod.more">
+                <span>{{ mod.more ? '收起' : '展开' }}更多选项</span>
+                <span class="more-sub">地市 · 立减 · 叠加策略 · 生效期 · 备注</span>
+                <v-icon size="18">{{ mod.more ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
+              </button>
+              <div v-if="mod.more" class="more-body">
+                <v-text-field
+                  v-model="form.city"
+                  label="限定地市（可空）"
+                  placeholder="不限"
+                  variant="outlined"
+                  hide-details
+                  class="field"
+                />
+                <v-text-field
+                  v-model="form.amountOffYuan"
+                  label="每次立减（元，可空）"
+                  type="number"
+                  inputmode="decimal"
+                  variant="outlined"
+                  hide-details
+                  class="field"
+                />
+                <v-select
+                  v-model="form.stackMode"
+                  :items="stackItems"
+                  label="多优惠同时命中时"
+                  variant="outlined"
+                  hide-details
+                  class="field"
+                />
+                <div class="pair field">
+                  <NativeDateField v-model="form.validFrom" label="生效起（可空）" variant="outlined" hide-details />
+                  <NativeDateField v-model="form.validTo" label="生效止（可空）" variant="outlined" hide-details />
+                </div>
+                <v-textarea v-model="form.note" label="备注" rows="2" auto-grow variant="outlined" hide-details class="field field--last" />
+                <p class="form-section__tip">
+                  有地市时模板仅在匹配城市自动选用；立减在计价后固定减去。多优惠一般用「优先」，要取更便宜时用「就低」。
+                </p>
               </div>
-              <v-textarea v-model="form.note" label="备注" rows="2" auto-grow variant="outlined" hide-details />
             </div>
           </section>
 
           <!-- 预览 / 补录 -->
-          <section v-if="editing" class="block preview-block">
-            <h3 class="block-title">试算与补录</h3>
-            <v-text-field
-              v-model="cycleSeedYuan"
-              label="本周期补录累计金额（元）"
-              type="number"
-              inputmode="decimal"
-              variant="outlined"
-              hide-details
-              class="mb-1"
-            />
-            <v-text-field
-              v-model.number="cycleCountSeed"
-              label="本周期补录已乘次数"
-              type="number"
-              variant="outlined"
-              hide-details
-              class="mb-1 mt-3"
-            />
-            <p class="field-note">半途启用时补上周期内已有累计；换周期自动失效。</p>
-            <v-text-field
-              v-model="trialBaseYuan"
-              label="试算原价（元）"
-              type="number"
-              inputmode="decimal"
-              variant="outlined"
-              hide-details
-              class="mb-1 mt-3"
-            />
-            <v-btn
-              block
-              variant="tonal"
-              color="primary"
-              class="mt-2"
-              :loading="previewLoading"
-              prepend-icon="mdi-calculator-variant-outline"
-              @click="refreshPreview"
-            >
-              预览今天建议价
-            </v-btn>
-            <div v-if="preview" class="preview-body">
-              <div class="preview-amount">约 ¥{{ fenToYuan(preview.amountFen) }}</div>
-              <div class="preview-reason">{{ preview.reason }}</div>
-              <div class="preview-meta">
-                流水 ¥{{ fenToYuan(preview.txSpentFen || 0) }}
-                · 补录 ¥{{ fenToYuan(preview.seedFen || 0) }}
-                · 合计 ¥{{ fenToYuan(preview.monthSpentFen) }}
-                · 本趟第 {{ preview.thisRideNo || 1 }} 次
-                （{{ preview.cycleStart }} ~ {{ preview.cycleEnd }}）
+          <section v-if="editing" class="form-section">
+            <header class="form-section__head">
+              <h3 class="form-section__title">试算与补录</h3>
+            </header>
+            <div class="form-section__body">
+              <div class="form-section__group">
+                <v-text-field
+                  v-model="cycleSeedYuan"
+                  label="本周期补录累计金额（元）"
+                  type="number"
+                  inputmode="decimal"
+                  variant="outlined"
+                  hide-details
+                  class="field"
+                />
+                <v-text-field
+                  v-model.number="cycleCountSeed"
+                  label="本周期补录已乘次数"
+                  type="number"
+                  variant="outlined"
+                  hide-details
+                  class="field field--last"
+                />
+                <p class="form-section__tip">半途启用时补上周期内已有累计；换周期自动失效。</p>
+              </div>
+              <div class="form-section__group">
+                <v-text-field
+                  v-model="trialBaseYuan"
+                  label="试算原价（元）"
+                  type="number"
+                  inputmode="decimal"
+                  variant="outlined"
+                  hide-details
+                  class="field field--last"
+                />
+                <v-btn
+                  block
+                  variant="tonal"
+                  color="primary"
+                  class="mt-3"
+                  :loading="previewLoading"
+                  prepend-icon="mdi-calculator-variant-outline"
+                  @click="refreshPreview"
+                >
+                  预览今天建议价
+                </v-btn>
+                <div v-if="preview" class="preview-body">
+                  <div class="preview-amount">约 ¥{{ fenToYuan(preview.amountFen) }}</div>
+                  <div class="preview-reason">{{ preview.reason }}</div>
+                  <div class="preview-meta">
+                    流水 ¥{{ fenToYuan(preview.txSpentFen || 0) }}
+                    · 补录 ¥{{ fenToYuan(preview.seedFen || 0) }}
+                    · 合计 ¥{{ fenToYuan(preview.monthSpentFen) }}
+                    · 本趟第 {{ preview.thisRideNo || 1 }} 次
+                    （{{ preview.cycleStart }} ~ {{ preview.cycleEnd }}）
+                  </div>
+                </div>
               </div>
             </div>
           </section>
@@ -1074,7 +1094,7 @@ function goBack() {
 .page-hint { color: var(--muted); font-size: 0.85rem; margin: 0 0 12px; line-height: 1.45; }
 .empty { color: var(--muted); text-align: center; margin-top: 32px; }
 .guide-line {
-  margin: 0 0 16px;
+  margin: 0;
   padding: 10px 12px;
   border-radius: 12px;
   background: var(--primary-soft);
@@ -1082,6 +1102,8 @@ function goBack() {
   color: var(--muted);
   font-size: 0.8rem;
   line-height: 1.45;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .scenario-grid {
@@ -1120,13 +1142,6 @@ function goBack() {
   color: var(--muted);
 }
 
-.core-block {
-  padding: 14px;
-  border-radius: 16px;
-  border: 1px solid var(--surface-border);
-  background: color-mix(in srgb, var(--primary-soft) 55%, transparent);
-}
-
 .mod-row {
   margin-bottom: 8px;
   border-radius: 14px;
@@ -1134,6 +1149,7 @@ function goBack() {
   background: rgb(var(--v-theme-surface));
   overflow: hidden;
   transition: border-color 0.15s;
+  min-width: 0;
 }
 .mod-row.on {
   border-color: color-mix(in srgb, var(--primary) 40%, var(--surface-border));
@@ -1144,9 +1160,21 @@ function goBack() {
   justify-content: space-between;
   gap: 12px;
   padding: 12px 14px;
+  min-width: 0;
+}
+.mod-row-main > div:first-child {
+  min-width: 0;
+  flex: 1;
 }
 .mod-name { font-weight: 700; font-size: 0.92rem; }
-.mod-hint { font-size: 0.72rem; color: var(--muted); margin-top: 2px; line-height: 1.35; }
+.mod-hint {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 2px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 .mod-body {
   padding: 0 14px 14px;
   border-top: 1px dashed var(--surface-border);
@@ -1181,6 +1209,7 @@ function goBack() {
   font-weight: 400;
   color: var(--muted);
   margin-top: 2px;
+  overflow-wrap: anywhere;
 }
 .more-body { margin-top: 12px; }
 
@@ -1283,43 +1312,14 @@ function goBack() {
 .holiday-group.now .hg-status { color: var(--primary); }
 .holiday-group.soon .hg-status { color: #c07830; }
 
-.danger-zone {
-  margin-top: 12px;
-  margin-bottom: 8px;
-  padding: 16px;
-  border-radius: 14px;
-  border: 1px solid rgba(198, 40, 40, 0.35);
-  background: rgba(198, 40, 40, 0.08);
-}
-.danger-title { font-weight: 700; color: #c62828; margin-bottom: 6px; }
-.danger-tip { margin: 0 0 12px; font-size: 0.8rem; color: var(--muted); line-height: 1.4; }
-
-
-
-.block { margin-bottom: 20px; padding-bottom: 4px; }
-.block-title {
-  margin: 0 0 12px;
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
 .block-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 10px;
+  min-width: 0;
 }
-
-.field-note {
-  margin: 0 0 14px;
-  padding: 0 2px;
-  font-size: 0.78rem;
-  line-height: 1.45;
-  color: var(--muted);
-}
-.field-note.alone { margin-bottom: 12px; }
 
 .item-card {
   margin-bottom: 12px;
@@ -1327,6 +1327,7 @@ function goBack() {
   border-radius: 14px;
   border: 1px solid var(--surface-border);
   background: var(--primary-soft);
+  min-width: 0;
 }
 .item-card-head {
   display: flex;
@@ -1365,6 +1366,8 @@ function goBack() {
   font-size: 0.82rem;
   line-height: 1.4;
   color: var(--muted);
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 .preview-meta { margin-top: 4px; }
 

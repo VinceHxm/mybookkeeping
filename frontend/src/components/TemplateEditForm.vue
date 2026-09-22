@@ -1,127 +1,147 @@
 <template>
-  <div class="form-root">
-    <section class="block">
-      <h3 class="block-title">基本信息</h3>
-      <IconPicker v-model="form.icon" title="模板图标" fallback="mdi-flash" />
-      <v-text-field v-model="form.name" label="名称" variant="outlined" hide-details class="mb-3" />
-      <v-select v-model="form.type" :items="typeItems" label="类型" variant="outlined" hide-details class="mb-3" />
-      <v-text-field
-        v-model="amountYuan"
-        label="金额（元）"
-        type="number"
-        inputmode="decimal"
-        variant="outlined"
-        hide-details
-        class="mb-1"
-      />
-      <p class="field-note">可空。绑定计费规则时，此金额会作为原价参与折扣计算。</p>
-      <v-select
-        v-model="form.accountId"
-        :items="accounts.list"
-        item-title="name"
-        item-value="id"
-        label="账户"
-        clearable
-        variant="outlined"
-        hide-details
-        class="mb-3"
-      />
-      <v-text-field v-model="form.remark" label="备注" variant="outlined" hide-details />
-    </section>
-
-    <section v-if="form.type !== 'transfer'" class="block">
-      <h3 class="block-title">分类与标签</h3>
-      <div class="field-row mb-3">
+  <div class="form-sections">
+    <section class="form-section">
+      <header class="form-section__head">
+        <h3 class="form-section__title">基本信息</h3>
+      </header>
+      <div class="form-section__body">
+        <IconPicker v-model="form.icon" title="模板图标" fallback="mdi-flash" />
+        <v-text-field v-model="form.name" label="名称" variant="outlined" hide-details class="field" />
+        <v-select v-model="form.type" :items="typeItems" label="类型" variant="outlined" hide-details class="field" />
+        <v-text-field
+          v-model="amountYuan"
+          label="金额（元）"
+          type="number"
+          inputmode="decimal"
+          variant="outlined"
+          hide-details
+          class="field"
+        />
         <v-select
-          v-model="form.categoryId"
-          :items="form.type === 'expense' ? categories.expenseOptions : categories.incomeOptions"
+          v-model="form.accountId"
+          :items="accounts.list"
           item-title="name"
           item-value="id"
-          label="分类"
+          label="账户"
           clearable
           variant="outlined"
           hide-details
-          class="flex1"
+          class="field"
         />
-        <v-btn icon="mdi-plus" variant="tonal" color="primary" aria-label="新建分类" @click="openQuickCategory" />
+        <v-text-field v-model="form.remark" label="备注" variant="outlined" hide-details class="field field--last" />
+        <p class="form-section__tip">金额可空；绑定计费规则时，此金额会作为原价参与折扣计算。</p>
       </div>
-      <div class="field-row">
+    </section>
+
+    <section v-if="form.type !== 'transfer'" class="form-section">
+      <header class="form-section__head">
+        <h3 class="form-section__title">分类与标签</h3>
+      </header>
+      <div class="form-section__body">
+        <div class="form-field-row field">
+          <v-select
+            v-model="form.categoryId"
+            :items="form.type === 'expense' ? categories.expenseOptions : categories.incomeOptions"
+            item-title="name"
+            item-value="id"
+            label="分类"
+            clearable
+            variant="outlined"
+            hide-details
+            class="flex1"
+          />
+          <v-btn icon="mdi-plus" variant="tonal" color="primary" aria-label="新建分类" @click="openQuickCategory" />
+        </div>
+        <div class="form-field-row field field--last">
+          <v-select
+            v-model="form.tagIds"
+            :items="tags.list"
+            item-title="name"
+            item-value="id"
+            label="标签"
+            multiple
+            chips
+            closable-chips
+            variant="outlined"
+            hide-details
+            class="flex1"
+          />
+          <v-btn icon="mdi-plus" variant="tonal" color="primary" aria-label="新建标签" @click="openQuickTag" />
+        </div>
+      </div>
+    </section>
+
+    <section v-else class="form-section">
+      <header class="form-section__head">
+        <h3 class="form-section__title">标签</h3>
+      </header>
+      <div class="form-section__body">
+        <div class="form-field-row field field--last">
+          <v-select
+            v-model="form.tagIds"
+            :items="tags.list"
+            item-title="name"
+            item-value="id"
+            label="标签"
+            multiple
+            chips
+            closable-chips
+            variant="outlined"
+            hide-details
+            class="flex1"
+          />
+          <v-btn icon="mdi-plus" variant="tonal" color="primary" aria-label="新建标签" @click="openQuickTag" />
+        </div>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <header class="form-section__head">
+        <h3 class="form-section__title">计费规则</h3>
+      </header>
+      <div class="form-section__body">
         <v-select
-          v-model="form.tagIds"
-          :items="tags.list"
-          item-title="name"
-          item-value="id"
-          label="标签"
-          multiple
-          chips
-          closable-chips
+          v-model="form.fareRuleId"
+          :items="fareRuleItems"
+          item-title="title"
+          item-value="value"
+          label="绑定规则"
+          clearable
           variant="outlined"
           hide-details
-          class="flex1"
+          class="field field--last"
         />
-        <v-btn icon="mdi-plus" variant="tonal" color="primary" aria-label="新建标签" @click="openQuickTag" />
+        <p class="form-section__tip">
+          套用模板时启用规则，按模板金额算建议价。
+          <router-link class="inline-link" to="/fare-rules">管理计费规则</router-link>
+        </p>
       </div>
     </section>
 
-    <section v-else class="block">
-      <h3 class="block-title">标签</h3>
-      <div class="field-row">
-        <v-select
-          v-model="form.tagIds"
-          :items="tags.list"
-          item-title="name"
-          item-value="id"
-          label="标签"
-          multiple
-          chips
-          closable-chips
-          variant="outlined"
-          hide-details
-          class="flex1"
-        />
-        <v-btn icon="mdi-plus" variant="tonal" color="primary" aria-label="新建标签" @click="openQuickTag" />
-      </div>
-    </section>
-
-    <section class="block">
-      <h3 class="block-title">计费规则</h3>
-      <v-select
-        v-model="form.fareRuleId"
-        :items="fareRuleItems"
-        item-title="title"
-        item-value="value"
-        label="绑定规则"
-        clearable
-        variant="outlined"
-        hide-details
-        class="mb-1"
-      />
-      <p class="field-note">
-        套用模板时启用规则，按模板金额算建议价。
-        <router-link class="inline-link" to="/fare-rules">管理计费规则</router-link>
-      </p>
-    </section>
-
-    <section class="block">
-      <h3 class="block-title">预设地点</h3>
-      <button v-if="!formGeoLabel" type="button" class="loc-tile" @click="showMap = true">
-        <v-icon size="24" color="primary">mdi-map-marker-plus-outline</v-icon>
-        <div class="loc-copy">
-          <strong>添加地点</strong>
-          <span>常用通勤 / 门店，套用时自动带入</span>
-        </div>
-        <v-icon size="18" class="loc-chevron">mdi-chevron-right</v-icon>
-      </button>
-      <div v-else class="loc-filled">
-        <div class="loc-preview" @click="showMap = true">
-          <v-chip size="small" color="primary" variant="tonal" class="mb-2">
-            {{ form.geoMode === 'route' ? '行程' : '位置' }}
-          </v-chip>
-          <div class="loc-value">{{ formGeoLabel }}</div>
-        </div>
-        <div class="loc-actions">
-          <v-btn variant="tonal" color="primary" size="small" @click="showMap = true">修改</v-btn>
-          <v-btn variant="text" color="error" size="small" @click="clearGeo">清除</v-btn>
+    <section class="form-section">
+      <header class="form-section__head">
+        <h3 class="form-section__title">预设地点</h3>
+      </header>
+      <div class="form-section__body">
+        <button v-if="!formGeoLabel" type="button" class="loc-tile" @click="showMap = true">
+          <v-icon size="24" color="primary">mdi-map-marker-plus-outline</v-icon>
+          <div class="loc-copy">
+            <strong>添加地点</strong>
+            <span>常用通勤 / 门店，套用时自动带入</span>
+          </div>
+          <v-icon size="18" class="loc-chevron">mdi-chevron-right</v-icon>
+        </button>
+        <div v-else class="loc-filled">
+          <div class="loc-preview" @click="showMap = true">
+            <v-chip size="small" color="primary" variant="tonal" class="mb-2">
+              {{ form.geoMode === 'route' ? '行程' : '位置' }}
+            </v-chip>
+            <div class="loc-value">{{ formGeoLabel }}</div>
+          </div>
+          <div class="loc-actions">
+            <v-btn variant="tonal" color="primary" size="small" @click="showMap = true">修改</v-btn>
+            <v-btn variant="text" color="error" size="small" @click="clearGeo">清除</v-btn>
+          </div>
         </div>
       </div>
     </section>
@@ -437,28 +457,13 @@ defineExpose({ save, saving })
 </script>
 
 <style scoped>
-.block { margin-bottom: 22px; }
-.block-title {
-  margin: 0 0 12px;
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-.field-note {
-  margin: 0 0 14px;
-  padding: 0 2px;
-  font-size: 0.78rem;
-  line-height: 1.45;
-  color: var(--muted);
-}
 .inline-link {
   color: var(--primary);
   font-weight: 600;
   text-decoration: none;
   margin-left: 4px;
+  white-space: nowrap;
 }
-.field-row { display: flex; gap: 8px; align-items: flex-start; }
 .flex1 { flex: 1; min-width: 0; }
 
 .loc-tile {
@@ -474,10 +479,16 @@ defineExpose({ save, saving })
   text-align: left;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  min-width: 0;
 }
 .loc-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .loc-copy strong { font-size: 0.95rem; color: rgb(var(--v-theme-on-surface)); }
-.loc-copy span { font-size: 0.78rem; color: var(--muted); line-height: 1.35; }
+.loc-copy span {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
 .loc-chevron { color: var(--muted); flex-shrink: 0; }
 
 .loc-filled {
@@ -488,27 +499,18 @@ defineExpose({ save, saving })
   border-radius: 14px;
   border: 1px solid var(--surface-border);
   background: var(--primary-soft);
+  min-width: 0;
 }
 .loc-preview { cursor: pointer; min-width: 0; }
 .loc-value {
   font-size: 0.92rem;
   font-weight: 600;
   line-height: 1.4;
+  overflow-wrap: anywhere;
   word-break: break-word;
   color: rgb(var(--v-theme-on-surface));
 }
 .loc-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-
-.danger-zone {
-  margin-top: 12px;
-  margin-bottom: 8px;
-  padding: 16px;
-  border-radius: 14px;
-  border: 1px solid rgba(198, 40, 40, 0.35);
-  background: rgba(198, 40, 40, 0.08);
-}
-.danger-title { font-weight: 700; color: #c62828; margin-bottom: 6px; }
-.danger-tip { margin: 0 0 12px; font-size: 0.8rem; color: var(--muted); line-height: 1.4; }
 
 .map-dialog-shell {
   height: min(80vh, 720px);

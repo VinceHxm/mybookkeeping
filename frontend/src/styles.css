@@ -163,6 +163,140 @@ body {
   letter-spacing: 0.02em;
 }
 
+/* —— 编辑表单分区（弹窗 / 子页共用） —— */
+.form-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.form-section {
+  border: 1px solid var(--surface-border);
+  border-radius: 14px;
+  background: rgba(var(--v-theme-surface), 0.35);
+  overflow: hidden;
+  min-width: 0;
+}
+.form-section--soft {
+  background: color-mix(in srgb, var(--primary-soft) 45%, transparent);
+}
+.form-section__head {
+  padding: 10px 14px 0;
+  min-width: 0;
+}
+.form-section__title {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: rgb(var(--v-theme-on-surface));
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.form-section__body {
+  padding: 12px 14px 14px;
+  min-width: 0;
+}
+.form-sections .field,
+.form-section .field {
+  margin-bottom: 12px;
+}
+.form-sections .field--last,
+.form-section .field--last {
+  margin-bottom: 0;
+}
+.form-section__group + .form-section__group {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--surface-border);
+}
+.form-section__tip {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  font-size: 0.76rem;
+  color: var(--muted);
+  line-height: 1.45;
+  border-radius: 10px;
+  background: rgba(var(--v-theme-on-surface), 0.04);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.form-section__tip--alone {
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+.form-field-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+.form-field-row > .flex1,
+.form-field-row > .v-input {
+  flex: 1;
+  min-width: 0;
+}
+.form-field-row > .v-btn {
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+.danger-zone {
+  margin-top: 4px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(198, 40, 40, 0.35);
+  background: rgba(198, 40, 40, 0.08);
+  min-width: 0;
+}
+.danger-title {
+  font-weight: 700;
+  color: #c62828;
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+}
+.danger-tip {
+  margin: 0 0 12px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* 弹窗内略收紧，避免窄宽下显得空、提示换行顶破 */
+.v-dialog .form-sections {
+  gap: 10px;
+}
+.v-dialog .form-section__head {
+  padding: 8px 12px 0;
+}
+.v-dialog .form-section__body {
+  padding: 10px 12px 12px;
+}
+.v-dialog .form-section__tip {
+  font-size: 0.74rem;
+  padding: 7px 9px;
+}
+
+@media (max-width: 380px) {
+  .form-section__head {
+    padding: 8px 10px 0;
+  }
+  .form-section__body {
+    padding: 10px;
+  }
+  .form-section__tip {
+    font-size: 0.72rem;
+    padding: 7px 8px;
+  }
+  .form-field-row {
+    flex-wrap: wrap;
+  }
+  .form-field-row > .v-btn {
+    margin-top: 0;
+  }
+}
+
 .surface-card {
   background: var(--surface);
   border: 1px solid var(--surface-border);

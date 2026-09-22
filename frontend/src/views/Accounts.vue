@@ -47,8 +47,8 @@
           <div class="bal-line">已用额度 ¥{{ fenToYuan(creditUsedFen(a)) }}</div>
           <div v-if="a.creditLimit" class="meta-sub">额度 ¥{{ fenToYuan(a.creditLimit) }} · 可用 ¥{{ fenToYuan(Math.max(0, (a.creditLimit || 0) - creditUsedFen(a))) }}</div>
           <div class="split-line">
-            <span>已出账 ¥{{ fenToYuan(creditBilledFenOf(a)) }}</span>
-            <span>未出账 ¥{{ fenToYuan(creditUnbilledFen(a)) }}</span>
+            <span>已出账 ¥{{ fenToYuan(displayBilledFen(a)) }}</span>
+            <span>未出账 ¥{{ fenToYuan(displayUnbilledFen(a)) }}</span>
           </div>
           <div v-if="a.billingDay" class="meta-sub">账单日 {{ a.billingDay }} 号<template v-if="a.paymentDueDay"> · 还款日 {{ a.paymentDueDay }} 号</template></div>
           <div
@@ -61,10 +61,6 @@
             </div>
             <div class="stmt-grid">
               <div class="stmt-cell">
-                <span>本期应还</span>
-                <strong>¥{{ fenToYuan(statements[a.id].dueAmount) }}</strong>
-              </div>
-              <div class="stmt-cell">
                 <span>本期已还</span>
                 <strong>¥{{ fenToYuan(statements[a.id].repaidAmount) }}</strong>
               </div>
@@ -73,16 +69,21 @@
                 <strong>¥{{ fenToYuan(statements[a.id].periodRemaining) }}</strong>
               </div>
               <div class="stmt-cell">
-                <span>还后待还</span>
+                <span>{{ statements[a.id].periodRemaining === 0 && (statements[a.id].remainingAfterPay || 0) > 0 ? '下期待还' : '还后待还' }}</span>
                 <strong class="warn">¥{{ fenToYuan(statements[a.id].remainingAfterPay) }}</strong>
               </div>
-              <div class="stmt-cell stmt-cell--wide">
+              <div class="stmt-cell">
                 <span>整体待还</span>
                 <strong>¥{{ fenToYuan(statements[a.id].totalOutstanding ?? statements[a.id].outstandingBalance) }}</strong>
               </div>
             </div>
             <div class="stmt-sub">
-              还后待还 = 整体待还 − 已出账；整体待还 = 已用额度（可提前还）
+              <template v-if="statements[a.id].periodRemaining === 0 && (statements[a.id].remainingAfterPay || 0) > 0">
+                本期已还清；剩余已用为下期/未出账
+              </template>
+              <template v-else>
+                本期待还 = 本期账单尚未还清部分；还后待还 = 未出账；整体待还 = 已用额度
+              </template>
               <template v-if="statements[a.id].futureInstallment">
                 · 后续分期 ¥{{ fenToYuan(statements[a.id].futureInstallment) }}
               </template>
@@ -277,12 +278,25 @@ function repayLink(a: Account) {
   const periodLeft = stmt?.periodRemaining ?? 0
   if (periodLeft > 0) {
     q.amountFen = String(periodLeft)
-  } else {
-    const billed = creditBilledFenOf(a)
-    if (billed > 0) q.amountFen = String(billed)
-    else if (stmt && stmt.dueAmount > 0) q.amountFen = String(stmt.dueAmount)
   }
+  // 本期已还清：不预填已出账/应还，避免把下期未出账当成本期还款额
   return { path: '/transactions/new', query: q }
+}
+
+function displayBilledFen(a: Account): number {
+  const stmt = statements.value[a.id]
+  if (stmt && stmt.periodRemaining === 0 && (stmt.remainingAfterPay || 0) > 0) {
+    return 0
+  }
+  return creditBilledFenOf(a)
+}
+
+function displayUnbilledFen(a: Account): number {
+  const stmt = statements.value[a.id]
+  if (stmt && stmt.periodRemaining === 0) {
+    return stmt.remainingAfterPay || stmt.unbilledOutstanding || creditUsedFen(a)
+  }
+  return creditUnbilledFen(a)
 }
 
 function openCreate() {
@@ -463,9 +477,6 @@ async function doDelete() {
   line-height: 1.25;
 }
 .stmt-grid .warn { color: #c45c3e; }
-.stmt-cell--wide {
-  grid-column: 1 / -1;
-}
 .stmt-sub {
   margin-top: 8px;
   font-size: 0.72rem;

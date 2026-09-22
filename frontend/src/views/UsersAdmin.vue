@@ -36,39 +36,48 @@
     <v-dialog v-model="dialog" max-width="440">
       <v-card>
         <v-card-title>编辑用户</v-card-title>
-        <v-card-text class="form-fields">
-          <v-text-field
-            :model-value="editing?.username || ''"
-            label="用户名"
-            variant="outlined"
-            hide-details
-            readonly
-            class="field"
-          />
-          <v-select
-            v-model="form.role"
-            :items="roleItems"
-            label="角色"
-            variant="outlined"
-            hide-details
-            class="field"
-            :disabled="isSelf"
-          />
-          <v-switch
-            v-model="form.disabled"
-            label="停用账户（无法登录，已登录会话立即失效）"
-            hide-details
-            color="error"
-            class="field"
-            :disabled="isSelf"
-          />
-          <p v-if="isSelf" class="field-tip">不能修改自己的角色或停用自己。</p>
-          <p v-else class="field-tip">停用后可再启用；删除会清空该用户全部账本数据且不可恢复。</p>
+        <v-card-text>
+          <div class="form-sections">
+            <section class="form-section">
+              <header class="form-section__head">
+                <h3 class="form-section__title">账户设置</h3>
+              </header>
+              <div class="form-section__body">
+                <v-text-field
+                  :model-value="editing?.username || ''"
+                  label="用户名"
+                  variant="outlined"
+                  hide-details
+                  readonly
+                  class="field"
+                />
+                <v-select
+                  v-model="form.role"
+                  :items="roleItems"
+                  label="角色"
+                  variant="outlined"
+                  hide-details
+                  class="field"
+                  :disabled="isSelf"
+                />
+                <v-switch
+                  v-model="form.disabled"
+                  label="停用账户（无法登录，已登录会话立即失效）"
+                  hide-details
+                  color="error"
+                  class="field field--last"
+                  :disabled="isSelf"
+                />
+                <p v-if="isSelf" class="form-section__tip">不能修改自己的角色或停用自己。</p>
+                <p v-else class="form-section__tip">停用后可再启用；删除会清空该用户全部账本数据且不可恢复。</p>
+              </div>
+            </section>
 
-          <div v-if="editing && !isSelf" class="danger-zone">
-            <div class="danger-title">危险操作</div>
-            <p class="danger-tip">删除用户将级联清除其账户、流水、模板等全部数据。</p>
-            <v-btn color="error" variant="outlined" block @click="askDelete(editing)">删除此用户</v-btn>
+            <div v-if="editing && !isSelf" class="danger-zone">
+              <div class="danger-title">危险操作</div>
+              <p class="danger-tip">删除用户将级联清除其账户、流水、模板等全部数据。</p>
+              <v-btn color="error" variant="outlined" block @click="askDelete(editing)">删除此用户</v-btn>
+            </div>
           </div>
         </v-card-text>
         <v-card-actions>
@@ -202,23 +211,7 @@ async function doDelete() {
   font-size: 0.82rem;
   color: var(--muted);
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 .meta-sub { margin-top: 2px; font-size: 0.75rem; opacity: 0.9; }
-.form-fields .field { margin-bottom: 14px; }
-.field-tip {
-  margin: -6px 0 14px;
-  padding: 0 2px;
-  font-size: 0.78rem;
-  color: var(--muted);
-  line-height: 1.45;
-}
-.danger-zone {
-  margin-top: 8px;
-  padding: 16px;
-  border-radius: 14px;
-  border: 1px solid rgba(198, 40, 40, 0.35);
-  background: rgba(198, 40, 40, 0.08);
-}
-.danger-title { font-weight: 700; color: #c62828; margin-bottom: 6px; }
-.danger-tip { margin: 0 0 12px; font-size: 0.8rem; color: var(--muted); line-height: 1.4; }
 </style>

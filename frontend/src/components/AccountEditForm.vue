@@ -1,146 +1,233 @@
 <template>
-  <div class="form-fields">
-    <p class="section-label">基本信息</p>
-    <v-text-field v-model="form.name" label="名称" variant="outlined" hide-details class="field" />
-    <v-select
-      v-model="form.type"
-      :items="typeItems"
-      label="类型"
-      variant="outlined"
-      hide-details
-      class="field"
-    />
-    <v-text-field v-model.number="form.sort" label="排序" type="number" variant="outlined" hide-details class="field" />
-
-    <template v-if="form.type === 'bank' || form.type === 'credit'">
-      <p class="section-label">卡片信息</p>
-      <v-text-field
-        v-model="form.institution"
-        :label="form.type === 'credit' ? '发卡机构' : '开户行'"
-        variant="outlined"
-        hide-details
-        class="field"
-        placeholder="如：工商银行"
-      />
-      <v-text-field
-        v-model="form.cardNo"
-        label="卡号"
-        variant="outlined"
-        hide-details
-        class="field"
-        inputmode="numeric"
-        autocomplete="off"
-        :append-inner-icon="accountId && originalCardMasked ? (secretsRevealed ? 'mdi-eye-off-outline' : 'mdi-eye-outline') : undefined"
-        @click:append-inner="toggleFormReveal"
-        @focus="onSecretFocus('cardNo')"
-        @blur="onSecretBlur('cardNo')"
-      />
-      <p class="field-tip">
-        默认脱敏；眼睛向服务器拉明文（不常驻）。改卡号请清空后重填完整号码，否则保存不会覆盖原值。
-      </p>
-      <v-text-field
-        v-model="form.holderName"
-        label="户名 / 持卡人"
-        variant="outlined"
-        hide-details
-        class="field"
-        :append-inner-icon="accountId && originalHolderMasked ? (secretsRevealed ? 'mdi-eye-off-outline' : 'mdi-eye-outline') : undefined"
-        @click:append-inner="toggleFormReveal"
-        @focus="onSecretFocus('holderName')"
-        @blur="onSecretBlur('holderName')"
-      />
-    </template>
-
-    <p class="section-label">{{ form.type === 'credit' ? '额度与账单' : '余额' }}</p>
-    <template v-if="form.type === 'credit'">
-      <v-text-field
-        v-model="usedCreditYuan"
-        :label="accountId ? '已用额度（元）' : '初始已用额度（元）'"
-        type="number"
-        inputmode="decimal"
-        variant="outlined"
-        hide-details
-        class="field"
-        @update:model-value="onUsedCreditChange"
-      />
-      <p class="field-tip">刷卡欠款总额；可用额度 = 信用额度 − 已用</p>
-      <v-text-field
-        v-model="billedYuan"
-        label="已出账（元）"
-        type="number"
-        inputmode="decimal"
-        variant="outlined"
-        hide-details
-        class="field"
-        @update:model-value="onBilledChange"
-      />
-      <p class="field-tip">本期账单已出账、待还款部分</p>
-      <v-text-field
-        :model-value="unbilledYuan"
-        label="未出账（元）"
-        type="number"
-        variant="outlined"
-        readonly
-        hide-details
-        class="field"
-      />
-      <p class="field-tip">自动计算：已用额度 − 已出账</p>
-      <v-text-field v-model="creditLimitYuan" label="信用额度（元）" type="number" variant="outlined" hide-details class="field" />
-      <v-text-field v-model.number="form.billingDay" label="账单日（1-28）" type="number" variant="outlined" hide-details class="field" />
-      <v-text-field v-model.number="form.paymentDueDay" label="还款日（1-28，可选）" type="number" variant="outlined" hide-details class="field" />
-      <p class="field-tip">设置账单日后可看本期应还；填写还款日后，临近还款日会在首页提醒（无欠款不提醒）。</p>
-    </template>
-    <template v-else>
-      <v-text-field
-        v-model="balanceYuan"
-        :label="accountId ? '余额（元）' : '初始余额（元）'"
-        type="number"
-        inputmode="decimal"
-        variant="outlined"
-        hide-details
-        class="field"
-      />
-      <p v-if="accountId" class="field-tip">可直接改余额，不自动生成流水</p>
-    </template>
-
-    <p class="section-label">存放位置</p>
-    <v-textarea
-      v-model="form.storageNote"
-      label="位置说明"
-      variant="outlined"
-      hide-details
-      class="field"
-      rows="2"
-      auto-grow
-      placeholder="如：客厅抽屉第二层 / 钱包夹层 / 保险柜"
-    />
-    <AttachmentUpload
-      v-model="attachmentIds"
-      :existing="formAttachments"
-      title="位置照片"
-      subtitle="柜子、抽屉等现场照片，可选 · 点图可放大"
-    />
-
-    <v-text-field
-      v-model="form.remark"
-      label="备注（可选）"
-      variant="outlined"
-      hide-details
-      class="field mt-3"
-    />
-
-    <template v-if="accountId">
-      <v-switch v-model="form.archived" label="归档（隐藏，保留流水）" hide-details class="field" />
-      <v-btn class="mt-1 mb-2" variant="tonal" size="small" :loading="reconciling" @click="markReconciled">
-        标记已对账
-      </v-btn>
-
-      <div class="danger-zone">
-        <div class="danger-title">危险操作</div>
-        <p class="danger-tip">删除账户不可恢复；若仍有流水关联可能无法删除。</p>
-        <v-btn color="error" variant="outlined" block @click="emit('delete')">删除此账户</v-btn>
+  <div class="form-sections">
+    <section class="form-section">
+      <header class="form-section__head">
+        <h3 class="form-section__title">基本信息</h3>
+      </header>
+      <div class="form-section__body">
+        <v-text-field v-model="form.name" label="名称" variant="outlined" hide-details class="field" />
+        <v-select
+          v-model="form.type"
+          :items="typeItems"
+          label="类型"
+          variant="outlined"
+          hide-details
+          class="field"
+        />
+        <v-text-field
+          v-model.number="form.sort"
+          label="排序"
+          type="number"
+          variant="outlined"
+          hide-details
+          class="field field--last"
+        />
       </div>
-    </template>
+    </section>
+
+    <section v-if="form.type === 'bank' || form.type === 'credit'" class="form-section">
+      <header class="form-section__head">
+        <h3 class="form-section__title">卡片信息</h3>
+      </header>
+      <div class="form-section__body">
+        <v-text-field
+          v-model="form.institution"
+          :label="form.type === 'credit' ? '发卡机构' : '开户行'"
+          variant="outlined"
+          hide-details
+          class="field"
+          placeholder="如：工商银行"
+        />
+        <v-text-field
+          v-model="form.cardNo"
+          label="卡号"
+          variant="outlined"
+          hide-details
+          class="field"
+          inputmode="numeric"
+          autocomplete="off"
+          :append-inner-icon="accountId && originalCardMasked ? (secretsRevealed ? 'mdi-eye-off-outline' : 'mdi-eye-outline') : undefined"
+          @click:append-inner="toggleFormReveal"
+          @focus="onSecretFocus('cardNo')"
+          @blur="onSecretBlur('cardNo')"
+        />
+        <v-text-field
+          v-model="form.holderName"
+          label="户名 / 持卡人"
+          variant="outlined"
+          hide-details
+          class="field field--last"
+          :append-inner-icon="accountId && originalHolderMasked ? (secretsRevealed ? 'mdi-eye-off-outline' : 'mdi-eye-outline') : undefined"
+          @click:append-inner="toggleFormReveal"
+          @focus="onSecretFocus('holderName')"
+          @blur="onSecretBlur('holderName')"
+        />
+        <p class="form-section__tip">
+          卡号与户名默认脱敏；点眼睛向服务器拉取明文（不常驻）。修改请先清空再填完整号码，否则保存不会覆盖原值。
+        </p>
+      </div>
+    </section>
+
+    <section v-if="form.type === 'credit'" class="form-section">
+      <header class="form-section__head">
+        <h3 class="form-section__title">额度</h3>
+      </header>
+      <div class="form-section__body">
+        <v-text-field
+          v-model="creditLimitYuan"
+          label="信用额度（元）"
+          type="number"
+          inputmode="decimal"
+          variant="outlined"
+          hide-details
+          class="field"
+          @update:model-value="onCreditLimitChange"
+        />
+        <v-text-field
+          v-model="availableCreditYuan"
+          label="可用额度（元）"
+          type="number"
+          inputmode="decimal"
+          variant="outlined"
+          hide-details
+          class="field"
+          @update:model-value="onAvailableCreditChange"
+        />
+        <v-text-field
+          v-model="usedCreditYuan"
+          :label="accountId ? '已用额度（元）' : '初始已用额度（元）'"
+          type="number"
+          inputmode="decimal"
+          variant="outlined"
+          hide-details
+          class="field field--last"
+          @update:model-value="onUsedCreditChange"
+        />
+        <p class="form-section__tip">
+          银行 App 常见只显示可用：填可用后自动算已用 = 额度 − 可用；也可直接改已用，可用会同步。保存以已用为准。
+        </p>
+      </div>
+    </section>
+
+    <section v-if="form.type === 'credit'" class="form-section">
+      <header class="form-section__head">
+        <h3 class="form-section__title">账单</h3>
+      </header>
+      <div class="form-section__body">
+        <div class="form-section__group">
+          <v-text-field
+            v-model="billedYuan"
+            label="已出账（元）"
+            type="number"
+            inputmode="decimal"
+            variant="outlined"
+            hide-details
+            class="field"
+            @update:model-value="onBilledChange"
+          />
+          <v-text-field
+            :model-value="unbilledYuan"
+            label="未出账（元）"
+            type="number"
+            variant="outlined"
+            readonly
+            hide-details
+            class="field field--last"
+          />
+          <p class="form-section__tip">已出账为本期待还款；未出账自动计算：已用额度 − 已出账。</p>
+        </div>
+        <div class="form-section__group">
+          <v-text-field
+            v-model.number="form.billingDay"
+            label="账单日（1-28）"
+            type="number"
+            variant="outlined"
+            hide-details
+            class="field"
+          />
+          <v-text-field
+            v-model.number="form.paymentDueDay"
+            label="还款日（1-28，可选）"
+            type="number"
+            variant="outlined"
+            hide-details
+            class="field field--last"
+          />
+          <p class="form-section__tip">
+            设置账单日后可看本期已还/待还；填写还款日后，临近还款日会在首页提醒（无欠款不提醒）。
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section v-else class="form-section">
+      <header class="form-section__head">
+        <h3 class="form-section__title">余额</h3>
+      </header>
+      <div class="form-section__body">
+        <v-text-field
+          v-model="balanceYuan"
+          :label="accountId ? '余额（元）' : '初始余额（元）'"
+          type="number"
+          inputmode="decimal"
+          variant="outlined"
+          hide-details
+          class="field field--last"
+        />
+        <p v-if="accountId" class="form-section__tip">可直接改余额，不自动生成流水。</p>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <header class="form-section__head">
+        <h3 class="form-section__title">存放位置</h3>
+      </header>
+      <div class="form-section__body">
+        <v-textarea
+          v-model="form.storageNote"
+          label="位置说明"
+          variant="outlined"
+          hide-details
+          class="field"
+          rows="2"
+          auto-grow
+          placeholder="如：客厅抽屉第二层 / 钱包夹层 / 保险柜"
+        />
+        <AttachmentUpload
+          v-model="attachmentIds"
+          :existing="formAttachments"
+          title="位置照片"
+          subtitle="柜子、抽屉等现场照片，可选 · 点图可放大"
+        />
+      </div>
+    </section>
+
+    <section class="form-section">
+      <header class="form-section__head">
+        <h3 class="form-section__title">其他</h3>
+      </header>
+      <div class="form-section__body">
+        <v-text-field
+          v-model="form.remark"
+          label="备注（可选）"
+          variant="outlined"
+          hide-details
+          :class="accountId ? 'field' : 'field field--last'"
+        />
+        <template v-if="accountId">
+          <v-switch v-model="form.archived" label="归档（隐藏，保留流水）" hide-details class="field" />
+          <v-btn class="mt-1" variant="tonal" size="small" :loading="reconciling" @click="markReconciled">
+            标记已对账
+          </v-btn>
+        </template>
+      </div>
+    </section>
+
+    <div v-if="accountId" class="danger-zone">
+      <div class="danger-title">危险操作</div>
+      <p class="danger-tip">删除账户不可恢复；若仍有流水关联可能无法删除。</p>
+      <v-btn color="error" variant="outlined" block @click="emit('delete')">删除此账户</v-btn>
+    </div>
   </div>
 </template>
 
@@ -179,6 +266,7 @@ const originalCardMasked = ref('')
 const originalHolderMasked = ref('')
 const balanceYuan = ref('0')
 const usedCreditYuan = ref('0')
+const availableCreditYuan = ref('0')
 const billedYuan = ref('0')
 const creditLimitYuan = ref('0')
 const attachmentIds = ref<number[]>([])
@@ -231,6 +319,7 @@ function fillFrom(a: Account | null | undefined) {
     originalHolderMasked.value = ''
     balanceYuan.value = '0'
     usedCreditYuan.value = '0'
+    availableCreditYuan.value = '0'
     billedYuan.value = '0'
     creditLimitYuan.value = '0'
     attachmentIds.value = []
@@ -256,6 +345,7 @@ function fillFrom(a: Account | null | undefined) {
   usedCreditYuan.value = fenToYuan(creditUsedFen(a))
   billedYuan.value = fenToYuan(creditBilledFenOf(a))
   creditLimitYuan.value = fenToYuan(a.creditLimit || 0)
+  syncAvailableFromUsed()
 }
 
 async function loadAccount() {
@@ -322,14 +412,47 @@ function onSecretBlur(field: 'cardNo' | 'holderName') {
   }
 }
 
-function onUsedCreditChange() {
-  const used = yuanToFen(usedCreditYuan.value)
+function syncAvailableFromUsed() {
+  const limit = yuanToFen(creditLimitYuan.value)
+  const used = Math.max(0, yuanToFen(usedCreditYuan.value))
+  availableCreditYuan.value = fenToYuan(Math.max(0, limit - used))
+}
+
+function clampBilledToUsed() {
+  const used = Math.max(0, yuanToFen(usedCreditYuan.value))
   const billed = yuanToFen(billedYuan.value)
   if (billed > used) billedYuan.value = fenToYuan(used)
 }
 
+function onCreditLimitChange() {
+  // 改额度：保留已用，重算可用（编辑已有账户改额度时不抹掉欠款）
+  syncAvailableFromUsed()
+}
+
+function onAvailableCreditChange() {
+  const limit = yuanToFen(creditLimitYuan.value)
+  let available = yuanToFen(availableCreditYuan.value)
+  if (available < 0) {
+    available = 0
+    availableCreditYuan.value = '0'
+  }
+  // 可用超过额度时按额度封顶，已用记 0
+  if (available > limit) {
+    available = Math.max(0, limit)
+    availableCreditYuan.value = fenToYuan(available)
+  }
+  usedCreditYuan.value = fenToYuan(Math.max(0, limit - available))
+  clampBilledToUsed()
+}
+
+function onUsedCreditChange() {
+  if (yuanToFen(usedCreditYuan.value) < 0) usedCreditYuan.value = '0'
+  syncAvailableFromUsed()
+  clampBilledToUsed()
+}
+
 function onBilledChange() {
-  const used = yuanToFen(usedCreditYuan.value)
+  const used = Math.max(0, yuanToFen(usedCreditYuan.value))
   const billed = yuanToFen(billedYuan.value)
   if (billed < 0) billedYuan.value = '0'
   else if (billed > used) billedYuan.value = fenToYuan(used)
@@ -396,32 +519,3 @@ async function markReconciled() {
 
 defineExpose({ save, saving })
 </script>
-
-<style scoped>
-.section-label {
-  margin: 4px 0 10px;
-  font-size: 0.8rem;
-  font-weight: 700;
-  color: rgb(var(--v-theme-on-surface));
-  letter-spacing: 0.02em;
-}
-.form-fields .field {
-  margin-bottom: 14px;
-}
-.field-tip {
-  margin: -6px 0 14px;
-  padding: 0 2px;
-  font-size: 0.78rem;
-  color: var(--muted);
-  line-height: 1.45;
-}
-.danger-zone {
-  margin-top: 16px;
-  padding: 16px;
-  border-radius: 14px;
-  border: 1px solid rgba(198, 40, 40, 0.35);
-  background: rgba(198, 40, 40, 0.08);
-}
-.danger-title { font-weight: 700; color: #c62828; margin-bottom: 6px; }
-.danger-tip { margin: 0 0 12px; font-size: 0.8rem; color: var(--muted); line-height: 1.4; }
-</style>

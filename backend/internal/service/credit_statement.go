@@ -119,14 +119,25 @@ func (s *AccountService) CreditStatement(userID, accountID uint64, at time.Time)
 	}
 	unbilled := outstanding - billed
 
-	// 本期应还：流水拆分与手填「已出账」取较大值。
-	due := resolveStatementDue(dueFromTx, billed)
+	// 本期应还：以流水拆分为准；手填「已出账」仅在尚未被本期还款覆盖时兜底抬高。
+	// 避免：账单已还清后仍把「剩余已用/下期未出账」算进本期应还。
+	due := resolveStatementDue(dueFromTx, billed, repaid)
 	periodRemaining := due - repaid
 	if periodRemaining < 0 {
 		periodRemaining = 0
 	}
-	// 还后待还 = 整体待还 − 已出账（付清本期已出账后仍欠的未出账部分）
+	// 本期已结清后：若应还额仍等于当前已用、且还款大于该应还，
+	// 多半是还清了更大的上期账单，剩余已用实为下期未出账，不应再展示为本期应还。
+	if periodRemaining == 0 && due > 0 && due == outstanding && repaid > due {
+		due = 0
+	}
+	// 还后待还：本期结清后，剩余已用全部视为未出账/下期；未结清时 = 已用 − 已出账
 	afterPay := unbilled
+	displayUnbilled := unbilled
+	if periodRemaining == 0 {
+		afterPay = outstanding
+		displayUnbilled = outstanding
+	}
 
 	var available *int64
 	if acc.CreditLimit > 0 {
@@ -135,10 +146,14 @@ func (s *AccountService) CreditStatement(userID, accountID uint64, at time.Time)
 	}
 
 	note := "账单出账仅供展示，不自动记账；还款以转账流水为准。"
-	if billed > dueFromTx {
+	if billed > dueFromTx && repaid < billed {
 		note += "本期应还已采用手填「已出账」。"
 	}
-	note += "「还后待还」= 整体待还 − 已出账；「整体待还」= 已用额度，可用于提前还款。"
+	if periodRemaining == 0 && outstanding > 0 {
+		note += "本期已还清，剩余已用计入还后待还（下期/未出账），不计入本期应还。"
+	} else {
+		note += "「还后待还」= 整体待还 − 已出账；「整体待还」= 已用额度，可用于提前还款。"
+	}
 
 	return &CreditStatement{
 		AccountID:           acc.ID,
@@ -161,7 +176,7 @@ func (s *AccountService) CreditStatement(userID, accountID uint64, at time.Time)
 		FutureInstallment:   futureInstallment,
 		OutstandingBalance:  outstanding,
 		BilledOutstanding:   billed,
-		UnbilledOutstanding: unbilled,
+		UnbilledOutstanding: displayUnbilled,
 		AvailableCredit:     available,
 		DisplayOnly:         true,
 		Note:                note,
@@ -169,9 +184,9 @@ func (s *AccountService) CreditStatement(userID, accountID uint64, at time.Time)
 	}, nil
 }
 
-// resolveStatementDue 手填已出账与流水应还取较大值
-func resolveStatementDue(txDue, billedFen int64) int64 {
-	if billedFen > txDue {
+// resolveStatementDue 手填已出账与流水应还取较大值；若本期还款已覆盖手填已出账，则不再用手填抬高（避免下期未出账混入本期应还）
+func resolveStatementDue(txDue, billedFen, repaid int64) int64 {
+	if billedFen > txDue && repaid < billedFen {
 		return billedFen
 	}
 	return txDue

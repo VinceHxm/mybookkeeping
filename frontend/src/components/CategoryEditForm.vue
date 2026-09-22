@@ -1,32 +1,49 @@
 <template>
-  <div class="form-fields">
-    <IconPicker v-model="form.icon" title="分类图标" fallback="mdi-shape" />
-    <v-text-field v-model="form.name" label="名称" variant="outlined" hide-details class="field" />
-    <v-select
-      v-if="!categoryId"
-      v-model="form.kind"
-      :items="[
-        { title: '支出', value: 'expense' },
-        { title: '收入', value: 'income' },
-      ]"
-      label="类型"
-      variant="outlined"
-      hide-details
-      class="field"
-    />
-    <v-select
-      v-model="form.parentId"
-      :items="parentOptions"
-      item-title="name"
-      item-value="id"
-      label="父分类（可选）"
-      clearable
-      variant="outlined"
-      hide-details
-      class="field"
-      :disabled="!!categoryId && hasChildren"
-    />
-    <v-text-field v-model.number="form.sort" label="排序" type="number" variant="outlined" hide-details class="field" />
+  <div class="form-sections">
+    <section class="form-section">
+      <header class="form-section__head">
+        <h3 class="form-section__title">基本信息</h3>
+      </header>
+      <div class="form-section__body">
+        <IconPicker v-model="form.icon" title="分类图标" fallback="mdi-shape" />
+        <v-text-field v-model="form.name" label="名称" variant="outlined" hide-details class="field" />
+        <v-select
+          v-if="!categoryId"
+          v-model="form.kind"
+          :items="[
+            { title: '支出', value: 'expense' },
+            { title: '收入', value: 'income' },
+          ]"
+          label="类型"
+          variant="outlined"
+          hide-details
+          class="field"
+        />
+        <v-select
+          v-model="form.parentId"
+          :items="parentOptions"
+          item-title="name"
+          item-value="id"
+          label="父分类（可选）"
+          clearable
+          variant="outlined"
+          hide-details
+          class="field"
+          :disabled="!!categoryId && hasChildren"
+        />
+        <v-text-field
+          v-model.number="form.sort"
+          label="排序"
+          type="number"
+          variant="outlined"
+          hide-details
+          class="field field--last"
+        />
+        <p v-if="categoryId && hasChildren" class="form-section__tip">
+          该分类下已有子分类，不可再挂到其他父分类下。
+        </p>
+      </div>
+    </section>
 
     <div v-if="categoryId" class="danger-zone">
       <div class="danger-title">危险操作</div>
@@ -124,16 +141,3 @@ async function save() {
 
 defineExpose({ save, saving })
 </script>
-
-<style scoped>
-.form-fields .field { margin-bottom: 14px; }
-.danger-zone {
-  margin-top: 28px;
-  padding: 16px;
-  border-radius: 14px;
-  border: 1px solid rgba(198, 40, 40, 0.35);
-  background: rgba(198, 40, 40, 0.08);
-}
-.danger-title { font-weight: 700; color: #c62828; margin-bottom: 6px; }
-.danger-tip { margin: 0 0 12px; font-size: 0.8rem; color: var(--muted); line-height: 1.4; }
-</style>

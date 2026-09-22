@@ -54,14 +54,22 @@ func TestRelevantPaymentDueNear(t *testing.T) {
 }
 
 func TestResolveStatementDue(t *testing.T) {
-	if got := resolveStatementDue(0, 196302); got != 196302 {
-		t.Fatalf("hand billed should win when tx=0, got %d", got)
+	// 未还清：手填已出账可抬高本期应还
+	if got := resolveStatementDue(0, 196302, 0); got != 196302 {
+		t.Fatalf("hand billed should win when unpaid, got %d", got)
 	}
-	if got := resolveStatementDue(200000, 196302); got != 200000 {
+	if got := resolveStatementDue(200000, 196302, 0); got != 200000 {
 		t.Fatalf("higher tx due should win, got %d", got)
 	}
-	if got := resolveStatementDue(100, 100); got != 100 {
-		t.Fatalf("equal ok, got %d", got)
+	// 已还清手填已出账：不再用手填抬高（避免下期未出账混入本期）
+	if got := resolveStatementDue(0, 25417, 196302); got != 0 {
+		t.Fatalf("paid billed should not inflate due, got %d", got)
+	}
+	if got := resolveStatementDue(10000, 25417, 25417); got != 10000 {
+		t.Fatalf("after billed covered, keep tx due, got %d", got)
+	}
+	if got := resolveStatementDue(100, 100, 50); got != 100 {
+		t.Fatalf("equal billed/tx while unpaid ok, got %d", got)
 	}
 }
 
