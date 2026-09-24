@@ -32,6 +32,7 @@ func OpenMySQL(cfg *config.Config) (*gorm.DB, error) {
 	if err := db.AutoMigrate(
 		&model.User{},
 		&model.Account{},
+		&model.CreditInstallmentPlan{},
 		&model.Category{},
 		&model.Tag{},
 		&model.Transaction{},

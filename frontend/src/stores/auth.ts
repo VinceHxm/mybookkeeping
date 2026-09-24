@@ -10,7 +10,10 @@ export interface UserProfile {
   email?: string
   emailVerified?: boolean
   role?: 'user' | 'admin'
+  /** 默认还款转出账户（非信用） */
   defaultAccountId?: number | null
+  /** 默认消费/收支账户 */
+  defaultExpenseAccountId?: number | null
   weekStart?: number
   expenseColor?: string
   incomeColor?: string

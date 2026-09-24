@@ -65,12 +65,13 @@ func RequireAdmin(getUser func(uint64) (*model.User, error)) gin.HandlerFunc {
 	}
 }
 
+// extractToken 只接受 Authorization 头；不支持 URL 参数，避免令牌写进访问日志 / Referer。
 func extractToken(c *gin.Context) string {
 	h := c.GetHeader("Authorization")
 	if strings.HasPrefix(strings.ToLower(h), "bearer ") {
 		return strings.TrimSpace(h[7:])
 	}
-	return c.Query("token")
+	return ""
 }
 
 func GetUserID(c *gin.Context) uint64 {

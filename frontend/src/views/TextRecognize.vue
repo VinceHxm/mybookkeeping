@@ -199,8 +199,21 @@ function isCreditAccount(id?: number) {
   return accounts.list.some((a) => a.id === id && a.type === 'credit')
 }
 
-function defaultAccountId() {
-  return auth.profile?.defaultAccountId || accounts.list.find((a) => a.type !== 'credit')?.id || accounts.list[0]?.id
+function defaultExpenseAccountId() {
+  return (
+    auth.profile?.defaultExpenseAccountId ||
+    auth.profile?.defaultAccountId ||
+    accounts.list.find((a) => a.type !== 'credit')?.id ||
+    accounts.list[0]?.id
+  )
+}
+
+function defaultRepayAccountId() {
+  return (
+    auth.profile?.defaultAccountId ||
+    accounts.list.find((a) => a.type !== 'credit')?.id ||
+    accounts.list[0]?.id
+  )
 }
 
 function toggleAll(v: boolean) {
@@ -222,10 +235,12 @@ async function onRecognize() {
       items.value = []
       return
     }
-    const defAcc = defaultAccountId()
+    const defExpense = defaultExpenseAccountId()
+    const defRepay = defaultRepayAccountId()
     items.value = list.map((it) => {
       keySeq += 1
       const type = (['expense', 'income', 'transfer'].includes(it.type) ? it.type : 'expense') as Row['type']
+      const defAcc = type === 'transfer' ? defRepay : defExpense
       return {
         key: `r-${keySeq}`,
         selected: true,

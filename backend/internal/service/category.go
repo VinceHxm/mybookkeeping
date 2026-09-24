@@ -135,7 +135,7 @@ func (s *CategoryService) Update(userID, id uint64, in CategoryInput) (*model.Ca
 			}
 			// 若当前分类已有子类，不可再变为二级
 			var childCount int64
-			s.db.Model(&model.Category{}).Where("parent_id = ?", id).Count(&childCount)
+			s.db.Model(&model.Category{}).Where("user_id = ? AND parent_id = ?", userID, id).Count(&childCount)
 			if childCount > 0 {
 				return nil, errors.New("已有子分类，不能降为二级")
 			}

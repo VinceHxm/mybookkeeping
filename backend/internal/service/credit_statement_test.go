@@ -3,6 +3,8 @@ package service
 import (
 	"testing"
 	"time"
+
+	"mybookkeeping/internal/model"
 )
 
 func TestLastClosedStatementAndCycle(t *testing.T) {
@@ -87,6 +89,46 @@ func TestFirstDueAndInstallmentSplit(t *testing.T) {
 	buy2 := time.Date(2026, 8, 10, 10, 0, 0, 0, loc)
 	if fmtDate(firstDueStatementForPurchase(buy2, 15)) != "2026-08-15" {
 		t.Fatal("expected Aug statement")
+	}
+}
+
+func TestAddPlanSharesFromNextStatement(t *testing.T) {
+	loc := time.Local
+	stmt := time.Date(2026, 9, 15, 0, 0, 0, 0, loc)
+	nextStmt := time.Date(2026, 10, 15, 0, 0, 0, 0, loc)
+	// 本期已含当期款：首期从下期起，8 期共 4800 → 每期 600，不抬高本期
+	p := model.CreditInstallmentPlan{
+		PrincipalFen: 480000, Periods: 8, InterestPerPeriodFen: 1000,
+		FirstDueOn: "2026-10-15",
+	}
+	var installmentDue, interestDue, future, nextInst int64
+	addPlanShares(p, 15, stmt, nextStmt, &installmentDue, &interestDue, &future, &nextInst)
+	if installmentDue != 0 || interestDue != 0 {
+		t.Fatalf("should not hit current stmt, due=%d interest=%d", installmentDue, interestDue)
+	}
+	if future != 480000 {
+		t.Fatalf("future=%d", future)
+	}
+	if nextInst != 60000 {
+		t.Fatalf("nextInst=%d", nextInst)
+	}
+}
+
+func TestAddPlanSharesCurrentStatement(t *testing.T) {
+	loc := time.Local
+	stmt := time.Date(2026, 9, 15, 0, 0, 0, 0, loc)
+	nextStmt := time.Date(2026, 10, 15, 0, 0, 0, 0, loc)
+	p := model.CreditInstallmentPlan{
+		PrincipalFen: 300000, Periods: 3, InterestPerPeriodFen: 500,
+		FirstDueOn: "2026-09-15",
+	}
+	var installmentDue, interestDue, future, nextInst int64
+	addPlanShares(p, 15, stmt, nextStmt, &installmentDue, &interestDue, &future, &nextInst)
+	if installmentDue != 100000 || interestDue != 500 {
+		t.Fatalf("due=%d interest=%d", installmentDue, interestDue)
+	}
+	if future != 200000 || nextInst != 100000 {
+		t.Fatalf("future=%d next=%d", future, nextInst)
 	}
 }
 

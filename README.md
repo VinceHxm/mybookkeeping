@@ -23,7 +23,8 @@
 - **模板 / 周期**：记账模板；周期自动记账（后台每分钟）
 - **计费规则**：刷卡折、立减、时段/节假日/乘次/金额阶梯等；模板可绑定；记一笔可预览建议价
 - **明细 / 统计**：多条件筛选分页；区间统计、分类饼图、趋势
-- **设置**：默认账户、周起始、主题（light/dark/system）、收支颜色
+- **设置**：周起始、主题（light/dark/system）、收支颜色
+- **账户管理**：默认还款账户、默认消费账户（卡片徽章区分）
 - **AI**：文字多笔识别（确认后再入库）；票据识图填回单笔表单
 - **管理**（admin）：用户列表、改角色、停用/启用、删除；节假日数据手动刷新
 
@@ -54,13 +55,19 @@ copy .env.example .env
 | `MYSQL_DSN` / `REDIS_*` / `MINIO_*` | 基础设施 |
 | `AMAP_KEY` / `AMAP_SECURITY_CODE` | 高德选点；空则地图能力不可用 |
 | `ALLOW_REGISTER` | 是否开放注册（默认 true） |
-| `RESET_TOKEN_IN_RESPONSE` | 忘记密码是否直接返回令牌（无 SMTP 时用） |
+| `RESET_TOKEN_IN_RESPONSE` | 忘记密码是否直接返回令牌，默认 false；生产勿开，由管理员在用户管理中重置 |
+| `APP_SECRET` | 附件签名短链密钥；空则每次启动随机生成 |
+| `TRUSTED_PROXIES` | 反向代理地址/网段，用于识别真实 IP（登录限流），默认本机+内网 |
+| `CORS_ORIGINS` | 跨域白名单；同源部署留空 |
 | `DEEPSEEK_API_KEY` | DeepSeek；空则关闭 AI |
 | `DEEPSEEK_MODEL` | 文字识别，默认 `deepseek-chat` |
 | `DEEPSEEK_VISION_MODEL` | 识图，默认 `deepseek-flash` |
 | `SESSION_TTL_DAYS` | Session 有效天数，默认 7 |
 
 > **安全**：真实密码、API Key 只放在本地 `.env`，不要提交。仓库内 `.env.example` 仅为占位示例。
+>
+> **部署要求**：只对外暴露 HTTPS 反向代理；MySQL / Redis / MinIO 端口仅监听内网或本机（远程维护走 SSH 隧道）。MinIO 桶保持私有，附件一律经后端签名短链访问。
+> 所有接收 ID 的写接口须调用 `assertRefsOwned` 校验归属，并在 `service/tenant_isolation_test.go` 补越权用例。
 
 ## 本地启动
 
@@ -74,7 +81,7 @@ go run ./cmd/init-user -username=admin -password=你的密码
 go run ./cmd/server
 ```
 
-健康检查：<http://127.0.0.1:8080/api/health>
+健康检查：<http://127.0.0.1:9180/api/health>（本地默认端口，见 `backend/.env` 的 `SERVER_ADDR`）
 
 若库中尚无管理员，启动时会自动把用户名为 `admin` 的账号或最早用户提升为 admin。
 

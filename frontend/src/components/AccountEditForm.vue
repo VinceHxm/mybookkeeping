@@ -134,7 +134,10 @@
             hide-details
             class="field field--last"
           />
-          <p class="form-section__tip">已出账为本期待还款；未出账自动计算：已用额度 − 已出账。</p>
+          <p class="form-section__tip">
+            只填银行/花呗「已出账、当前应还」的金额。上期已还清、下期还在累积时请填
+            <strong>0</strong>——花呗里的「本期已累计」不是已出账，应留在未出账里。未出账 = 已用 − 已出账。
+          </p>
         </div>
         <div class="form-section__group">
           <v-text-field
@@ -160,7 +163,111 @@
       </div>
     </section>
 
-    <section v-else class="form-section">
+    <section v-if="form.type === 'credit'" class="form-section">
+      <header class="form-section__head">
+        <h3 class="form-section__title">存量分期（可选）</h3>
+      </header>
+      <div class="form-section__body">
+        <p class="form-section__tip form-section__tip--alone">
+          按 App「分期待还」抄剩余本金与期数，不改已用额度。系统里的「出账」= 账单日那一次结账，不是花呗正在累积的那一期。
+          上期已还清、累计还在滚时：已出账填 0，首期选「下次出账起」，剩余本金含即将入下期账单的那一期。
+          仅当上方「已出账」里已经含有该分期的当期款时，才选「已含在已出账」。
+        </p>
+        <div
+          v-for="(row, idx) in planRows"
+          :key="row.key"
+          class="plan-row"
+        >
+          <v-text-field
+            v-model="row.name"
+            label="名称"
+            variant="outlined"
+            hide-details
+            density="compact"
+            class="field"
+            placeholder="如：京东 12 期"
+          />
+          <div class="plan-row__grid">
+            <v-text-field
+              v-model="row.principalYuan"
+              label="剩余本金"
+              type="number"
+              inputmode="decimal"
+              variant="outlined"
+              hide-details
+              density="compact"
+              prefix="¥"
+              class="field"
+            />
+            <v-text-field
+              v-model.number="row.periods"
+              label="剩余期数"
+              type="number"
+              min="1"
+              max="60"
+              variant="outlined"
+              hide-details
+              density="compact"
+              class="field"
+            />
+            <v-text-field
+              v-model="row.interestYuan"
+              label="每期利息"
+              type="number"
+              inputmode="decimal"
+              variant="outlined"
+              hide-details
+              density="compact"
+              prefix="¥"
+              class="field"
+            />
+            <v-select
+              v-model="row.firstDueMode"
+              :items="firstDueModeItems"
+              label="首期如何入账"
+              variant="outlined"
+              hide-details
+              density="compact"
+              class="field field--last"
+            />
+          </div>
+          <div class="plan-row__actions">
+            <span v-if="planShareHint(row)" class="plan-share">约每期 ¥{{ planShareHint(row) }}</span>
+            <v-btn size="small" variant="text" color="error" @click="removePlanRow(idx)">移除</v-btn>
+          </div>
+        </div>
+        <v-btn size="small" variant="tonal" color="primary" class="mt-1" @click="addPlanRow">
+          添加分期计划
+        </v-btn>
+        <div v-if="planSummary.futurePrincipal > 0 || planSummary.includedInBilled > 0 || planRows.length" class="plan-summary">
+          <div v-if="planSummary.includedInBilled > 0">
+            已含在已出账内的分期首期约 ¥{{ fenToYuan(planSummary.includedInBilled) }}（不会再计入未出账）
+          </div>
+          <div v-if="planSummary.futurePrincipal > 0">
+            尚未出账的分期本金 ¥{{ fenToYuan(planSummary.futurePrincipal) }}
+            <template v-if="planSummary.nextShare > 0">
+              · 其中下次出账约 ¥{{ fenToYuan(planSummary.nextShare) }}
+            </template>
+          </div>
+          <div>
+            未出账里的非分期约 ¥{{ fenToYuan(planSummary.nonInstallmentUnbilled) }}
+            <template v-if="planSummary.nextShare > 0">
+              · 估下次出账合计约 ¥{{ fenToYuan(planSummary.nonInstallmentUnbilled + planSummary.nextShare) }}
+            </template>
+          </div>
+          <div v-if="planSummary.warnBilledZeroButIncluded" class="plan-warn">
+            已出账为 0，但分期选了「已含在已出账」——请改成「下次出账起」，否则首期会对着已关闭的账单周期。
+          </div>
+          <div v-if="planSummary.warnAccruingAsBilled" class="plan-warn">
+            若上期已还清、这里填的是花呗「已累计」而非应还账单，请把已出账改回 0，分期选「下次出账起」。
+          </div>
+          <div v-if="planSummary.overUnbilled" class="plan-warn">尚未出账的分期本金已超过未出账，请核对已用/已出账或分期金额</div>
+          <div v-if="!form.billingDay" class="plan-warn">请先设置账单日，才能正确映射首期出账日</div>
+        </div>
+      </div>
+    </section>
+
+    <section v-else-if="form.type !== 'credit'" class="form-section">
       <header class="form-section__head">
         <h3 class="form-section__title">余额</h3>
       </header>
@@ -175,6 +282,35 @@
           class="field field--last"
         />
         <p v-if="accountId" class="form-section__tip">可直接改余额，不自动生成流水。</p>
+      </div>
+    </section>
+
+    <section v-if="accountId" class="form-section">
+      <header class="form-section__head">
+        <h3 class="form-section__title">默认用途</h3>
+      </header>
+      <div class="form-section__body">
+        <v-switch
+          v-model="asDefaultExpense"
+          label="默认消费账户（记收支时优先选用；全局仅一个）"
+          color="primary"
+          hide-details
+          density="compact"
+          class="field"
+          :disabled="form.archived"
+        />
+        <v-switch
+          v-if="form.type !== 'credit'"
+          v-model="asDefaultRepay"
+          label="默认还款账户（还信用卡时优先作转出；全局仅一个）"
+          color="primary"
+          hide-details
+          density="compact"
+          class="field field--last"
+          :disabled="form.archived"
+        />
+        <p v-else class="form-section__tip">信用账户不能设为默认还款账户。</p>
+        <p class="form-section__tip">开启后会替换原先的同类型默认账户；可与另一类默认设为同一账户。</p>
       </div>
     </section>
 
@@ -240,7 +376,9 @@ import {
   creditUsedFen,
   creditBilledFenOf,
   type Account,
+  type CreditInstallmentPlan,
 } from '../stores/account'
+import { useAuthStore } from '../stores/auth'
 import { fenToYuan, yuanToFen } from '../utils/money'
 import { looksMaskedSecret, secretFieldForSave } from '../utils/mask'
 
@@ -257,10 +395,13 @@ const emit = defineEmits<{
 }>()
 
 const accounts = useAccountStore()
+const auth = useAuthStore()
 const saving = ref(false)
 const reconciling = ref(false)
 const revealLoading = ref(false)
 const secretsRevealed = ref(false)
+const asDefaultExpense = ref(false)
+const asDefaultRepay = ref(false)
 /** 打开表单时的脱敏快照，用于判断「未改动」 */
 const originalCardMasked = ref('')
 const originalHolderMasked = ref('')
@@ -271,6 +412,22 @@ const billedYuan = ref('0')
 const creditLimitYuan = ref('0')
 const attachmentIds = ref<number[]>([])
 const formAttachments = ref<{ id: number; url: string }[]>([])
+
+type PlanRow = {
+  key: number
+  name: string
+  principalYuan: string
+  periods: number
+  interestYuan: string
+  firstDueMode: 'current' | 'next'
+}
+
+let planKeySeq = 1
+const planRows = ref<PlanRow[]>([])
+const firstDueModeItems = [
+  { title: '下次出账起', value: 'next' },
+  { title: '已含在已出账', value: 'current' },
+]
 
 const form = reactive({
   name: '',
@@ -301,6 +458,143 @@ const unbilledYuan = computed(() => {
   return fenToYuan(Math.max(0, used - billed))
 })
 
+function clampDay(year: number, month: number, day: number) {
+  const d = Math.min(28, Math.max(1, day || 1))
+  return dayjs(`${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`)
+}
+
+/** 对齐后端 lastClosedStatementDate / nextStatementDate */
+function creditStatementDates(billingDay: number, at = dayjs()) {
+  const bd = Math.min(28, Math.max(1, billingDay || 1))
+  const d = at.date()
+  let stmt = clampDay(at.year(), at.month() + 1, bd)
+  if (d < bd) {
+    const prev = at.subtract(1, 'month')
+    stmt = clampDay(prev.year(), prev.month() + 1, bd)
+  }
+  const next = stmt.add(1, 'month')
+  const nextStmt = clampDay(next.year(), next.month() + 1, bd)
+  return { stmt, nextStmt }
+}
+
+function firstDueOnForMode(mode: 'current' | 'next', billingDay: number) {
+  const { stmt, nextStmt } = creditStatementDates(billingDay)
+  return (mode === 'current' ? stmt : nextStmt).format('YYYY-MM-DD')
+}
+
+function modeFromFirstDueOn(firstDueOn: string, billingDay: number): 'current' | 'next' {
+  if (!billingDay || !firstDueOn) return 'next'
+  const { stmt, nextStmt } = creditStatementDates(billingDay)
+  if (firstDueOn === stmt.format('YYYY-MM-DD')) return 'current'
+  if (firstDueOn === nextStmt.format('YYYY-MM-DD')) return 'next'
+  // 过去日期视为已开始，尽量按是否等于本期判断
+  if (firstDueOn <= stmt.format('YYYY-MM-DD')) return 'current'
+  return 'next'
+}
+
+function emptyPlanRow(): PlanRow {
+  return {
+    key: planKeySeq++,
+    name: '',
+    principalYuan: '',
+    periods: 1,
+    interestYuan: '0',
+    firstDueMode: 'next',
+  }
+}
+
+function addPlanRow() {
+  planRows.value.push(emptyPlanRow())
+}
+
+function removePlanRow(idx: number) {
+  planRows.value.splice(idx, 1)
+}
+
+function planShareHint(row: PlanRow) {
+  const principal = yuanToFen(row.principalYuan)
+  const periods = Math.max(1, Number(row.periods) || 1)
+  if (principal <= 0) return ''
+  return fenToYuan(Math.floor(principal / periods))
+}
+
+const planSummary = computed(() => {
+  let includedInBilled = 0
+  let futurePrincipal = 0
+  let nextShare = 0
+  let hasIncludedMode = false
+  for (const row of planRows.value) {
+    const principal = Math.max(0, yuanToFen(row.principalYuan))
+    const periods = Math.max(1, Math.min(60, Number(row.periods) || 1))
+    if (principal <= 0) continue
+    const base = Math.floor(principal / periods)
+    const rem = principal % periods
+    const firstShare = base + rem
+    if (row.firstDueMode === 'next') {
+      futurePrincipal += principal
+      nextShare += firstShare
+    } else {
+      hasIncludedMode = true
+      includedInBilled += firstShare
+      futurePrincipal += Math.max(0, principal - firstShare)
+      if (periods > 1) nextShare += base
+    }
+  }
+  const used = Math.max(0, yuanToFen(usedCreditYuan.value))
+  let billed = yuanToFen(billedYuan.value)
+  if (billed < 0) billed = 0
+  if (billed > used) billed = used
+  const unbilled = used - billed
+  // 未出账里应覆盖「尚未出账的分期」；已含在已出账的首期不占用未出账
+  const nonInstallmentUnbilled = Math.max(0, unbilled - futurePrincipal)
+  return {
+    includedInBilled,
+    futurePrincipal,
+    nextShare,
+    nonInstallmentUnbilled,
+    overUnbilled: futurePrincipal > unbilled && unbilled >= 0,
+    warnBilledZeroButIncluded: billed === 0 && hasIncludedMode && includedInBilled > 0,
+    // 已出账>0 且存在「已含在已出账」分期时，提醒别把「已累计」误当已出账（启发式：未出账≈后续分期）
+    warnAccruingAsBilled:
+      billed > 0 &&
+      hasIncludedMode &&
+      futurePrincipal > 0 &&
+      Math.abs(unbilled - futurePrincipal) <= 1,
+  }
+})
+
+function fillPlansFrom(a: Account | null | undefined) {
+  const plans = a?.installmentPlans || []
+  const billingDay = a?.billingDay || 0
+  planRows.value = plans.map((p) => ({
+    key: planKeySeq++,
+    name: p.name || '',
+    principalYuan: fenToYuan(p.principalFen || 0),
+    periods: Math.max(1, p.periods || 1),
+    interestYuan: fenToYuan(p.interestPerPeriodFen || 0),
+    firstDueMode: modeFromFirstDueOn(p.firstDueOn || '', billingDay),
+  }))
+}
+
+function buildInstallmentPlansPayload(): CreditInstallmentPlan[] {
+  const billingDay = form.billingDay || 0
+  return planRows.value
+    .map((row, i) => {
+      const principalFen = Math.max(0, yuanToFen(row.principalYuan))
+      const periods = Math.max(1, Math.min(60, Number(row.periods) || 1))
+      if (principalFen <= 0 && !row.name.trim()) return null
+      return {
+        name: row.name.trim() || '存量分期',
+        principalFen,
+        periods,
+        interestPerPeriodFen: Math.max(0, yuanToFen(row.interestYuan)),
+        firstDueOn: firstDueOnForMode(row.firstDueMode, billingDay || 1),
+        sort: i,
+      } as CreditInstallmentPlan
+    })
+    .filter(Boolean) as CreditInstallmentPlan[]
+}
+
 function fillFrom(a: Account | null | undefined) {
   secretsRevealed.value = false
   if (!a) {
@@ -324,6 +618,9 @@ function fillFrom(a: Account | null | undefined) {
     creditLimitYuan.value = '0'
     attachmentIds.value = []
     formAttachments.value = []
+    planRows.value = []
+    asDefaultExpense.value = false
+    asDefaultRepay.value = false
     return
   }
   form.name = a.name
@@ -346,9 +643,15 @@ function fillFrom(a: Account | null | undefined) {
   billedYuan.value = fenToYuan(creditBilledFenOf(a))
   creditLimitYuan.value = fenToYuan(a.creditLimit || 0)
   syncAvailableFromUsed()
+  fillPlansFrom(a)
+  asDefaultExpense.value = auth.profile?.defaultExpenseAccountId === a.id
+  asDefaultRepay.value = a.type !== 'credit' && auth.profile?.defaultAccountId === a.id
 }
 
 async function loadAccount() {
+  if (!auth.profile) {
+    await auth.fetchMe().catch(() => {})
+  }
   if (props.initial) {
     fillFrom(props.initial)
     return
@@ -460,6 +763,13 @@ function onBilledChange() {
 
 async function save() {
   if (saving.value) return
+  if (form.type === 'credit' && planRows.value.length && !form.billingDay) {
+    alert('补录存量分期前请先设置账单日（1-28）')
+    return
+  }
+  if (form.type === 'credit' && planSummary.value.overUnbilled) {
+    if (!confirm('存量分期本金合计已超过未出账，仍要保存吗？')) return
+  }
   saving.value = true
   try {
     const payload: Record<string, unknown> = {
@@ -489,12 +799,15 @@ async function save() {
     if (form.type === 'credit') {
       payload.usedCredit = yuanToFen(usedCreditYuan.value)
       payload.creditBilledFen = yuanToFen(billedYuan.value)
+      payload.installmentPlans = buildInstallmentPlansPayload()
     } else {
       payload.balance = yuanToFen(balanceYuan.value)
+      payload.installmentPlans = []
     }
     if (props.accountId) {
       payload.archived = form.archived
       await accounts.update(props.accountId, payload as any)
+      await syncDefaults(props.accountId)
     } else {
       await accounts.create(payload as any)
     }
@@ -503,6 +816,27 @@ async function save() {
     emit('saved')
   } finally {
     saving.value = false
+  }
+}
+
+async function syncDefaults(accountId: number) {
+  if (form.archived) {
+    await auth.fetchMe().catch(() => {})
+    return
+  }
+  const payload: Record<string, unknown> = {}
+  const wasExpense = auth.profile?.defaultExpenseAccountId === accountId
+  const wasRepay = auth.profile?.defaultAccountId === accountId
+  if (asDefaultExpense.value && !wasExpense) payload.defaultExpenseAccountId = accountId
+  if (!asDefaultExpense.value && wasExpense) payload.clearDefaultExpenseAccount = true
+  if (form.type !== 'credit') {
+    if (asDefaultRepay.value && !wasRepay) payload.defaultAccountId = accountId
+    if (!asDefaultRepay.value && wasRepay) payload.clearDefaultAccount = true
+  } else if (wasRepay) {
+    payload.clearDefaultAccount = true
+  }
+  if (Object.keys(payload).length) {
+    await auth.updateSettings(payload)
   }
 }
 
@@ -519,3 +853,42 @@ async function markReconciled() {
 
 defineExpose({ save, saving })
 </script>
+
+<style scoped>
+.plan-row {
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border, #d0d7d3) 70%, transparent);
+}
+.plan-row:last-of-type {
+  border-bottom: none;
+}
+/* 弹窗内勿用视口断点拉四列，否则 label 会被挤成省略号 */
+.plan-row__grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 12px;
+  row-gap: 0;
+}
+.plan-row__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 2px;
+}
+.plan-share {
+  font-size: 12px;
+  color: var(--muted, #6b7280);
+}
+.plan-summary {
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-secondary, #4b5563);
+}
+.plan-warn {
+  color: var(--warn, #c45c3e);
+  margin-top: 4px;
+}
+</style>

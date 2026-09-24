@@ -1,7 +1,7 @@
 <template>
   <div class="page narrow">
     <h1 class="title">重置密码</h1>
-    <p class="hint">个人部署默认会直接返回重置令牌（未接邮件服务）。</p>
+    <p class="hint">默认不开放自助找回，请联系管理员在「用户管理」中为你重置密码。</p>
 
     <v-stepper v-model="step" alt-labels flat>
       <v-stepper-header>
@@ -17,6 +17,7 @@
       <v-alert v-if="token" type="success" class="mt-3" density="compact">
         令牌：{{ token }}（已自动填入下一步）
       </v-alert>
+      <v-alert v-else-if="info" type="info" class="mt-3" density="compact">{{ info }}</v-alert>
     </div>
 
     <div v-else class="mt-4">
@@ -41,16 +42,18 @@ const token = ref('')
 const password = ref('')
 const loading = ref(false)
 const error = ref('')
+const info = ref('')
 const ok = ref(false)
 
 async function onForgot() {
   error.value = ''
+  info.value = ''
   loading.value = true
   try {
     const { data } = await http.post('/auth/forgot-password', { username: username.value.trim() })
     token.value = data.resetToken || ''
     if (token.value) step.value = 2
-    else error.value = data.message || '已处理（未返回令牌，请检查服务端配置）'
+    else info.value = data.message || '请联系管理员重置密码'
   } catch (e: any) {
     error.value = e.message || '失败'
   } finally {

@@ -145,6 +145,9 @@ func (s *TransactionService) Create(userID uint64, in TransactionInput) (*model.
 	}
 	var out *model.Transaction
 	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := assertRefsOwned(tx, userID, txRefs(in)); err != nil {
+			return err
+		}
 		t := &model.Transaction{
 			UserID:             userID,
 			Type:               in.Type,
@@ -198,6 +201,9 @@ func (s *TransactionService) Update(userID, id uint64, in TransactionInput) (*mo
 		var old model.Transaction
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("id = ? AND user_id = ?", id, userID).First(&old).Error; err != nil {
+			return err
+		}
+		if err := assertRefsOwned(tx, userID, txRefs(in)); err != nil {
 			return err
 		}
 		oldIn := TransactionInput{

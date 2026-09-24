@@ -117,18 +117,27 @@
           <span>本期待还</span><strong>¥{{ fenToYuan(repayStatement.periodRemaining) }}</strong>
         </div>
         <div class="repay-stmt-row">
-          <span>{{ repayStatement.periodRemaining === 0 && (repayStatement.remainingAfterPay || 0) > 0 ? '下期待还' : '还后待还' }}</span>
+          <span>{{ repayStatement.periodRemaining === 0 && (repayStatement.remainingAfterPay || 0) > 0 ? '剩余已用' : '还后待还' }}</span>
           <strong class="warn">¥{{ fenToYuan(repayStatement.remainingAfterPay) }}</strong>
         </div>
         <div class="repay-stmt-row">
           <span>整体待还</span><strong>¥{{ fenToYuan(repayTotalOutstanding) }}</strong>
         </div>
+        <div
+          v-if="repayStatement.periodRemaining === 0 && (repayStatement.nextPeriodEstimate || 0) > 0"
+          class="repay-stmt-row"
+        >
+          <span>预计下次出账</span><strong>¥{{ fenToYuan(repayStatement.nextPeriodEstimate || 0) }}</strong>
+        </div>
         <div class="repay-stmt-hint">
           <template v-if="repayStatement.periodRemaining === 0 && (repayStatement.remainingAfterPay || 0) > 0">
-            本期已还清；剩余已用为下期/未出账。默认按本期待还，提前还款可加载整体待还
+            本期已还清。「剩余已用」是卡上还欠总额；还款默认按本期待还（现为 0），提前还款可加载整体待还。
           </template>
           <template v-else>
             默认按本期待还预填；提前还款可加载整体待还
+          </template>
+          <template v-if="(repayStatement.futureInstallment || 0) > 0">
+            · 尚未出账分期 ¥{{ fenToYuan(repayStatement.futureInstallment) }}
           </template>
         </div>
       </div>
@@ -681,12 +690,38 @@ watch(() => form.type, (t, prev) => {
   }
 })
 
+/** 支出用默认消费账户；收入 / 转账 / 还款用默认还款账户。未设置或已归档则不改动 */
+function defaultAccountFor(kind: 'expense' | 'income' | 'transfer' | 'repay') {
+  const id = kind === 'expense' ? auth.profile?.defaultExpenseAccountId : auth.profile?.defaultAccountId
+  if (!id) return undefined
+  const acc = accounts.list.find((a) => a.id === id && !a.archived)
+  if (!acc) return undefined
+  if (kind !== 'expense' && acc.type === 'credit') return undefined
+  return acc.id
+}
+
+/** 模板 / 识别 / 路由参数已指定账户时，本轮模式切换不再套默认账户 */
+let skipDefaultAccount = false
+function suppressDefaultAccountOnce() {
+  skipDefaultAccount = true
+  void nextTick(() => { skipDefaultAccount = false })
+}
+
+function applyDefaultAccount(kind: 'expense' | 'income' | 'transfer' | 'repay') {
+  if (isEdit.value || skipDefaultAccount) return
+  const id = defaultAccountFor(kind)
+  if (!id) return
+  form.accountId = id
+  if (form.toAccountId === id) form.toAccountId = undefined
+}
+
 watch(flowKind, (k) => {
   if (syncingUiMode || uiMode.value !== 'flow') return
   if (form.type !== k) {
     form.type = k
     form.categoryId = undefined
   }
+  applyDefaultAccount(k)
 })
 
 watch(uiMode, (mode, prev) => {
@@ -694,7 +729,7 @@ watch(uiMode, (mode, prev) => {
   enterUiMode(mode)
 })
 
-function enterUiMode(mode: 'flow' | 'transfer' | 'repay') {
+function enterUiMode(mode: 'flow' | 'transfer' | 'repay', useDefaultAccount = true) {
   syncingUiMode = true
   try {
     if (mode === 'flow') {
@@ -702,6 +737,7 @@ function enterUiMode(mode: 'flow' | 'transfer' | 'repay') {
       form.toAccountId = undefined
       if (form.remark === '信用卡还款') form.remark = ''
       repayStatement.value = null
+      if (useDefaultAccount) applyDefaultAccount(flowKind.value)
     } else if (mode === 'transfer') {
       form.type = 'transfer'
       form.categoryId = undefined
@@ -711,12 +747,14 @@ function enterUiMode(mode: 'flow' | 'transfer' | 'repay') {
         form.toAccountId = undefined
       }
       repayStatement.value = null
+      if (useDefaultAccount) applyDefaultAccount('transfer')
     } else {
       form.type = 'transfer'
       form.categoryId = undefined
       form.remark = form.remark || '信用卡还款'
       repayAmountAuto.value = true
       form.installmentPeriods = Math.max(1, form.installmentPeriods || 1)
+      if (useDefaultAccount) applyDefaultAccount('repay')
       const credit =
         accounts.list.find((a) => a.id === form.toAccountId && a.type === 'credit') ||
         accounts.list.find((a) => a.type === 'credit' && !a.archived)
@@ -810,14 +848,18 @@ onMounted(async () => {
   await storesP
 
   if (!form.accountId) {
-    const def = auth.profile?.defaultAccountId
-    form.accountId = def || accounts.list.find((a) => a.type !== 'credit')?.id || accounts.list[0]?.id
+    const kind = uiMode.value === 'flow' ? flowKind.value : uiMode.value
+    form.accountId =
+      defaultAccountFor(kind) ||
+      accounts.list.find((a) => a.type !== 'credit' && !a.archived)?.id ||
+      accounts.list[0]?.id
   }
   // 账户页 / 首页还款提醒入口
   if (route.query.mode === 'repay') {
     syncingUiMode = true
     uiMode.value = 'repay'
     syncingUiMode = false
+    suppressDefaultAccountOnce()
     const qTo = Number(route.query.toAccountId || 0)
     const qFrom = Number(route.query.fromAccountId || 0)
     const credit =
@@ -837,7 +879,7 @@ onMounted(async () => {
       repayPrincipalBaseFen.value = qFen
       repayAmountAuto.value = true
     }
-    enterUiMode('repay')
+    enterUiMode('repay', false)
     if (credit) form.toAccountId = credit.id
     if (form.accountId === form.toAccountId) {
       form.accountId = accounts.list.find((a) => a.id !== form.toAccountId && a.type !== 'credit')?.id
@@ -845,6 +887,14 @@ onMounted(async () => {
     }
     if (qFen > 0) applyRepaySuggestion(true)
     await loadRepayStatement(credit?.id)
+  }
+
+  // 首页快捷模板缺字段时跳转至此，预填模板供编辑
+  const tplId = Number(route.query.templateId || 0)
+  if (tplId > 0) {
+    await loadSideData()
+    const t = templates.value.find((x) => x.id === tplId)
+    if (t) await applyTemplate(t)
   }
 })
 
@@ -889,6 +939,7 @@ function applyRecognized(data: any) {
       uiMode.value = toCredit ? 'repay' : 'transfer'
     }
     syncingUiMode = false
+    suppressDefaultAccountOnce()
   }
   if (data.amountYuan) amountYuan.value = String(data.amountYuan)
   if (data.accountId) form.accountId = data.accountId
@@ -910,6 +961,7 @@ async function applyTemplate(t: any) {
     uiMode.value = toCredit ? 'repay' : 'transfer'
   }
   syncingUiMode = false
+  suppressDefaultAccountOnce()
   if (t.accountId) form.accountId = t.accountId
   form.toAccountId = t.toAccountId || undefined
   form.categoryId = t.categoryId || undefined

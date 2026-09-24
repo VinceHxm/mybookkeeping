@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/url"
+	"log"
 	"strings"
 	"time"
 
@@ -15,9 +15,8 @@ import (
 )
 
 type MinIO struct {
-	client    *minio.Client
-	bucket    string
-	publicURL string
+	client *minio.Client
+	bucket string
 }
 
 func NewMinIO(cfg *config.Config) (*MinIO, error) {
@@ -41,43 +40,35 @@ func NewMinIO(cfg *config.Config) (*MinIO, error) {
 			return nil, fmt.Errorf("minio make bucket: %w", err)
 		}
 	}
-	// 无论新建还是已有桶，都尽量放开匿名读，便于直接用公开 URL 回显
-	policy := fmt.Sprintf(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/*"]}]}`, cfg.MinIOBucket)
-	_ = client.SetBucketPolicy(ctx, cfg.MinIOBucket, policy)
+	// 桶必须私有：附件只经后端鉴权后转发。旧版本曾设置匿名读策略，这里主动清除。
+	if p, err := client.GetBucketPolicy(ctx, cfg.MinIOBucket); err == nil && strings.TrimSpace(p) != "" {
+		if err := client.SetBucketPolicy(ctx, cfg.MinIOBucket, ""); err != nil {
+			log.Printf("warn: minio remove bucket policy: %v", err)
+		} else {
+			log.Printf("minio: bucket %q policy removed (now private)", cfg.MinIOBucket)
+		}
+	}
 
-	public := strings.TrimRight(cfg.MinIOPublicURL, "/")
-	return &MinIO{client: client, bucket: cfg.MinIOBucket, publicURL: public}, nil
+	return &MinIO{client: client, bucket: cfg.MinIOBucket}, nil
 }
 
-func (m *MinIO) Upload(ctx context.Context, objectKey, contentType string, reader io.Reader, size int64) (string, error) {
+func (m *MinIO) Upload(ctx context.Context, objectKey, contentType string, reader io.Reader, size int64) error {
 	_, err := m.client.PutObject(ctx, m.bucket, objectKey, reader, size, minio.PutObjectOptions{
 		ContentType: contentType,
 	})
-	if err != nil {
-		return "", err
-	}
-	return m.AccessURL(ctx, objectKey)
+	return err
 }
 
-// PublicURL 构造直链。注意：不要对整段 key 做 PathEscape，否则 u1/a.jpg 会变成 u1%2Fa.jpg 导致 403。
-func (m *MinIO) PublicURL(objectKey string) string {
-	parts := strings.Split(objectKey, "/")
-	for i, p := range parts {
-		parts[i] = url.PathEscape(p)
-	}
-	return fmt.Sprintf("%s/%s/%s", m.publicURL, m.bucket, strings.Join(parts, "/"))
-}
-
-// AccessURL 返回浏览器可访问的地址。
-// 优先用 MINIO_PUBLIC_URL 拼直链（桶已放开匿名 GetObject；且可指向 HTTPS 反代，避免 HTTPS 站点 Mixed Content）。
-// 未配置 publicURL 时再回退预签名（签名 Host 来自 MINIO_ENDPOINT，通常是内网/HTTP，不宜直接给浏览器）。
-func (m *MinIO) AccessURL(ctx context.Context, objectKey string) (string, error) {
-	if m.publicURL != "" {
-		return m.PublicURL(objectKey), nil
-	}
-	u, err := m.client.PresignedGetObject(ctx, m.bucket, objectKey, 7*24*time.Hour, nil)
+// Open 读取对象内容；调用方负责 Close。
+func (m *MinIO) Open(ctx context.Context, objectKey string) (io.ReadCloser, int64, error) {
+	obj, err := m.client.GetObject(ctx, m.bucket, objectKey, minio.GetObjectOptions{})
 	if err != nil {
-		return "", err
+		return nil, 0, err
 	}
-	return u.String(), nil
+	st, err := obj.Stat()
+	if err != nil {
+		_ = obj.Close()
+		return nil, 0, err
+	}
+	return obj, st.Size, nil
 }

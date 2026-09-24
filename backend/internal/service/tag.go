@@ -57,8 +57,16 @@ func (s *TagService) Update(userID, id uint64, name, color string, sort int) (*m
 }
 
 func (s *TagService) Delete(userID, id uint64) error {
-	s.db.Where("tag_id = ?", id).Delete(&model.TransactionTag{})
-	return s.db.Where("id = ? AND user_id = ?", id, userID).Delete(&model.Tag{}).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		res := tx.Where("id = ? AND user_id = ?", id, userID).Delete(&model.Tag{})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return errors.New("标签不存在")
+		}
+		return tx.Where("tag_id = ?", id).Delete(&model.TransactionTag{}).Error
+	})
 }
 
 // 常用标签预设（原版无默认标签，按个人记账场景补充）

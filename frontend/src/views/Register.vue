@@ -3,7 +3,7 @@
     <h1 class="title">注册</h1>
     <v-text-field v-model="username" label="用户名" variant="outlined" />
     <v-text-field v-model="email" label="邮箱（可选）" variant="outlined" />
-    <v-text-field v-model="password" label="密码（至少 6 位）" type="password" variant="outlined" />
+    <v-text-field v-model="password" label="密码（至少 8 位）" type="password" variant="outlined" />
     <v-text-field v-model="password2" label="确认密码" type="password" variant="outlined" @keyup.enter="onSubmit" />
     <v-alert v-if="error" type="error" density="compact" class="mb-3">{{ error }}</v-alert>
     <v-btn color="primary" block size="large" :loading="loading" @click="onSubmit">注册并登录</v-btn>

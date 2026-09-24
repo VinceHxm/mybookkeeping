@@ -75,17 +75,6 @@ func normalizeTemplateGeo(in *TemplateInput) (mode string, endLng, endLat *float
 	return "point", nil, nil, ""
 }
 
-func (s *TemplateService) assertFareRule(userID uint64, id *uint64) error {
-	if id == nil || *id == 0 {
-		return nil
-	}
-	_, err := s.fareSvc.Get(userID, *id)
-	if err != nil {
-		return errors.New("计费规则不存在")
-	}
-	return nil
-}
-
 func (s *TemplateService) List(userID uint64) ([]model.Template, error) {
 	var list []model.Template
 	err := s.db.Preload("FareRule").Where("user_id = ?", userID).Order("sort asc, id asc").Find(&list).Error
@@ -102,7 +91,7 @@ func (s *TemplateService) Create(userID uint64, in TemplateInput) (*model.Templa
 	if in.Type == "" {
 		in.Type = "expense"
 	}
-	if err := s.assertFareRule(userID, in.FareRuleID); err != nil {
+	if err := assertRefsOwned(s.db, userID, refIDs{Account: in.AccountID, ToAccount: in.ToAccountID, Category: in.CategoryID, FareRule: in.FareRuleID}); err != nil {
 		return nil, err
 	}
 	mode, endLng, endLat, endName := normalizeTemplateGeo(&in)
@@ -134,7 +123,7 @@ func (s *TemplateService) Update(userID, id uint64, in TemplateInput) (*model.Te
 	if err := s.db.Where("id = ? AND user_id = ?", id, userID).First(&t).Error; err != nil {
 		return nil, err
 	}
-	if err := s.assertFareRule(userID, in.FareRuleID); err != nil {
+	if err := assertRefsOwned(s.db, userID, refIDs{Account: in.AccountID, ToAccount: in.ToAccountID, Category: in.CategoryID, FareRule: in.FareRuleID}); err != nil {
 		return nil, err
 	}
 	if in.Name != "" {

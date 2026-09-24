@@ -76,6 +76,9 @@ func (s *ScheduleService) Create(userID uint64, in ScheduleInput) (*model.Schedu
 	if err := validateSchedule(in); err != nil {
 		return nil, err
 	}
+	if err := assertRefsOwned(s.db, userID, refIDs{Account: &in.AccountID, ToAccount: in.ToAccountID, Category: in.CategoryID}); err != nil {
+		return nil, err
+	}
 	if in.IntervalN < 1 {
 		in.IntervalN = 1
 	}
@@ -137,6 +140,9 @@ func (s *ScheduleService) Update(userID, id uint64, in ScheduleInput) (*model.Sc
 		sch.NextRunAt = in.NextRunAt
 	}
 	sch.EndAt = in.EndAt
+	if err := assertRefsOwned(s.db, userID, refIDs{Account: &sch.AccountID, ToAccount: sch.ToAccountID, Category: sch.CategoryID}); err != nil {
+		return nil, err
+	}
 	if err := s.db.Save(&sch).Error; err != nil {
 		return nil, err
 	}

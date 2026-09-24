@@ -6,7 +6,7 @@
       <span class="spacer" />
     </div>
 
-    <p class="page-tip">仅管理员可见。可调整角色、停用或删除注册用户（不可操作自己；须保留至少一名可用管理员）。</p>
+    <p class="page-tip">仅管理员可见。可调整角色、停用、重置密码或删除注册用户（不可操作自己；须保留至少一名可用管理员）。</p>
 
     <EntityCard
       v-for="u in users.list"
@@ -73,6 +73,32 @@
               </div>
             </section>
 
+            <section v-if="editing && !isSelf" class="form-section">
+              <header class="form-section__head">
+                <h3 class="form-section__title">重置密码</h3>
+              </header>
+              <div class="form-section__body">
+                <v-text-field
+                  v-model="newPassword"
+                  label="新密码（至少 8 位）"
+                  type="password"
+                  autocomplete="new-password"
+                  variant="outlined"
+                  hide-details
+                  class="field"
+                />
+                <v-btn
+                  color="primary"
+                  variant="tonal"
+                  block
+                  :loading="resetting"
+                  :disabled="newPassword.length < 8"
+                  @click="onResetPassword"
+                >重置密码</v-btn>
+                <p class="form-section__tip">重置后该用户所有已登录设备会立即下线，请通过线下方式告知新密码。</p>
+              </div>
+            </section>
+
             <div v-if="editing && !isSelf" class="danger-zone">
               <div class="danger-title">危险操作</div>
               <p class="danger-tip">删除用户将级联清除其账户、流水、模板等全部数据。</p>
@@ -117,6 +143,8 @@ const confirmOpen = ref(false)
 const pendingDelete = ref<AdminUser | null>(null)
 const deleting = ref(false)
 const form = reactive({ role: 'user' as 'user' | 'admin', disabled: false })
+const newPassword = ref('')
+const resetting = ref(false)
 const roleItems = [
   { title: '普通用户', value: 'user' },
   { title: '管理员', value: 'admin' },
@@ -158,7 +186,22 @@ function openEdit(u: AdminUser) {
   editing.value = u
   form.role = u.role === 'admin' ? 'admin' : 'user'
   form.disabled = !!u.disabled
+  newPassword.value = ''
   dialog.value = true
+}
+
+async function onResetPassword() {
+  if (!editing.value || isSelf.value) return
+  resetting.value = true
+  try {
+    await users.resetPassword(editing.value.id, newPassword.value)
+    newPassword.value = ''
+    alert(`已重置「${editing.value.username}」的密码`)
+  } catch (e: any) {
+    alert(e?.message || '重置失败')
+  } finally {
+    resetting.value = false
+  }
 }
 
 async function onSave() {

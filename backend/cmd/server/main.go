@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -58,7 +60,7 @@ func main() {
 	llmSvc := service.NewLLMService(cfg, db)
 	var attachSvc *service.AttachmentService
 	if minioReady {
-		attachSvc = service.NewAttachmentService(db, minioStore)
+		attachSvc = service.NewAttachmentService(db, minioStore, appSecret(cfg))
 	}
 
 	api := handler.NewAPI(cfg, authSvc, accountSvc, categorySvc, tagSvc, templateSvc, fareRuleSvc, holidaySvc, scheduleSvc, txSvc, attachSvc, statsSvc, llmSvc, minioReady)
@@ -93,13 +95,19 @@ func main() {
 	}()
 
 	r := gin.Default()
-	r.Use(corsMiddleware())
+	r.MaxMultipartMemory = 8 << 20
+	if err := r.SetTrustedProxies(cfg.TrustedProxies); err != nil {
+		log.Fatalf("TRUSTED_PROXIES: %v", err)
+	}
+	r.Use(securityHeaders(), corsMiddleware(cfg.CORSOrigins))
 
 	r.GET("/api/health", api.Health)
 	r.POST("/api/auth/login", api.Login)
 	r.POST("/api/auth/register", api.Register)
 	r.POST("/api/auth/forgot-password", api.ForgotPassword)
 	r.POST("/api/auth/reset-password", api.ResetPassword)
+	// 附件凭签名短链访问（<img> 无法携带 Authorization 头）
+	r.GET("/api/attachments/:id/file", api.ServeAttachment)
 
 	auth := r.Group("/api")
 	auth.Use(authMw.Required())
@@ -146,6 +154,7 @@ func main() {
 		{
 			admin.GET("/users", api.AdminListUsers)
 			admin.PUT("/users/:id", api.AdminUpdateUser)
+			admin.PUT("/users/:id/password", api.AdminResetPassword)
 			admin.DELETE("/users/:id", api.AdminDeleteUser)
 		}
 
@@ -176,14 +185,45 @@ func main() {
 	}
 }
 
-func corsMiddleware() gin.HandlerFunc {
+func appSecret(cfg *config.Config) []byte {
+	if cfg.AppSecret != "" {
+		return []byte(cfg.AppSecret)
+	}
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		log.Fatalf("generate app secret: %v", err)
+	}
+	log.Printf("warn: APP_SECRET 未配置，已随机生成（重启后旧的附件链接失效，刷新页面即可）")
+	return b
+}
+
+func securityHeaders() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Header("Access-Control-Allow-Origin", "*")
-		c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type")
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
+		h := c.Writer.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "same-origin")
+		c.Next()
+	}
+}
+
+// corsMiddleware 仅对白名单源放行；未配置时不下发任何 CORS 头（同源部署与 Vite 代理都不需要）
+func corsMiddleware(origins []string) gin.HandlerFunc {
+	allowed := make(map[string]bool, len(origins))
+	for _, o := range origins {
+		allowed[strings.TrimRight(o, "/")] = true
+	}
+	return func(c *gin.Context) {
+		origin := c.GetHeader("Origin")
+		if origin != "" && allowed[origin] {
+			c.Header("Access-Control-Allow-Origin", origin)
+			c.Header("Vary", "Origin")
+			c.Header("Access-Control-Allow-Headers", "Authorization, Content-Type")
+			c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			if c.Request.Method == "OPTIONS" {
+				c.AbortWithStatus(204)
+				return
+			}
 		}
 		c.Next()
 	}

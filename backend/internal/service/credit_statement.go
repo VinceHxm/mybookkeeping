@@ -9,31 +9,34 @@ import (
 
 // CreditStatement 信用卡账单展示（只读，不落库、不改余额）
 type CreditStatement struct {
-	AccountID          uint64    `json:"accountId"`
-	AccountName        string    `json:"accountName"`
-	BillingDay         int       `json:"billingDay"`
-	StatementDate      string    `json:"statementDate"`     // 本期出账日 YYYY-MM-DD
-	CycleStart         string    `json:"cycleStart"`        // 账单周期起
-	CycleEnd           string    `json:"cycleEnd"`          // 账单周期止（出账日）
-	NextStatementDate  string    `json:"nextStatementDate"` // 下期出账日
-	SpentInCycle       int64     `json:"spentInCycle"`      // 周期内刷卡总额（流水本金）
-	InstallmentDue     int64     `json:"installmentDue"`    // 本期入账的分期本金份额
-	NonInstallmentDue  int64     `json:"nonInstallmentDue"` // 本期一次性入账本金
-	InterestDue        int64     `json:"interestDue"`       // 本期计入应还的利息/手续费
-	DueAmount          int64     `json:"dueAmount"`         // 本期应还 = 本金份额 + 利息（含手填已出账兜底）
-	RepaidAmount       int64     `json:"repaidAmount"`      // 出账后至下期出账前的还款转账合计
-	RepaidInterest     int64     `json:"repaidInterest"`    // 还款流水上标注的利息（展示拆分）
-	PeriodRemaining    int64     `json:"periodRemaining"`   // 本期待还 = max(0, 本期应还−本期已还)
-	RemainingAfterPay  int64     `json:"remainingAfterPay"` // 还后待还 = 整体待还 − 已出账（即未出账）
-	TotalOutstanding   int64     `json:"totalOutstanding"`  // 整体待还 = 已用额度（方便提前还款）
-	FutureInstallment  int64     `json:"futureInstallment"` // 后续分期待还本金
-	OutstandingBalance int64     `json:"outstandingBalance"` // 同 totalOutstanding（兼容旧字段）
-	BilledOutstanding  int64     `json:"billedOutstanding"`  // 账户手填的已出账
-	UnbilledOutstanding int64    `json:"unbilledOutstanding"` // 已用 − 已出账（同 remainingAfterPay）
-	AvailableCredit    *int64    `json:"availableCredit"`
-	DisplayOnly        bool      `json:"displayOnly"`
-	Note               string    `json:"note"`
-	ComputedAt         time.Time `json:"computedAt"`
+	AccountID             uint64    `json:"accountId"`
+	AccountName           string    `json:"accountName"`
+	BillingDay            int       `json:"billingDay"`
+	StatementDate         string    `json:"statementDate"`     // 本期出账日 YYYY-MM-DD
+	CycleStart            string    `json:"cycleStart"`        // 账单周期起
+	CycleEnd              string    `json:"cycleEnd"`          // 账单周期止（出账日）
+	NextStatementDate     string    `json:"nextStatementDate"` // 下期出账日
+	SpentInCycle          int64     `json:"spentInCycle"`      // 周期内刷卡总额（流水本金）
+	InstallmentDue        int64     `json:"installmentDue"`    // 本期入账的分期本金份额
+	NonInstallmentDue     int64     `json:"nonInstallmentDue"` // 本期一次性入账本金
+	InterestDue           int64     `json:"interestDue"`       // 本期计入应还的利息/手续费
+	DueAmount             int64     `json:"dueAmount"`         // 本期应还 = 本金份额 + 利息（含手填已出账兜底）
+	RepaidAmount          int64     `json:"repaidAmount"`      // 出账后至下期出账前的还款转账合计
+	RepaidInterest        int64     `json:"repaidInterest"`    // 还款流水上标注的利息（展示拆分）
+	PeriodRemaining       int64     `json:"periodRemaining"`   // 本期待还 = max(0, 本期应还−本期已还)
+	RemainingAfterPay     int64     `json:"remainingAfterPay"` // 还后待还 = 整体待还 − 已出账（即未出账）
+	TotalOutstanding      int64     `json:"totalOutstanding"`  // 整体待还 = 已用额度（方便提前还款）
+	FutureInstallment     int64     `json:"futureInstallment"` // 后续分期待还本金（流水+存量计划）
+	OutstandingBalance    int64     `json:"outstandingBalance"` // 同 totalOutstanding（兼容旧字段）
+	BilledOutstanding     int64     `json:"billedOutstanding"`  // 账户手填的已出账
+	UnbilledOutstanding   int64     `json:"unbilledOutstanding"` // 已用 − 已出账（同 remainingAfterPay）
+	NonInstallmentUnbilled int64    `json:"nonInstallmentUnbilled"` // 未出账非分期 = max(0, 未出账 − 后续分期本金)
+	NextPeriodInstallment int64     `json:"nextPeriodInstallment"`  // 预计下期分期本金入账（流水+计划）
+	NextPeriodEstimate    int64     `json:"nextPeriodEstimate"`     // 预计下期约还 ≈ 下期分期 + 未出账非分期（非整笔已用）
+	AvailableCredit       *int64    `json:"availableCredit"`
+	DisplayOnly           bool      `json:"displayOnly"`
+	Note                  string    `json:"note"`
+	ComputedAt            time.Time `json:"computedAt"`
 }
 
 func (s *AccountService) CreditStatement(userID, accountID uint64, at time.Time) (*CreditStatement, error) {
@@ -66,6 +69,7 @@ func (s *AccountService) CreditStatement(userID, accountID uint64, at time.Time)
 	}
 
 	var spentInCycle, installmentDue, nonInstallmentDue, interestDue, futureInstallment int64
+	var nextPeriodInstallment int64
 	for _, e := range expenses {
 		if !e.HappenedAt.Before(cycleStart) && e.HappenedAt.Before(cycleTo) {
 			spentInCycle += e.Amount
@@ -90,8 +94,16 @@ func (s *AccountService) CreditStatement(userID, accountID uint64, at time.Time)
 				}
 			} else if dueOn.After(stmt) {
 				futureInstallment += shares[i]
+				if sameYMD(dueOn, nextStmt) {
+					nextPeriodInstallment += shares[i]
+				}
 			}
 		}
+	}
+
+	// 存量分期计划：不改余额，按绝对出账日序列拆入本期/后续
+	for _, p := range acc.InstallmentPlans {
+		addPlanShares(p, acc.BillingDay, stmt, nextStmt, &installmentDue, &interestDue, &futureInstallment, &nextPeriodInstallment)
 	}
 
 	var repayments []model.Transaction
@@ -119,25 +131,37 @@ func (s *AccountService) CreditStatement(userID, accountID uint64, at time.Time)
 	}
 	unbilled := outstanding - billed
 
-	// 本期应还：以流水拆分为准；手填「已出账」仅在尚未被本期还款覆盖时兜底抬高。
-	// 避免：账单已还清后仍把「剩余已用/下期未出账」算进本期应还。
+	// 本期应还：以流水/计划拆分为准；手填「已出账」仅在尚未被本期还款覆盖时兜底抬高。
 	due := resolveStatementDue(dueFromTx, billed, repaid)
 	periodRemaining := due - repaid
 	if periodRemaining < 0 {
 		periodRemaining = 0
 	}
-	// 本期已结清后：若应还额仍等于当前已用、且还款大于该应还，
-	// 多半是还清了更大的上期账单，剩余已用实为下期未出账，不应再展示为本期应还。
 	if periodRemaining == 0 && due > 0 && due == outstanding && repaid > due {
 		due = 0
 	}
-	// 还后待还：本期结清后，剩余已用全部视为未出账/下期；未结清时 = 已用 − 已出账
 	afterPay := unbilled
 	displayUnbilled := unbilled
 	if periodRemaining == 0 {
 		afterPay = outstanding
 		displayUnbilled = outstanding
 	}
+
+	nonInstallmentUnbilled := unbilled - futureInstallment
+	if nonInstallmentUnbilled < 0 {
+		nonInstallmentUnbilled = 0
+	}
+	// 本期已结清后「下期待还」展示用整笔已用，但提示仍按 非分期未出账+下期分期
+	nextEstimateBaseUnbilled := nonInstallmentUnbilled
+	if periodRemaining == 0 {
+		nextEstimateBaseUnbilled = outstanding - futureInstallment
+		if nextEstimateBaseUnbilled < 0 {
+			nextEstimateBaseUnbilled = 0
+		}
+		// 结清后整笔已用里含后续分期；非分期部分 = 已用 − 后续分期
+		nonInstallmentUnbilled = nextEstimateBaseUnbilled
+	}
+	nextPeriodEstimate := nextPeriodInstallment + nextEstimateBaseUnbilled
 
 	var available *int64
 	if acc.CreditLimit > 0 {
@@ -154,34 +178,77 @@ func (s *AccountService) CreditStatement(userID, accountID uint64, at time.Time)
 	} else {
 		note += "「还后待还」= 整体待还 − 已出账；「整体待还」= 已用额度，可用于提前还款。"
 	}
+	if futureInstallment > 0 {
+		note += "含后续分期时，「下期待还」不等于下期必还；预计下期约还见 nextPeriodEstimate。"
+	}
 
 	return &CreditStatement{
-		AccountID:           acc.ID,
-		AccountName:         acc.Name,
-		BillingDay:          acc.BillingDay,
-		StatementDate:       fmtDate(stmt),
-		CycleStart:          fmtDate(cycleStart),
-		CycleEnd:            fmtDate(cycleEnd),
-		NextStatementDate:   fmtDate(nextStmt),
-		SpentInCycle:        spentInCycle,
-		InstallmentDue:      installmentDue,
-		NonInstallmentDue:   nonInstallmentDue,
-		InterestDue:         interestDue,
-		DueAmount:           due,
-		RepaidAmount:        repaid,
-		RepaidInterest:      repaidInterest,
-		PeriodRemaining:     periodRemaining,
-		RemainingAfterPay:   afterPay,
-		TotalOutstanding:    outstanding,
-		FutureInstallment:   futureInstallment,
-		OutstandingBalance:  outstanding,
-		BilledOutstanding:   billed,
-		UnbilledOutstanding: displayUnbilled,
-		AvailableCredit:     available,
-		DisplayOnly:         true,
-		Note:                note,
-		ComputedAt:          at,
+		AccountID:              acc.ID,
+		AccountName:            acc.Name,
+		BillingDay:             acc.BillingDay,
+		StatementDate:          fmtDate(stmt),
+		CycleStart:             fmtDate(cycleStart),
+		CycleEnd:               fmtDate(cycleEnd),
+		NextStatementDate:      fmtDate(nextStmt),
+		SpentInCycle:           spentInCycle,
+		InstallmentDue:         installmentDue,
+		NonInstallmentDue:      nonInstallmentDue,
+		InterestDue:            interestDue,
+		DueAmount:              due,
+		RepaidAmount:           repaid,
+		RepaidInterest:         repaidInterest,
+		PeriodRemaining:        periodRemaining,
+		RemainingAfterPay:      afterPay,
+		TotalOutstanding:       outstanding,
+		FutureInstallment:      futureInstallment,
+		OutstandingBalance:     outstanding,
+		BilledOutstanding:      billed,
+		UnbilledOutstanding:    displayUnbilled,
+		NonInstallmentUnbilled: nonInstallmentUnbilled,
+		NextPeriodInstallment:  nextPeriodInstallment,
+		NextPeriodEstimate:     nextPeriodEstimate,
+		AvailableCredit:        available,
+		DisplayOnly:            true,
+		Note:                   note,
+		ComputedAt:             at,
 	}, nil
+}
+
+// addPlanShares 将存量分期按 firstDueOn 起的绝对出账日序列拆入本期/下期/后续
+func addPlanShares(
+	p model.CreditInstallmentPlan,
+	billingDay int,
+	stmt, nextStmt time.Time,
+	installmentDue, interestDue, futureInstallment, nextPeriodInstallment *int64,
+) {
+	periods := p.Periods
+	if periods < 1 {
+		periods = 1
+	}
+	firstDue, err := time.ParseInLocation("2006-01-02", p.FirstDueOn, stmt.Location())
+	if err != nil {
+		return
+	}
+	firstDue = clampDay(firstDue.Year(), firstDue.Month(), billingDay, stmt.Location())
+	shares := splitAmountEvenly(p.PrincipalFen, periods)
+	for i := 0; i < periods; i++ {
+		dueOn := addBillingMonths(firstDue, i, billingDay)
+		if sameYMD(dueOn, stmt) {
+			*installmentDue += shares[i]
+			if p.InterestPerPeriodFen > 0 {
+				*interestDue += p.InterestPerPeriodFen
+			}
+		} else if dueOn.After(stmt) {
+			*futureInstallment += shares[i]
+			if sameYMD(dueOn, nextStmt) {
+				*nextPeriodInstallment += shares[i]
+				if p.InterestPerPeriodFen > 0 {
+					// 下期利息不并入本期 interestDue；仅本金进 nextPeriodInstallment
+					_ = p.InterestPerPeriodFen
+				}
+			}
+		}
+	}
 }
 
 // resolveStatementDue 手填已出账与流水应还取较大值；若本期还款已覆盖手填已出账，则不再用手填抬高（避免下期未出账混入本期应还）

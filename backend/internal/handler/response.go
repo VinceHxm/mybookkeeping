@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -22,6 +23,8 @@ func NotFound(c *gin.Context, msg string) {
 	Fail(c, http.StatusNotFound, msg)
 }
 
+// ServerError 内部错误细节（SQL、Redis、MinIO 报错等）只写日志，不回给客户端。
 func ServerError(c *gin.Context, msg string) {
-	Fail(c, http.StatusInternalServerError, msg)
+	log.Printf("server error %s %s: %s", c.Request.Method, c.FullPath(), msg)
+	Fail(c, http.StatusInternalServerError, "服务器内部错误，请稍后重试")
 }

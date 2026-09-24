@@ -7,6 +7,9 @@
     </div>
 
     <v-switch v-model="showArchived" label="显示已归档" hide-details class="mb-2" density="compact" @update:model-value="reload" />
+    <p class="page-tip">
+      默认消费 / 默认还款各只能选一个账户（可同一账户）。在编辑账户里开关设置；已设默认的卡片会高亮并带角标。
+    </p>
 
     <EntityCard
       v-for="a in accounts.list"
@@ -14,12 +17,25 @@
       :title="a.name"
       :icon="accountTypeIcon(a.type)"
       :dim="a.archived"
+      :accent="cardAccent(a)"
       @edit="openEdit(a)"
       @delete="askDelete(a)"
     >
       <template #badges>
         <v-chip v-if="a.archived" size="x-small" variant="tonal">已归档</v-chip>
         <v-chip size="x-small" variant="tonal" color="primary">{{ typeMap[a.type] || a.type }}</v-chip>
+        <v-chip
+          v-if="isDefaultExpense(a.id)"
+          size="x-small"
+          variant="flat"
+          color="primary"
+        >默认消费</v-chip>
+        <v-chip
+          v-if="isDefaultRepay(a.id)"
+          size="x-small"
+          variant="flat"
+          color="info"
+        >默认还款</v-chip>
       </template>
       <template #meta>
         <div v-if="hasProfile(a)" class="profile-row">
@@ -69,8 +85,8 @@
                 <strong>¥{{ fenToYuan(statements[a.id].periodRemaining) }}</strong>
               </div>
               <div class="stmt-cell">
-                <span>{{ statements[a.id].periodRemaining === 0 && (statements[a.id].remainingAfterPay || 0) > 0 ? '下期待还' : '还后待还' }}</span>
-                <strong class="warn">¥{{ fenToYuan(statements[a.id].remainingAfterPay) }}</strong>
+                <span>{{ afterPayLabel(statements[a.id]) }}</span>
+                <strong class="warn">¥{{ fenToYuan(afterPayDisplayFen(statements[a.id])) }}</strong>
               </div>
               <div class="stmt-cell">
                 <span>整体待还</span>
@@ -79,13 +95,19 @@
             </div>
             <div class="stmt-sub">
               <template v-if="statements[a.id].periodRemaining === 0 && (statements[a.id].remainingAfterPay || 0) > 0">
-                本期已还清；剩余已用为下期/未出账
+                本期已还清；「剩余已用」= 卡上还欠多少（可提前还）
+                <template v-if="(statements[a.id].nextPeriodEstimate || 0) > 0">
+                  · 预计下次出账约还 ¥{{ fenToYuan(statements[a.id].nextPeriodEstimate || 0) }}
+                </template>
               </template>
               <template v-else>
                 本期待还 = 本期账单尚未还清部分；还后待还 = 未出账；整体待还 = 已用额度
               </template>
               <template v-if="statements[a.id].futureInstallment">
-                · 后续分期 ¥{{ fenToYuan(statements[a.id].futureInstallment) }}
+                · 尚未出账分期 ¥{{ fenToYuan(statements[a.id].futureInstallment) }}
+              </template>
+              <template v-if="(statements[a.id].nonInstallmentUnbilled || 0) > 0 && (statements[a.id].futureInstallment || 0) > 0">
+                · 未出账非分期 ¥{{ fenToYuan(statements[a.id].nonInstallmentUnbilled || 0) }}
               </template>
             </div>
           </div>
@@ -187,12 +209,14 @@ import {
   type Account,
   type CreditStatement,
 } from '../stores/account'
+import { useAuthStore } from '../stores/auth'
 import { fenToYuan } from '../utils/money'
 import { accountTypeIcon } from '../utils/icons'
 import { displayCardNo, displayHolderName } from '../utils/mask'
 import { useBreakpoint } from '../composables/useBreakpoint'
 
 const accounts = useAccountStore()
+const auth = useAuthStore()
 const router = useRouter()
 const { isMobile } = useBreakpoint()
 
@@ -210,6 +234,23 @@ const storagePreview = ref<{ url: string } | null>(null)
 const typeMap: Record<string, string> = { cash: '现金', bank: '银行卡', credit: '信用', other: '其他' }
 const statements = ref<Record<number, CreditStatement>>({})
 const stmtError = ref<Record<number, string>>({})
+
+function isDefaultRepay(id: number) {
+  return !!auth.profile?.defaultAccountId && auth.profile.defaultAccountId === id
+}
+
+function isDefaultExpense(id: number) {
+  return !!auth.profile?.defaultExpenseAccountId && auth.profile.defaultExpenseAccountId === id
+}
+
+function cardAccent(a: Account): 'none' | 'expense' | 'repay' | 'both' {
+  const exp = isDefaultExpense(a.id)
+  const repay = isDefaultRepay(a.id)
+  if (exp && repay) return 'both'
+  if (exp) return 'expense'
+  if (repay) return 'repay'
+  return 'none'
+}
 
 function toggleReveal(a: Account) {
   if (revealCache[a.id]) {
@@ -245,7 +286,10 @@ function openStoragePreview(a: Account, idx: number) {
 }
 
 async function reload() {
-  await accounts.load(showArchived.value)
+  await Promise.all([
+    accounts.load(showArchived.value),
+    auth.fetchMe().catch(() => {}),
+  ])
   await loadStatements()
 }
 
@@ -297,6 +341,16 @@ function displayUnbilledFen(a: Account): number {
     return stmt.remainingAfterPay || stmt.unbilledOutstanding || creditUsedFen(a)
   }
   return creditUnbilledFen(a)
+}
+
+/** 本期结清后：格子显示「剩余已用」，避免被理解成下次账单金额 */
+function afterPayLabel(stmt: CreditStatement) {
+  if (stmt.periodRemaining === 0 && (stmt.remainingAfterPay || 0) > 0) return '剩余已用'
+  return '还后待还'
+}
+
+function afterPayDisplayFen(stmt: CreditStatement) {
+  return stmt.remainingAfterPay || 0
 }
 
 function openCreate() {
@@ -435,6 +489,12 @@ async function doDelete() {
   color: var(--primary);
   text-decoration: none;
   font-weight: 600;
+}
+.page-tip {
+  margin: 0 0 12px;
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.45;
 }
 .stmt-box {
   margin-top: 8px;

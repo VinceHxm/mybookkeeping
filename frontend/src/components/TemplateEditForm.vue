@@ -222,6 +222,7 @@ export interface Template {
   type: string
   amount: number
   accountId?: number | null
+  toAccountId?: number | null
   categoryId?: number | null
   tagIds?: number[]
   remark?: string

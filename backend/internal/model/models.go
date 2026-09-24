@@ -10,7 +10,8 @@ type User struct {
 	EmailVerified    bool      `gorm:"not null;default:false" json:"emailVerified"`
 	Role             string    `gorm:"size:16;not null;default:user;index" json:"role"` // user | admin
 	Disabled         bool      `gorm:"not null;default:false;index" json:"disabled"`   // 停用后不可登录
-	DefaultAccountID *uint64   `json:"defaultAccountId"`
+	DefaultAccountID *uint64   `json:"defaultAccountId"` // 默认还款转出账户（非信用）
+	DefaultExpenseAccountID *uint64 `json:"defaultExpenseAccountId"` // 默认消费/收支账户
 	WeekStart        int       `gorm:"not null;default:1" json:"weekStart"` // 0=周日 1=周一
 	ExpenseColor     string    `gorm:"size:16;default:#c45c3e" json:"expenseColor"`
 	IncomeColor      string    `gorm:"size:16;default:#1b7f5a" json:"incomeColor"`
@@ -66,7 +67,23 @@ type Account struct {
 	CreatedAt        time.Time  `json:"createdAt"`
 	UpdatedAt        time.Time  `json:"updatedAt"`
 
-	Attachments []Attachment `gorm:"foreignKey:AccountID" json:"attachments,omitempty"`
+	Attachments      []Attachment            `gorm:"foreignKey:AccountID" json:"attachments,omitempty"`
+	InstallmentPlans []CreditInstallmentPlan `gorm:"foreignKey:AccountID" json:"installmentPlans,omitempty"`
+}
+
+// CreditInstallmentPlan 信用账户建账/补录的存量分期（不改余额，仅参与账单拆分）
+type CreditInstallmentPlan struct {
+	ID                   uint64    `gorm:"primaryKey" json:"id"`
+	UserID               uint64    `gorm:"index;not null" json:"userId"`
+	AccountID            uint64    `gorm:"index;not null" json:"accountId"`
+	Name                 string    `gorm:"size:64;not null;default:''" json:"name"`
+	PrincipalFen         int64     `gorm:"not null;default:0" json:"principalFen"`                 // 剩余本金（分）
+	Periods              int       `gorm:"not null;default:1" json:"periods"`                       // 剩余期数 1–60
+	InterestPerPeriodFen int64     `gorm:"not null;default:0" json:"interestPerPeriodFen"`         // 每期利息/手续费（分）
+	FirstDueOn           string    `gorm:"size:10;not null" json:"firstDueOn"`                     // 首期出账日 YYYY-MM-DD
+	Sort                 int       `gorm:"not null;default:0" json:"sort"`
+	CreatedAt            time.Time `json:"createdAt"`
+	UpdatedAt            time.Time `json:"updatedAt"`
 }
 
 type Category struct {

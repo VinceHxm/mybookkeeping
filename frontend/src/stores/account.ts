@@ -2,6 +2,16 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import http from '../api/http'
 
+export interface CreditInstallmentPlan {
+  id?: number
+  name: string
+  principalFen: number
+  periods: number
+  interestPerPeriodFen: number
+  firstDueOn: string
+  sort?: number
+}
+
 export interface Account {
   id: number
   name: string
@@ -19,6 +29,7 @@ export interface Account {
   storageNote?: string
   remark?: string
   attachments?: { id: number; url: string }[]
+  installmentPlans?: CreditInstallmentPlan[]
   lastReconciledAt?: string | null
 }
 
@@ -45,6 +56,12 @@ export interface CreditStatement {
   outstandingBalance: number
   billedOutstanding: number
   unbilledOutstanding: number
+  /** 未出账中的非分期部分 */
+  nonInstallmentUnbilled?: number
+  /** 预计下期分期本金入账 */
+  nextPeriodInstallment?: number
+  /** 预计下期约还（下期分期 + 未出账非分期） */
+  nextPeriodEstimate?: number
   availableCredit?: number | null
   displayOnly: boolean
   note: string
@@ -84,7 +101,13 @@ export const useAccountStore = defineStore('account', () => {
     return data as Account[]
   }
 
-  async function create(payload: Partial<Account> & { usedCredit?: number; attachmentIds?: number[] }) {
+  async function create(
+    payload: Partial<Account> & {
+      usedCredit?: number
+      attachmentIds?: number[]
+      installmentPlans?: CreditInstallmentPlan[]
+    },
+  ) {
     const { data } = await http.post('/accounts', payload)
     await load()
     return data
@@ -96,6 +119,7 @@ export const useAccountStore = defineStore('account', () => {
       clearReconciled?: boolean
       usedCredit?: number
       attachmentIds?: number[]
+      installmentPlans?: CreditInstallmentPlan[]
     },
   ) {
     const { data } = await http.put(`/accounts/${id}`, payload)

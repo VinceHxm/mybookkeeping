@@ -17,8 +17,6 @@ services:
     restart: unless-stopped
     ports:
       - "9002:8080"
-    env_file:
-      - .env
     environment:
       CONFIG_FILE: /app/.env
       SERVER_ADDR: ":8080"

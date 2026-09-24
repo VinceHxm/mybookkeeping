@@ -18,7 +18,24 @@
       @pointercancel="onPointerUp"
       @click="onFrontClick"
     >
-      <article class="entity-card">
+      <article
+        class="entity-card"
+        :class="{
+          'is-default': accent !== 'none',
+          'accent-expense': accent === 'expense',
+          'accent-repay': accent === 'repay',
+          'accent-both': accent === 'both',
+        }"
+      >
+        <div
+          v-if="accent !== 'none'"
+          class="corner-mark"
+          :class="accent"
+          :title="cornerTitle"
+          aria-hidden="true"
+        >
+          <v-icon size="15" class="corner-ico">mdi-bookmark</v-icon>
+        </div>
         <div class="entity-main">
           <div class="avatar" :class="{ 'has-dot': !icon && !!dot }">
             <v-icon v-if="icon" :icon="icon" size="22" />
@@ -42,7 +59,7 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 const props = withDefaults(defineProps<{
   title: string
@@ -51,14 +68,24 @@ const props = withDefaults(defineProps<{
   dot?: string
   dim?: boolean
   deleteLabel?: string
+  /** 默认账户高亮：消费 / 还款 / 两者 */
+  accent?: 'none' | 'expense' | 'repay' | 'both'
 }>(), {
   deleteLabel: '删除',
+  accent: 'none',
 })
 
 const emit = defineEmits<{
   edit: []
   delete: []
 }>()
+
+const cornerTitle = computed(() => {
+  if (props.accent === 'both') return '默认消费 · 默认还款'
+  if (props.accent === 'expense') return '默认消费'
+  if (props.accent === 'repay') return '默认还款'
+  return ''
+})
 
 const ACTION_W = 88
 const threshold = 48
@@ -91,7 +118,6 @@ onBeforeUnmount(() => window.removeEventListener(OPEN_EVENT, onCloseAll))
 
 function onPointerDown(e: PointerEvent) {
   if (e.button !== 0) return
-  // 仅真实控件 / 显式 .no-card-nav 阻断；勿把大块容器标成 no-card-nav
   const t = e.target as HTMLElement | null
   if (t?.closest?.('a, button, input, textarea, select, .v-selection-control, .no-card-nav')) return
   tracking = true
@@ -112,7 +138,6 @@ function onPointerMove(e: PointerEvent) {
     axis = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y'
     if (axis === 'x') {
       closeOthers()
-      // 确认横向滑动后再捕获，避免抢走子元素点击
       const el = e.currentTarget as HTMLElement
       if (pointerId != null) el.setPointerCapture?.(pointerId)
     } else {
@@ -177,7 +202,6 @@ function onDeleteClick() {
   justify-content: stretch;
   background: transparent;
   pointer-events: none;
-  /* 未滑开时完全隐藏，避免右侧圆角透出红边 */
   opacity: 0;
   transition: opacity 0.12s ease;
 }
@@ -212,6 +236,7 @@ function onDeleteClick() {
 }
 
 .entity-card {
+  position: relative;
   padding: 14px;
   border-radius: var(--radius-md, 14px);
   border: 1px solid var(--surface-border);
@@ -219,7 +244,68 @@ function onDeleteClick() {
   box-shadow: var(--shadow-soft);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
 }
+.entity-card.is-default {
+  box-shadow:
+    var(--shadow-soft),
+    0 0 0 1px color-mix(in srgb, var(--accent-tone, var(--primary)) 35%, transparent);
+}
+.entity-card.accent-expense {
+  --accent-tone: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 55%, transparent);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--primary) 16%, var(--surface-solid, #1c2620)) 0%,
+    var(--surface-solid, #1c2620) 72%
+  );
+}
+.entity-card.accent-repay {
+  --accent-tone: #3d8fad;
+  border-color: color-mix(in srgb, #3d8fad 55%, transparent);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, #3d8fad 16%, var(--surface-solid, #1c2620)) 0%,
+    var(--surface-solid, #1c2620) 72%
+  );
+}
+.entity-card.accent-both {
+  --accent-tone: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 60%, #3d8fad);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--primary) 14%, var(--surface-solid, #1c2620)) 0%,
+    color-mix(in srgb, #3d8fad 12%, var(--surface-solid, #1c2620)) 48%,
+    var(--surface-solid, #1c2620) 100%
+  );
+}
+
+.corner-mark {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 40px 40px 0;
+  border-color: transparent var(--accent-tone, var(--primary)) transparent transparent;
+  z-index: 2;
+  pointer-events: none;
+}
+.corner-mark.repay {
+  --accent-tone: #3d8fad;
+}
+.corner-mark.both {
+  border-width: 0 44px 44px 0;
+}
+.corner-ico {
+  position: absolute;
+  top: 5px;
+  right: -34px;
+  color: #fff;
+}
+
 .entity-main {
   display: flex;
   align-items: flex-start;
@@ -253,6 +339,7 @@ function onDeleteClick() {
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
+  padding-right: 18px;
 }
 .title {
   margin: 0;

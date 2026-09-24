@@ -23,15 +23,6 @@
 
     <h2 class="sec">偏好</h2>
     <v-select
-      v-model="form.defaultAccountId"
-      :items="[{ id: null, name: '不指定' }, ...accounts.list]"
-      item-title="name"
-      item-value="id"
-      label="默认账户（还款时优先作转出储蓄卡）"
-      variant="outlined"
-      class="mb-2"
-    />
-    <v-select
       v-model="form.weekStart"
       :items="[{ title: '周一', value: 1 }, { title: '周日', value: 0 }]"
       label="一周起始"
@@ -43,6 +34,7 @@
       <v-text-field v-model="form.incomeColor" label="收入颜色" type="color" variant="outlined" />
     </div>
     <v-text-field v-model="form.email" label="邮箱" variant="outlined" class="mb-2" />
+    <p class="pref-tip mb-3">默认还款 / 消费账户请到「账户管理」里设置，卡片上会显示标记。</p>
     <v-btn color="primary" block class="mb-6" :loading="saving" @click="saveSettings">保存偏好</v-btn>
 
     <h2 class="sec">修改密码</h2>
@@ -56,11 +48,9 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
-import { useAccountStore } from '../stores/account'
 import { useAppTheme, type ThemePreference } from '../composables/useAppTheme'
 
 const auth = useAuthStore()
-const accounts = useAccountStore()
 const { setPreference } = useAppTheme()
 const saving = ref(false)
 const pwdLoading = ref(false)
@@ -76,7 +66,6 @@ const themeOptions: { title: string; value: ThemePreference; icon: string }[] = 
 ]
 
 const form = reactive({
-  defaultAccountId: null as number | null,
   weekStart: 1,
   theme: 'light' as ThemePreference,
   expenseColor: '#c45c3e',
@@ -92,10 +81,9 @@ function applyLocalTheme() {
 }
 
 onMounted(async () => {
-  await Promise.all([accounts.load(), auth.fetchMe()])
+  await auth.fetchMe()
   const p = auth.profile
   if (p) {
-    form.defaultAccountId = p.defaultAccountId ?? null
     form.weekStart = p.weekStart ?? 1
     form.theme = (p.theme as ThemePreference) || 'system'
     form.expenseColor = p.expenseColor || '#c45c3e'
@@ -113,8 +101,6 @@ async function saveSettings() {
   try {
     await auth.updateSettings({
       email: form.email,
-      defaultAccountId: form.defaultAccountId,
-      clearDefaultAccount: form.defaultAccountId == null,
       weekStart: form.weekStart,
       theme: form.theme,
       expenseColor: form.expenseColor,
@@ -176,5 +162,11 @@ async function changePwd() {
   background: var(--primary-soft);
   box-shadow: 0 0 0 1px var(--primary);
   font-weight: 600;
+}
+.pref-tip {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.45;
 }
 </style>

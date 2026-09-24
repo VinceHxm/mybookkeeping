@@ -32,5 +32,9 @@ export const useAdminUsersStore = defineStore('adminUsers', () => {
     await load()
   }
 
-  return { list, load, update, remove }
+  async function resetPassword(id: number, newPassword: string) {
+    await http.put(`/admin/users/${id}/password`, { newPassword })
+  }
+
+  return { list, load, update, remove, resetPassword }
 })

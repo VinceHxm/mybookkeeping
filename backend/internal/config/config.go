@@ -24,7 +24,13 @@ type Config struct {
 	MinIOSecretKey string
 	MinIOBucket    string
 	MinIOUseSSL    bool
-	MinIOPublicURL string
+
+	// AppSecret 用于签发附件短期访问链接（HMAC）；为空时每次启动随机生成
+	AppSecret string
+	// TrustedProxies 反向代理地址/网段，用于从 X-Forwarded-For 取真实客户端 IP（登录限流依赖）
+	TrustedProxies []string
+	// CORSOrigins 允许跨域的前端源；为空=不下发 CORS 头（同源部署 / Vite 代理无需配置）
+	CORSOrigins []string
 
 	AmapKey          string
 	AmapSecurityCode string
@@ -67,7 +73,10 @@ func Load() *Config {
 		MinIOSecretKey: get("MINIO_SECRET_KEY", "minioadmin"),
 		MinIOBucket:    get("MINIO_BUCKET", "mybookkeeping"),
 		MinIOUseSSL:    getBool("MINIO_USE_SSL", false),
-		MinIOPublicURL: get("MINIO_PUBLIC_URL", "http://127.0.0.1:9000"),
+
+		AppSecret:      get("APP_SECRET", ""),
+		TrustedProxies: getList("TRUSTED_PROXIES", "127.0.0.1,::1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"),
+		CORSOrigins:    getList("CORS_ORIGINS", ""),
 
 		AmapKey:          get("AMAP_KEY", ""),
 		AmapSecurityCode: get("AMAP_SECURITY_CODE", ""),
@@ -75,7 +84,7 @@ func Load() *Config {
 		SessionTTL: time.Duration(getInt("SESSION_TTL_DAYS", 7)) * 24 * time.Hour,
 
 		AllowRegister:        getBool("ALLOW_REGISTER", true),
-		ResetTokenInResponse: getBool("RESET_TOKEN_IN_RESPONSE", true),
+		ResetTokenInResponse: getBool("RESET_TOKEN_IN_RESPONSE", false),
 		ResetTokenTTLHours:   getInt("RESET_TOKEN_TTL_HOURS", 2),
 
 		DeepSeekAPIKey:      get("DEEPSEEK_API_KEY", ""),
@@ -171,6 +180,16 @@ func get(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func getList(key, def string) []string {
+	var out []string
+	for _, p := range strings.Split(get(key, def), ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func getInt(key string, def int) int {

@@ -73,7 +73,13 @@ func (a *API) Login(c *gin.Context) {
 		BadRequest(c, "请输入用户名和密码")
 		return
 	}
-	token, user, err := a.auth.Login(c.Request.Context(), req.Username, req.Password)
+	token, user, err := a.auth.Login(c.Request.Context(), req.Username, req.Password, c.ClientIP())
+	var tooMany *service.TooManyAttemptsError
+	if errors.As(err, &tooMany) {
+		c.Header("Retry-After", strconv.Itoa(int(tooMany.RetryAfter.Seconds())))
+		Fail(c, http.StatusTooManyRequests, err.Error())
+		return
+	}
 	if errors.Is(err, service.ErrInvalidCredentials) {
 		Fail(c, http.StatusUnauthorized, err.Error())
 		return
@@ -117,7 +123,7 @@ func (a *API) Register(c *gin.Context) {
 	_ = a.categories.EnsureDefaults(user.ID)
 	_ = a.tags.EnsureDefaults(user.ID)
 	// 注册后直接登录
-	token, _, err := a.auth.Login(c.Request.Context(), req.Username, req.Password)
+	token, _, err := a.auth.Login(c.Request.Context(), req.Username, req.Password, c.ClientIP())
 	if err != nil {
 		OK(c, gin.H{"user": user})
 		return
@@ -200,7 +206,7 @@ func (a *API) ChangePassword(c *gin.Context) {
 		BadRequest(c, "参数错误")
 		return
 	}
-	err := a.auth.ChangePassword(middleware.GetUserID(c), req.OldPassword, req.NewPassword)
+	err := a.auth.ChangePassword(c.Request.Context(), middleware.GetUserID(c), req.OldPassword, req.NewPassword, c.GetString("sessionToken"))
 	if err != nil {
 		BadRequest(c, err.Error())
 		return
@@ -210,13 +216,15 @@ func (a *API) ChangePassword(c *gin.Context) {
 
 func (a *API) UpdateSettings(c *gin.Context) {
 	var req struct {
-		Email            *string `json:"email"`
-		DefaultAccountID *uint64 `json:"defaultAccountId"`
-		ClearDefaultAcc  bool    `json:"clearDefaultAccount"`
-		WeekStart        *int    `json:"weekStart"`
-		ExpenseColor     *string `json:"expenseColor"`
-		IncomeColor      *string `json:"incomeColor"`
-		Theme            *string `json:"theme"`
+		Email                   *string `json:"email"`
+		DefaultAccountID        *uint64 `json:"defaultAccountId"`
+		ClearDefaultAcc         bool    `json:"clearDefaultAccount"`
+		DefaultExpenseAccountID *uint64 `json:"defaultExpenseAccountId"`
+		ClearDefaultExpenseAcc  bool    `json:"clearDefaultExpenseAccount"`
+		WeekStart               *int    `json:"weekStart"`
+		ExpenseColor            *string `json:"expenseColor"`
+		IncomeColor             *string `json:"incomeColor"`
+		Theme                   *string `json:"theme"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		BadRequest(c, "参数错误")
@@ -233,6 +241,13 @@ func (a *API) UpdateSettings(c *gin.Context) {
 		id := req.DefaultAccountID
 		in.DefaultAccountID = &id
 	}
+	if req.ClearDefaultExpenseAcc {
+		var nilID *uint64
+		in.DefaultExpenseAccountID = &nilID
+	} else if req.DefaultExpenseAccountID != nil {
+		id := req.DefaultExpenseAccountID
+		in.DefaultExpenseAccountID = &id
+	}
 	user, err := a.auth.UpdateSettings(middleware.GetUserID(c), in)
 	if err != nil {
 		BadRequest(c, err.Error())
@@ -248,27 +263,37 @@ func (a *API) ListAccounts(c *gin.Context) {
 		ServerError(c, err.Error())
 		return
 	}
+	if a.attachments != nil {
+		a.attachments.RefreshAccountListAttachments(list)
+	}
 	OK(c, list)
 }
 
 func (a *API) CreateAccount(c *gin.Context) {
 	var req struct {
-		Name            string   `json:"name"`
-		Type            string   `json:"type"`
-		Balance         int64    `json:"balance"`
-		Sort            int      `json:"sort"`
-		CreditLimit     *int64   `json:"creditLimit"`
-		CreditBilledFen *int64   `json:"creditBilledFen"`
-		BillingDay      *int     `json:"billingDay"`
-		PaymentDueDay   *int     `json:"paymentDueDay"`
-		Institution     *string  `json:"institution"`
-		CardNo          *string  `json:"cardNo"`
-		HolderName      *string  `json:"holderName"`
-		StorageNote     *string  `json:"storageNote"`
-		Remark          *string  `json:"remark"`
-		AttachmentIDs   []uint64 `json:"attachmentIds"`
-		// UsedCredit：信用账户前端可传「已用额度（正数）」；若有则覆盖 balance
-		UsedCredit *int64 `json:"usedCredit"`
+		Name             string `json:"name"`
+		Type             string `json:"type"`
+		Balance          int64  `json:"balance"`
+		Sort             int    `json:"sort"`
+		CreditLimit      *int64 `json:"creditLimit"`
+		CreditBilledFen  *int64 `json:"creditBilledFen"`
+		BillingDay       *int   `json:"billingDay"`
+		PaymentDueDay    *int   `json:"paymentDueDay"`
+		Institution      *string `json:"institution"`
+		CardNo           *string `json:"cardNo"`
+		HolderName       *string `json:"holderName"`
+		StorageNote      *string `json:"storageNote"`
+		Remark           *string `json:"remark"`
+		AttachmentIDs    []uint64 `json:"attachmentIds"`
+		UsedCredit       *int64   `json:"usedCredit"`
+		InstallmentPlans *[]struct {
+			Name                 string `json:"name"`
+			PrincipalFen         int64  `json:"principalFen"`
+			Periods              int    `json:"periods"`
+			InterestPerPeriodFen int64  `json:"interestPerPeriodFen"`
+			FirstDueOn           string `json:"firstDueOn"`
+			Sort                 int    `json:"sort"`
+		} `json:"installmentPlans"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		BadRequest(c, "参数错误")
@@ -278,16 +303,30 @@ func (a *API) CreateAccount(c *gin.Context) {
 	if req.Type == "credit" && req.UsedCredit != nil {
 		bal = *req.UsedCredit
 	}
-	acc, err := a.accounts.Create(middleware.GetUserID(c), service.AccountInput{
+	in := service.AccountInput{
 		Name: req.Name, Type: req.Type, Balance: bal, Sort: req.Sort,
 		CreditLimit: req.CreditLimit, CreditBilledFen: req.CreditBilledFen,
 		BillingDay: req.BillingDay, PaymentDueDay: req.PaymentDueDay,
 		Institution: req.Institution, CardNo: req.CardNo, HolderName: req.HolderName,
 		StorageNote: req.StorageNote, Remark: req.Remark, AttachmentIDs: req.AttachmentIDs,
-	})
+	}
+	if req.InstallmentPlans != nil {
+		plans := make([]service.CreditInstallmentPlanInput, 0, len(*req.InstallmentPlans))
+		for _, p := range *req.InstallmentPlans {
+			plans = append(plans, service.CreditInstallmentPlanInput{
+				Name: p.Name, PrincipalFen: p.PrincipalFen, Periods: p.Periods,
+				InterestPerPeriodFen: p.InterestPerPeriodFen, FirstDueOn: p.FirstDueOn, Sort: p.Sort,
+			})
+		}
+		in.InstallmentPlans = &plans
+	}
+	acc, err := a.accounts.Create(middleware.GetUserID(c), in)
 	if err != nil {
 		BadRequest(c, err.Error())
 		return
+	}
+	if a.attachments != nil {
+		a.attachments.RefreshAccountAttachments(acc)
 	}
 	OK(c, acc)
 }
@@ -313,6 +352,14 @@ func (a *API) UpdateAccount(c *gin.Context) {
 		AttachmentIDs    []uint64 `json:"attachmentIds"`
 		LastReconciledAt *string  `json:"lastReconciledAt"`
 		ClearReconciled  bool     `json:"clearReconciled"`
+		InstallmentPlans *[]struct {
+			Name                 string `json:"name"`
+			PrincipalFen         int64  `json:"principalFen"`
+			Periods              int    `json:"periods"`
+			InterestPerPeriodFen int64  `json:"interestPerPeriodFen"`
+			FirstDueOn           string `json:"firstDueOn"`
+			Sort                 int    `json:"sort"`
+		} `json:"installmentPlans"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		BadRequest(c, "参数错误")
@@ -338,10 +385,23 @@ func (a *API) UpdateAccount(c *gin.Context) {
 			in.LastReconciledAt = t
 		}
 	}
+	if req.InstallmentPlans != nil {
+		plans := make([]service.CreditInstallmentPlanInput, 0, len(*req.InstallmentPlans))
+		for _, p := range *req.InstallmentPlans {
+			plans = append(plans, service.CreditInstallmentPlanInput{
+				Name: p.Name, PrincipalFen: p.PrincipalFen, Periods: p.Periods,
+				InterestPerPeriodFen: p.InterestPerPeriodFen, FirstDueOn: p.FirstDueOn, Sort: p.Sort,
+			})
+		}
+		in.InstallmentPlans = &plans
+	}
 	acc, err := a.accounts.Update(middleware.GetUserID(c), id, in)
 	if err != nil {
 		BadRequest(c, err.Error())
 		return
+	}
+	if a.attachments != nil {
+		a.attachments.RefreshAccountAttachments(acc)
 	}
 	OK(c, acc)
 }
@@ -721,6 +781,22 @@ func (a *API) AdminUpdateUser(c *gin.Context) {
 	OK(c, user)
 }
 
+func (a *API) AdminResetPassword(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	var req struct {
+		NewPassword string `json:"newPassword"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		BadRequest(c, "参数错误")
+		return
+	}
+	if err := a.auth.AdminResetPassword(c.Request.Context(), middleware.GetUserID(c), id, req.NewPassword); err != nil {
+		BadRequest(c, err.Error())
+		return
+	}
+	OK(c, gin.H{"ok": true})
+}
+
 func (a *API) AdminDeleteUser(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
 	err := a.auth.AdminDeleteUser(c.Request.Context(), middleware.GetUserID(c), id)
@@ -878,7 +954,7 @@ func (a *API) ListTransactions(c *gin.Context) {
 		return
 	}
 	if a.attachments != nil {
-		a.attachments.RefreshTxListAttachments(c.Request.Context(), res.Items)
+		a.attachments.RefreshTxListAttachments(res.Items)
 	}
 	OK(c, res)
 }
@@ -891,7 +967,7 @@ func (a *API) GetTransaction(c *gin.Context) {
 		return
 	}
 	if a.attachments != nil {
-		a.attachments.RefreshTxAttachments(c.Request.Context(), t)
+		a.attachments.RefreshTxAttachments(t)
 	}
 	OK(c, t)
 }
@@ -955,7 +1031,7 @@ func (a *API) CreateTransaction(c *gin.Context) {
 		return
 	}
 	if a.attachments != nil {
-		a.attachments.RefreshTxAttachments(c.Request.Context(), t)
+		a.attachments.RefreshTxAttachments(t)
 	}
 	OK(c, t)
 }
@@ -978,7 +1054,7 @@ func (a *API) UpdateTransaction(c *gin.Context) {
 		return
 	}
 	if a.attachments != nil {
-		a.attachments.RefreshTxAttachments(c.Request.Context(), t)
+		a.attachments.RefreshTxAttachments(t)
 	}
 	OK(c, t)
 }
@@ -997,9 +1073,10 @@ func (a *API) UploadAttachment(c *gin.Context) {
 		Fail(c, http.StatusServiceUnavailable, "附件服务未就绪（请启动 MinIO）")
 		return
 	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, service.MaxAttachmentSize+(1<<20))
 	file, err := c.FormFile("file")
 	if err != nil {
-		BadRequest(c, "请上传文件")
+		BadRequest(c, "请上传文件（上限 10MB）")
 		return
 	}
 	f, err := file.Open()
@@ -1008,16 +1085,34 @@ func (a *API) UploadAttachment(c *gin.Context) {
 		return
 	}
 	defer f.Close()
-	ct := file.Header.Get("Content-Type")
-	if ct == "" {
-		ct = "application/octet-stream"
+	att, err := a.attachments.Upload(c.Request.Context(), middleware.GetUserID(c), file.Header.Get("Content-Type"), f, file.Size)
+	if errors.Is(err, service.ErrAttachmentTooLarge) || errors.Is(err, service.ErrAttachmentType) {
+		BadRequest(c, err.Error())
+		return
 	}
-	att, err := a.attachments.Upload(c.Request.Context(), middleware.GetUserID(c), file.Filename, ct, f, file.Size)
 	if err != nil {
 		ServerError(c, err.Error())
 		return
 	}
 	OK(c, att)
+}
+
+// ServeAttachment 凭签名短链读取附件（供 <img> 直接引用，不需要会话令牌）
+func (a *API) ServeAttachment(c *gin.Context) {
+	if a.attachments == nil {
+		NotFound(c, service.ErrAttachmentNotFound.Error())
+		return
+	}
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	rc, size, ct, err := a.attachments.OpenSigned(c.Request.Context(), id, c.Query("exp"), c.Query("sig"))
+	if err != nil {
+		NotFound(c, service.ErrAttachmentNotFound.Error())
+		return
+	}
+	defer rc.Close()
+	c.Header("Cache-Control", "private, max-age=3600")
+	c.Header("Content-Security-Policy", "default-src 'none'; sandbox")
+	c.DataFromReader(http.StatusOK, size, ct, rc, nil)
 }
 
 func (a *API) StatsSummary(c *gin.Context) {
@@ -1086,9 +1181,10 @@ func (a *API) RecognizeImage(c *gin.Context) {
 		Fail(c, http.StatusServiceUnavailable, "未配置 DeepSeek API Key")
 		return
 	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 13<<20)
 	file, err := c.FormFile("file")
 	if err != nil {
-		BadRequest(c, "请上传图片（字段名 file）")
+		BadRequest(c, "请上传图片（字段名 file，上限约 12MB）")
 		return
 	}
 	f, err := file.Open()
