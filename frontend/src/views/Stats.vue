@@ -172,9 +172,19 @@ const lineOption = computed(() => {
   font-family: var(--font-display);
   font-variant-numeric: tabular-nums;
 }
+.f { min-width: 0; }
 .chart-wrap { padding: 8px; }
 .chart { height: 280px; width: 100%; }
 @media (max-width: 600px) {
-  .filters { flex-wrap: wrap; }
+  .cards { gap: 8px; }
+  .card { padding: 12px; }
+  .val { font-size: 1.15rem; margin-top: 4px; word-break: break-all; }
+  .chart-wrap { padding: 4px; }
+  .chart { height: 240px; }
+  .section-label { margin: 18px 0 8px; }
+  .quick { margin-left: -4px; }
+}
+@media (max-width: 600px) and (max-height: 700px) {
+  .chart { height: 210px; }
 }
 </style>

@@ -82,11 +82,11 @@
           :key="item.id"
           :to="`/transactions/${item.id}`"
           rounded="lg"
-          class="mb-2 surface-row row-in"
+          class="recent-row surface-row row-in"
           :style="{ '--d': `${160 + i * 40}ms` }"
         >
           <template #prepend>
-            <v-avatar color="primary" variant="tonal" size="40">
+            <v-avatar color="primary" variant="tonal" size="34">
               <span>{{ typeLabel(item.type).slice(0, 1) }}</span>
             </v-avatar>
           </template>
@@ -362,13 +362,19 @@ onMounted(refreshHome)
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 10px;
   padding: 8px 0 12px;
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+.home-mid::-webkit-scrollbar { display: none; }
+
+/* 用 auto margin 居中：空间不足时退化为顶部对齐，不会像 justify-content:center 那样裁掉顶部 */
+.home-mid > :first-child { margin-top: auto; }
+.home-mid > :last-child { margin-bottom: auto; }
 
 .repay-tags {
   display: flex;
@@ -615,7 +621,9 @@ onMounted(refreshHome)
 }
 
 .home-bottom {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: clamp(168px, 34vh, 340px);
   display: flex;
   flex-direction: column;
   padding-bottom: 6px;
@@ -642,8 +650,28 @@ onMounted(refreshHome)
 }
 
 .recent {
-  flex: 0 0 auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 0;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 18px), transparent);
+  mask-image: linear-gradient(180deg, #000 calc(100% - 18px), transparent);
 }
+.recent::-webkit-scrollbar { display: none; }
+
+.recent-row {
+  margin-bottom: 6px;
+  min-height: 52px !important;
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
+}
+.recent-row:last-child { margin-bottom: 14px; }
+.recent-row :deep(.v-list-item__prepend > .v-avatar) { margin-inline-end: 12px; }
+.recent-row :deep(.v-list-item-title) { font-size: 0.92rem; line-height: 1.25; }
+.recent-row :deep(.v-list-item-subtitle) { font-size: 0.74rem; line-height: 1.3; }
 
 .home-flash {
   position: absolute;
@@ -708,5 +736,63 @@ onMounted(refreshHome)
   .tpl-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+/* 矮屏（带浏览器工具栏的手机）：大按钮缩小、模板改单行横滑 */
+@media (max-width: 959px) and (max-height: 780px) {
+  .summary { padding: 8px 10px; }
+  .summary-cell { padding: 2px 8px; }
+  .big { font-size: clamp(1.2rem, 4.6vw, 1.5rem); margin-top: 2px; }
+
+  .home-mid { gap: 8px; padding: 10px 0 8px; }
+
+  .fab-record {
+    width: clamp(108px, 30vw, 132px);
+    height: clamp(108px, 30vw, 132px);
+  }
+  .fab-core { gap: 0; }
+  .fab-core :deep(.v-icon) { font-size: 36px !important; }
+  .fab-label { font-size: 0.98rem; }
+
+  .tpl-block {
+    width: 100%;
+    max-width: 480px;
+    margin-top: 6px;
+    padding: 0 2px;
+  }
+  .tpl-head { margin-bottom: 6px; }
+  .tpl-grid {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 2px 2px 6px;
+  }
+  .tpl-grid::-webkit-scrollbar { display: none; }
+  .tpl-btn {
+    flex: 0 0 auto;
+    width: 88px;
+    min-height: 62px;
+    padding: 8px 6px 6px;
+    border-radius: 14px;
+    scroll-snap-align: start;
+  }
+  .tpl-hint { display: none; }
+
+  .section-label.tight { margin: 2px 0 6px; }
+  .home-bottom { max-height: clamp(150px, 33vh, 280px); }
+}
+
+@media (max-width: 959px) and (max-height: 620px) {
+  .fab-record {
+    width: 92px;
+    height: 92px;
+  }
+  .fab-core :deep(.v-icon) { font-size: 30px !important; }
+  .fab-label { font-size: 0.86rem; letter-spacing: 0.06em; }
+  .home-bottom { max-height: clamp(130px, 30vh, 200px); }
 }
 </style>

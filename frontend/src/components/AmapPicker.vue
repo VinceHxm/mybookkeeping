@@ -191,17 +191,22 @@
       </div>
     </div>
 
-    <div v-if="recentPlaces.length && mode !== 'transit'" class="recent">
-      <div class="recent-label">最近地点</div>
+    <div v-if="recentPlaces.length && mode !== 'transit' && !searchTips.length" class="recent">
+      <div class="recent-label">
+        <v-icon size="14">mdi-history</v-icon>
+        <span>最近</span>
+      </div>
       <div class="recent-chips">
         <button
           v-for="(r, i) in recentPlaces"
           :key="i"
           type="button"
           class="recent-chip"
+          :title="recentLabel(r)"
           @click="applyRecent(r)"
         >
-          {{ recentLabel(r) }}
+          <v-icon v-if="r.mode === 'route'" size="13" class="recent-chip-ico">mdi-map-marker-path</v-icon>
+          <span class="recent-chip-text">{{ recentShortLabel(r) }}</span>
         </button>
       </div>
     </div>
@@ -840,6 +845,24 @@ function recentLabel(r: GeoPickResult) {
   return r.name
 }
 
+/** 去掉「福建省南平市顺昌县」这类行政区前缀，横滑 chip 里只留有辨识度的部分 */
+function shortPlace(name: string) {
+  const s = (name || '').trim()
+  const province = s.match(/^([^()（）]{2,8}?(省|自治区|特别行政区)|北京市|上海市|天津市|重庆市)/)
+  if (!province) return s
+  let rest = s.slice(province[0].length)
+  if (/(省|自治区|特别行政区)$/.test(province[0])) {
+    rest = rest.replace(/^[^()（）]{2,10}?(市|自治州|地区|盟)/, '')
+  }
+  rest = rest.replace(/^[^()（）]{1,10}?(区|县|市|旗)/, '')
+  return rest.length >= 2 ? rest : s
+}
+
+function recentShortLabel(r: GeoPickResult) {
+  if (r.mode === 'route' && r.endName) return `${shortPlace(r.name)} → ${shortPlace(r.endName)}`
+  return shortPlace(r.name)
+}
+
 async function applyRecent(r: GeoPickResult) {
   if (r.mode === 'route' && r.endLng != null && r.endLat != null) {
     mode.value = 'route'
@@ -1271,24 +1294,47 @@ function confirm() {
 .st-name { font-size: 0.84rem; font-weight: 600; }
 
 .recent {
-  padding: 8px 12px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0 6px 12px;
   background: var(--surface-solid, #fff);
   border-bottom: 1px solid var(--surface-border, #e6ece8);
+  flex-shrink: 0;
 }
 .recent-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
   font-size: 0.72rem;
   font-weight: 600;
   color: var(--muted, #5a6f64);
-  margin-bottom: 6px;
 }
 .recent-chips {
+  flex: 1;
+  min-width: 0;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 6px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  padding-right: 12px;
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 20px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 20px), transparent);
 }
+.recent-chips::-webkit-scrollbar { display: none; }
 .recent-chip {
-  max-width: 100%;
-  padding: 4px 10px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: min(62vw, 240px);
+  height: 30px;
+  padding: 0 11px;
   border-radius: 999px;
   border: 1px solid var(--surface-border, #e6ece8);
   background: var(--primary-soft, rgba(27, 127, 90, 0.08));
@@ -1296,6 +1342,13 @@ function confirm() {
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
+  scroll-snap-align: start;
+  -webkit-tap-highlight-color: transparent;
+}
+.recent-chip:active { transform: scale(0.97); }
+.recent-chip-ico { color: var(--primary, #1b7f5a); flex-shrink: 0; }
+.recent-chip-text {
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1372,9 +1425,13 @@ function confirm() {
     padding: 8px 10px;
   }
   .mode-card {
-    padding: 8px 6px;
+    padding: 7px 6px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
   }
   .mode-text span { display: none; }
+  .search-box { padding: 8px 12px 6px; }
   .search-box.is-transit {
     max-height: min(34vh, 240px);
   }
@@ -1390,13 +1447,6 @@ function confirm() {
   }
   .route-steps {
     padding: 8px 10px;
-  }
-  .sheet {
-    gap: 8px;
-    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
-  }
-  .confirm-btn {
-    min-height: 44px;
   }
 }
 
@@ -1477,6 +1527,29 @@ function confirm() {
     width: auto;
     min-width: 180px;
     flex-shrink: 0;
+  }
+}
+
+/* 小屏底栏左右排布：信息在左、按钮在右，省出一整行给地图 */
+@media (max-width: 600px) {
+  .sheet {
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+  .sheet-info { flex: 1; min-width: 0; }
+  .sheet-kicker { font-size: 0.7rem; }
+  .sheet-primary { margin-top: 2px; font-size: 0.9rem; }
+  .sheet-secondary { margin-top: 2px; font-size: 0.8rem; -webkit-line-clamp: 1; }
+  .confirm-btn {
+    width: auto;
+    min-width: 108px;
+    max-width: 40%;
+    min-height: 44px;
+    flex-shrink: 0;
+    padding: 0 14px !important;
+    letter-spacing: 0.02em;
   }
 }
 </style>

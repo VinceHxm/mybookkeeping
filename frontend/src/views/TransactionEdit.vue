@@ -22,7 +22,7 @@
       <v-chip
         v-for="t in templates"
         :key="t.id"
-        class="ma-1"
+        class="tpl-chip"
         color="primary"
         variant="outlined"
         @click="applyTemplate(t)"
@@ -347,7 +347,9 @@
     </section>
 
     <v-alert v-if="error" type="error" class="mb-3" density="compact">{{ error }}</v-alert>
-    <v-btn color="primary" block size="large" class="hero-cta" :loading="saving" @click="onSave">保存</v-btn>
+    <div class="save-bar">
+      <v-btn color="primary" block size="large" class="hero-cta" :loading="saving" @click="onSave">保存</v-btn>
+    </div>
 
     <v-dialog
       v-model="showMap"
@@ -1227,7 +1229,32 @@ async function onDelete() {
   font-family: var(--font-display);
   font-variant-numeric: tabular-nums;
 }
-.tpls { display: flex; flex-wrap: wrap; }
+.tpls {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding: 2px 0;
+}
+.tpls::-webkit-scrollbar { display: none; }
+.tpl-chip { flex-shrink: 0; }
+@media (min-width: 960px) {
+  .tpls { flex-wrap: wrap; overflow: visible; }
+}
+
+@media (max-width: 959px) {
+  .save-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    margin: 0 calc(-1 * max(var(--content-pad-x), var(--sar))) -16px;
+    padding: 10px max(var(--content-pad-x), var(--sar)) calc(10px + var(--sab));
+    background: linear-gradient(180deg, transparent, var(--bg) 30%);
+  }
+}
 .hint { color: var(--muted); font-size: 0.85rem; margin-bottom: 8px; }
 .flow-sub {
   display: flex;

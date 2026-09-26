@@ -1,6 +1,32 @@
 <template>
   <div class="page">
     <h1 class="page-title">明细</h1>
+    <div class="search-row">
+      <v-text-field
+        v-model="keyword"
+        label="备注关键词"
+        density="compact"
+        variant="outlined"
+        hide-details
+        clearable
+        class="f"
+        prepend-inner-icon="mdi-magnify"
+        @keyup.enter="reload"
+        @click:clear="reload"
+      />
+      <v-btn
+        class="filter-toggle"
+        :variant="filtersOpen || activeFilterCount ? 'tonal' : 'outlined'"
+        color="primary"
+        height="40"
+        @click="filtersOpen = !filtersOpen"
+      >
+        <v-icon start size="18">mdi-filter-variant</v-icon>
+        筛选<template v-if="activeFilterCount">·{{ activeFilterCount }}</template>
+        <v-icon end size="18">{{ filtersOpen ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
+      </v-btn>
+    </div>
+    <div class="filter-panel" :class="{ open: filtersOpen }">
     <div class="filters">
       <v-select
         v-model="accountId"
@@ -52,28 +78,21 @@
       <NativeDateField v-model="from" label="从" density="compact" variant="outlined" hide-details class="f" />
       <NativeDateField v-model="to" label="到" density="compact" variant="outlined" hide-details class="f" />
     </div>
-    <v-text-field
-      v-model="keyword"
-      label="备注关键词"
-      density="compact"
-      variant="outlined"
-      hide-details
-      clearable
-      class="mb-3"
-      prepend-inner-icon="mdi-magnify"
-      @keyup.enter="reload"
-    />
+    <div v-if="activeFilterCount" class="filter-reset">
+      <v-btn size="small" variant="text" color="primary" @click="resetFilters">清空筛选</v-btn>
+    </div>
+    </div>
 
     <div v-if="!groups.length" class="empty-tip">暂无流水</div>
     <div v-for="g in groups" :key="g.day" class="group">
       <div class="day">{{ g.day }}</div>
-      <v-list bg-color="transparent">
+      <v-list bg-color="transparent" class="py-0">
         <v-list-item
           v-for="item in g.items"
           :key="item.id"
           :to="`/transactions/${item.id}`"
           rounded="lg"
-          class="mb-2 surface-row"
+          class="tx-row surface-row"
         >
           <v-list-item-title>{{ item.category?.name || typeLabel(item.type) }}</v-list-item-title>
           <v-list-item-subtitle>
@@ -121,6 +140,20 @@ const from = ref('')
 const to = ref('')
 const pageSize = 30
 const loadingMore = ref(false)
+const filtersOpen = ref(false)
+
+const activeFilterCount = computed(() =>
+  [accountId.value, type.value, categoryId.value, tagId.value, from.value, to.value].filter(Boolean).length,
+)
+
+function resetFilters() {
+  accountId.value = 0
+  type.value = ''
+  categoryId.value = 0
+  tagId.value = 0
+  from.value = ''
+  to.value = ''
+}
 
 const catItems = computed(() => [
   ...categories.expenseOptions,
@@ -179,11 +212,23 @@ watch([accountId, type, categoryId, tagId, from, to], reload)
 </script>
 
 <style scoped>
+.search-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+.filter-toggle { flex-shrink: 0; padding: 0 10px !important; letter-spacing: 0; }
 .filters { display: flex; gap: 8px; margin-bottom: 8px; }
-.f { flex: 1; }
+.f { flex: 1; min-width: 0; }
+.filter-reset { display: flex; justify-content: flex-end; margin: -4px 0 4px; }
 .day { color: var(--muted); font-size: 0.85rem; margin: 12px 4px 4px; font-weight: 600; }
+.tx-row { margin-bottom: 6px; min-height: 52px !important; }
+.tx-row :deep(.v-list-item-subtitle) { font-size: 0.76rem; }
 .more { text-align: center; padding: 16px 0 32px; }
-@media (max-width: 600px) {
-  .filters { flex-direction: column; }
+
+/* 宽屏始终展开，窄屏默认折叠 */
+@media (min-width: 600px) {
+  .filter-toggle { display: none; }
+}
+@media (max-width: 599px) {
+  .filter-panel { display: none; }
+  .filter-panel.open { display: block; }
+  .filters :deep(.v-field__input) { padding-inline: 10px; }
 }
 </style>
