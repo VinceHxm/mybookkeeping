@@ -39,6 +39,7 @@ func (a *API) ListTransactions(c *gin.Context) {
 		}
 	}
 	q.Pending = c.Query("pending") == "1" || c.Query("pending") == "true"
+	q.Voucher = c.Query("voucher")
 	q.Type = c.Query("type")
 	q.Keyword = c.Query("keyword")
 	q.From = parseTimePtr(c.Query("from"))
@@ -52,6 +53,17 @@ func (a *API) ListTransactions(c *gin.Context) {
 		a.attachments.RefreshTxListAttachments(res.Items)
 	}
 	OK(c, res)
+}
+
+// RecentPlaces 最近使用过的地点（只返回地理字段）
+func (a *API) RecentPlaces(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.Query("limit"))
+	list, err := a.transactions.RecentPlaces(middleware.GetUserID(c), limit)
+	if err != nil {
+		ServerError(c, err.Error())
+		return
+	}
+	OK(c, list)
 }
 
 func (a *API) GetTransaction(c *gin.Context) {
@@ -84,9 +96,12 @@ type txBody struct {
 	FareRuleID         *uint64  `json:"fareRuleId"`
 	InstallmentPeriods int      `json:"installmentPeriods"`
 	InterestFen        int64    `json:"interestFen"`
+	InstallmentDeferCycles int  `json:"installmentDeferCycles"`
 	AmountPending      bool     `json:"amountPending"`
 	ForeignCurrency    string   `json:"foreignCurrency"`
 	ForeignAmount      int64    `json:"foreignAmount"`
+	VoucherStatus      string   `json:"voucherStatus"`
+	VoucherExpireOn    string   `json:"voucherExpireOn"`
 	HappenedAt         string   `json:"happenedAt"`
 	AttachmentIDs      []uint64 `json:"attachmentIds"`
 	TagIDs             []uint64 `json:"tagIds"`
@@ -100,7 +115,9 @@ func (b txBody) toInput() (service.TransactionInput, error) {
 		GeoEndLng: b.GeoEndLng, GeoEndLat: b.GeoEndLat, GeoEndName: b.GeoEndName,
 		FareRuleID:         b.FareRuleID,
 		InstallmentPeriods: b.InstallmentPeriods, InterestFen: b.InterestFen,
+		InstallmentDeferCycles: b.InstallmentDeferCycles,
 		AmountPending: b.AmountPending, ForeignCurrency: b.ForeignCurrency, ForeignAmount: b.ForeignAmount,
+		VoucherStatus: b.VoucherStatus, VoucherExpireOn: b.VoucherExpireOn,
 		AttachmentIDs: b.AttachmentIDs, TagIDs: b.TagIDs,
 	}
 	if b.HappenedAt == "" {
@@ -154,6 +171,57 @@ func (a *API) UpdateTransaction(c *gin.Context) {
 	}
 	if a.attachments != nil {
 		a.attachments.RefreshTxAttachments(t)
+	}
+	OK(c, t)
+}
+
+// SetVoucherStatus 一键核销 / 撤销核销
+func (a *API) SetVoucherStatus(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	var body struct {
+		Status string `json:"status"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		BadRequest(c, "参数错误")
+		return
+	}
+	t, err := a.transactions.SetVoucherStatus(middleware.GetUserID(c), id, body.Status)
+	if err != nil {
+		BadRequest(c, err.Error())
+		return
+	}
+	OK(c, t)
+}
+
+// RefundVoucher 团购券退款：生成退款收入并把券标记为已退款
+func (a *API) RefundVoucher(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	var body struct {
+		Amount     int64   `json:"amount"`
+		AccountID  uint64  `json:"accountId"`
+		CategoryID *uint64 `json:"categoryId"`
+		HappenedAt string  `json:"happenedAt"`
+		Remark     string  `json:"remark"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil {
+		BadRequest(c, "参数错误")
+		return
+	}
+	in := service.VoucherRefundInput{
+		Amount: body.Amount, AccountID: body.AccountID, CategoryID: body.CategoryID, Remark: body.Remark,
+	}
+	if body.HappenedAt != "" {
+		t := parseTimePtr(body.HappenedAt)
+		if t == nil {
+			BadRequest(c, "时间格式无效")
+			return
+		}
+		in.HappenedAt = *t
+	}
+	t, err := a.transactions.RefundVoucher(middleware.GetUserID(c), id, in)
+	if err != nil {
+		BadRequest(c, err.Error())
+		return
 	}
 	OK(c, t)
 }

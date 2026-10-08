@@ -7,6 +7,7 @@
     </div>
     <p class="page-hint">记一笔可一键套用。绑定计费规则时，模板金额会作为原价计算建议价。</p>
 
+    <div class="card-grid">
     <EntityCard
       v-for="t in list"
       :key="t.id"
@@ -25,6 +26,7 @@
         <div v-if="t.remark">备注 {{ t.remark }}</div>
       </template>
     </EntityCard>
+    </div>
     <div v-if="!list.length" class="empty-tip">暂无模板，点右上角添加</div>
 
     <!-- 宽屏：弹窗编辑 -->

@@ -1,15 +1,8 @@
 <template>
   <div class="fx">
-    <div class="fx-head">
-      <div class="fx-title-row">
-        <v-icon size="20" color="primary">mdi-currency-usd</v-icon>
-        <div class="fx-copy">
-          <div class="fx-title">外币支付</div>
-          <div class="fx-sub">{{ subtitle }}</div>
-        </div>
-      </div>
+    <MetaHead icon="mdi-currency-usd" title="外币支付" :subtitle="subtitle">
       <v-switch v-model="enabled" color="primary" density="compact" hide-details inset />
-    </div>
+    </MetaHead>
     <template v-if="enabled">
       <div class="fx-row">
         <v-combobox
@@ -48,6 +41,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { FOREIGN_CURRENCIES, payRate, yuanToFen } from '../utils/money'
+import MetaHead from './MetaHead.vue'
 
 const props = withDefaults(defineProps<{
   /** 上方实际人民币金额（分） */
@@ -70,24 +64,6 @@ const rate = computed(() => payRate(props.cnyFen, yuanToFen(amountYuan.value || 
 </script>
 
 <style scoped>
-.fx-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  min-width: 0;
-}
-.fx-head > .v-switch { flex-shrink: 0; }
-.fx-title-row { display: flex; align-items: flex-start; gap: 10px; min-width: 0; flex: 1; }
-.fx-copy { min-width: 0; flex: 1; }
-.fx-title { font-weight: 700; font-size: 0.98rem; line-height: 1.2; }
-.fx-sub {
-  color: var(--muted);
-  font-size: 0.8rem;
-  margin-top: 2px;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
 .fx-row { display: flex; gap: 8px; margin-top: 12px; min-width: 0; }
 .fx-cur { flex: 0 0 132px; min-width: 0; }
 .fx-amt { flex: 1; min-width: 0; }

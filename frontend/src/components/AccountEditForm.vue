@@ -25,6 +25,22 @@
       </div>
     </section>
 
+    <section v-if="form.type === 'invest'" class="form-section">
+      <header class="form-section__head">
+        <h3 class="form-section__title">平台</h3>
+      </header>
+      <div class="form-section__body">
+        <v-text-field
+          v-model="form.institution"
+          label="平台 / 券商"
+          variant="outlined"
+          hide-details
+          class="field field--last"
+          placeholder="如：支付宝、华泰证券"
+        />
+      </div>
+    </section>
+
     <section v-if="form.type === 'bank' || form.type === 'credit'" class="form-section">
       <header class="form-section__head">
         <h3 class="form-section__title">卡片信息</h3>
@@ -169,9 +185,10 @@
       </header>
       <div class="form-section__body">
         <p class="form-section__tip form-section__tip--alone">
-          按 App「分期待还」抄剩余本金与期数，不改已用额度。系统里的「出账」= 账单日那一次结账，不是花呗正在累积的那一期。
-          上期已还清、累计还在滚时：已出账填 0，首期选「下次出账起」，剩余本金含即将入下期账单的那一期。
-          仅当上方「已出账」里已经含有该分期的当期款时，才选「已含在已出账」。
+          本金与期数只填<strong>尚未出账</strong>的部分（App「分期待还」里还没进账单的剩余本金、剩余期数），不改已用额度。
+          系统里的「出账」= 账单日那一次结账，不是花呗正在累积的那一期。
+          若上方「已出账」里已经含了该分期的一期，选「另有一期已含在已出账」，那一期<strong>不要</strong>再算进这里的本金和期数；
+          上期已还清、累计还在滚时，已出账填 0，选「下次出账起」。
         </p>
         <div
           v-for="(row, idx) in planRows"
@@ -190,7 +207,7 @@
           <div class="plan-row__grid">
             <v-text-field
               v-model="row.principalYuan"
-              label="剩余本金"
+              label="未出账剩余本金"
               type="number"
               inputmode="decimal"
               variant="outlined"
@@ -201,10 +218,10 @@
             />
             <v-text-field
               v-model.number="row.periods"
-              label="剩余期数"
+              label="未出账剩余期数"
               type="number"
               min="1"
-              max="60"
+              :max="row.firstDueMode === 'current' ? 59 : 60"
               variant="outlined"
               hide-details
               density="compact"
@@ -241,7 +258,7 @@
         </v-btn>
         <div v-if="planSummary.futurePrincipal > 0 || planSummary.includedInBilled > 0 || planRows.length" class="plan-summary">
           <div v-if="planSummary.includedInBilled > 0">
-            已含在已出账内的分期首期约 ¥{{ fenToYuan(planSummary.includedInBilled) }}（不会再计入未出账）
+            已出账里含分期约 ¥{{ fenToYuan(planSummary.includedInBilled) }}（按每期均摊估算，仅用于拆分展示；本期应还以已出账为准，不会再计入未出账）
           </div>
           <div v-if="planSummary.futurePrincipal > 0">
             尚未出账的分期本金 ¥{{ fenToYuan(planSummary.futurePrincipal) }}
@@ -256,7 +273,7 @@
             </template>
           </div>
           <div v-if="planSummary.warnBilledZeroButIncluded" class="plan-warn">
-            已出账为 0，但分期选了「已含在已出账」——请改成「下次出账起」，否则首期会对着已关闭的账单周期。
+            已出账为 0，但分期选了「另有一期已含在已出账」——请改成「下次出账起」，否则首期会对着已关闭的账单周期。
           </div>
           <div v-if="planSummary.warnAccruingAsBilled" class="plan-warn">
             若上期已还清、这里填的是花呗「已累计」而非应还账单，请把已出账改回 0，分期选「下次出账起」。
@@ -269,19 +286,22 @@
 
     <section v-else-if="form.type !== 'credit'" class="form-section">
       <header class="form-section__head">
-        <h3 class="form-section__title">余额</h3>
+        <h3 class="form-section__title">{{ form.type === 'invest' ? '市值' : '余额' }}</h3>
       </header>
       <div class="form-section__body">
         <v-text-field
           v-model="balanceYuan"
-          :label="accountId ? '余额（元）' : '初始余额（元）'"
+          :label="form.type === 'invest' ? (accountId ? '市值（元）' : '当前市值（元）') : (accountId ? '余额（元）' : '初始余额（元）')"
           type="number"
           inputmode="decimal"
           variant="outlined"
           hide-details
           class="field field--last"
         />
-        <p v-if="accountId" class="form-section__tip">可直接改余额，不自动生成流水。</p>
+        <p v-if="form.type === 'invest'" class="form-section__tip">
+          买入 / 赎回记成与银行卡之间的转账；行情变化请在账户列表点「校准市值」，会留下盈亏记录。这里直接改不留记录。
+        </p>
+        <p v-else-if="accountId" class="form-section__tip">可直接改余额，不自动生成流水。</p>
       </div>
     </section>
 
@@ -421,13 +441,15 @@ type PlanRow = {
   periods: number
   interestYuan: string
   firstDueMode: 'current' | 'next'
+  /** 库内首期出账日晚于下次出账日时保留原值，避免编辑时被提前 */
+  fixedFirstDueOn?: string
 }
 
 let planKeySeq = 1
 const planRows = ref<PlanRow[]>([])
 const firstDueModeItems = [
   { title: '下次出账起', value: 'next' },
-  { title: '已含在已出账', value: 'current' },
+  { title: '另有一期已含在已出账', value: 'current' },
 ]
 
 const form = reactive({
@@ -448,6 +470,7 @@ const typeItems = [
   { title: '现金', value: 'cash' },
   { title: '银行卡', value: 'bank' },
   { title: '信用', value: 'credit' },
+  { title: '理财（基金 / 股票）', value: 'invest' },
   { title: '其他', value: 'other' },
 ]
 
@@ -478,19 +501,50 @@ function creditStatementDates(billingDay: number, at = dayjs()) {
   return { stmt, nextStmt }
 }
 
-function firstDueOnForMode(mode: 'current' | 'next', billingDay: number) {
-  const { stmt, nextStmt } = creditStatementDates(billingDay)
-  return (mode === 'current' ? stmt : nextStmt).format('YYYY-MM-DD')
+/** 对齐后端 splitAmountEvenly：余数并入首期 */
+function splitEvenly(total: number, periods: number) {
+  const n = Math.max(1, periods)
+  const base = Math.floor(total / n)
+  const out = Array.from({ length: n }, () => base)
+  out[0] += total - base * n
+  return out
 }
 
-function modeFromFirstDueOn(firstDueOn: string, billingDay: number): 'current' | 'next' {
-  if (!billingDay || !firstDueOn) return 'next'
+/**
+ * 库内计划按今天重新定位：已出账的期数剔除，表单只展示「尚未出账」的剩余本金/期数。
+ * 库内「当期」计划含已出账那一期（本金、期数各多一期），表单里扣掉。
+ */
+function planRowFromStored(p: CreditInstallmentPlan, billingDay: number): PlanRow | null {
+  const principal = Math.max(0, p.principalFen || 0)
+  const periods = Math.max(1, p.periods || 1)
+  const common = {
+    key: planKeySeq++,
+    name: p.name || '',
+    interestYuan: fenToYuan(p.interestPerPeriodFen || 0),
+  }
+  if (!billingDay || !p.firstDueOn) {
+    return { ...common, principalYuan: fenToYuan(principal), periods, firstDueMode: 'next' }
+  }
   const { stmt, nextStmt } = creditStatementDates(billingDay)
-  if (firstDueOn === stmt.format('YYYY-MM-DD')) return 'current'
-  if (firstDueOn === nextStmt.format('YYYY-MM-DD')) return 'next'
-  // 过去日期视为已开始，尽量按是否等于本期判断
-  if (firstDueOn <= stmt.format('YYYY-MM-DD')) return 'current'
-  return 'next'
+  const fd = dayjs(p.firstDueOn)
+  const firstDue = clampDay(fd.year(), fd.month() + 1, billingDay)
+  if (firstDue.isAfter(stmt, 'day')) {
+    return {
+      ...common,
+      principalYuan: fenToYuan(principal),
+      periods,
+      firstDueMode: 'next',
+      fixedFirstDueOn: firstDue.isAfter(nextStmt, 'day') ? p.firstDueOn : undefined,
+    }
+  }
+  // 最近一次出账对应第 k 期（0 起），之后的才是尚未出账
+  const k = stmt.diff(firstDue, 'month')
+  const left = periods - k - 1
+  if (left <= 0) return null
+  const rest = splitEvenly(principal, periods)
+    .slice(k + 1)
+    .reduce((s, x) => s + x, 0)
+  return { ...common, principalYuan: fenToYuan(rest), periods: left, firstDueMode: 'current' }
 }
 
 function emptyPlanRow(): PlanRow {
@@ -529,16 +583,15 @@ const planSummary = computed(() => {
     const periods = Math.max(1, Math.min(60, Number(row.periods) || 1))
     if (principal <= 0) continue
     const base = Math.floor(principal / periods)
-    const rem = principal % periods
-    const firstShare = base + rem
     if (row.firstDueMode === 'next') {
       futurePrincipal += principal
-      nextShare += firstShare
+      nextShare += base + (principal % periods)
     } else {
+      // 输入只含尚未出账部分；已出账那期按每期均摊估算，存库时补回（余数落在已出账那期）
       hasIncludedMode = true
-      includedInBilled += firstShare
-      futurePrincipal += Math.max(0, principal - firstShare)
-      if (periods > 1) nextShare += base
+      includedInBilled += base
+      futurePrincipal += base * periods
+      nextShare += base
     }
   }
   const used = Math.max(0, yuanToFen(usedCreditYuan.value))
@@ -565,32 +618,38 @@ const planSummary = computed(() => {
 })
 
 function fillPlansFrom(a: Account | null | undefined) {
-  const plans = a?.installmentPlans || []
   const billingDay = a?.billingDay || 0
-  planRows.value = plans.map((p) => ({
-    key: planKeySeq++,
-    name: p.name || '',
-    principalYuan: fenToYuan(p.principalFen || 0),
-    periods: Math.max(1, p.periods || 1),
-    interestYuan: fenToYuan(p.interestPerPeriodFen || 0),
-    firstDueMode: modeFromFirstDueOn(p.firstDueOn || '', billingDay),
-  }))
+  planRows.value = (a?.installmentPlans || [])
+    .map((p) => planRowFromStored(p, billingDay))
+    .filter((r): r is PlanRow => r !== null)
 }
 
 function buildInstallmentPlansPayload(): CreditInstallmentPlan[] {
-  const billingDay = form.billingDay || 0
+  const { stmt, nextStmt } = creditStatementDates(form.billingDay || 1)
   return planRows.value
     .map((row, i) => {
-      const principalFen = Math.max(0, yuanToFen(row.principalYuan))
-      const periods = Math.max(1, Math.min(60, Number(row.periods) || 1))
-      if (principalFen <= 0 && !row.name.trim()) return null
-      return {
+      const inputFen = Math.max(0, yuanToFen(row.principalYuan))
+      if (inputFen <= 0 && !row.name.trim()) return null
+      const common = {
         name: row.name.trim() || '存量分期',
-        principalFen,
-        periods,
         interestPerPeriodFen: Math.max(0, yuanToFen(row.interestYuan)),
-        firstDueOn: firstDueOnForMode(row.firstDueMode, billingDay || 1),
         sort: i,
+      }
+      if (row.firstDueMode === 'current') {
+        // 库内首期 = 已出账那期：本金、期数各补一期，首期出账日为最近一次出账日
+        const periods = Math.max(1, Math.min(59, Number(row.periods) || 1))
+        return {
+          ...common,
+          principalFen: inputFen + Math.floor(inputFen / periods),
+          periods: periods + 1,
+          firstDueOn: stmt.format('YYYY-MM-DD'),
+        } as CreditInstallmentPlan
+      }
+      return {
+        ...common,
+        principalFen: inputFen,
+        periods: Math.max(1, Math.min(60, Number(row.periods) || 1)),
+        firstDueOn: row.fixedFirstDueOn || nextStmt.format('YYYY-MM-DD'),
       } as CreditInstallmentPlan
     })
     .filter(Boolean) as CreditInstallmentPlan[]

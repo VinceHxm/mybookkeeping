@@ -206,6 +206,16 @@ func (a *API) CreditStatement(c *gin.Context) {
 	OK(c, stmt)
 }
 
+// CreditStatements 全部已设账单日的信用卡账单，一次返回
+func (a *API) CreditStatements(c *gin.Context) {
+	list, err := a.accounts.CreditStatements(middleware.GetUserID(c), time.Now())
+	if err != nil {
+		ServerError(c, err.Error())
+		return
+	}
+	OK(c, list)
+}
+
 // AccountLedger 账户流水明细（按月分组，信用卡带出账/还款状态）
 func (a *API) AccountLedger(c *gin.Context) {
 	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
@@ -215,6 +225,35 @@ func (a *API) AccountLedger(c *gin.Context) {
 		return
 	}
 	OK(c, ledger)
+}
+
+// RevalueAccount 理财账户按当前市值校准；与余额一致时 transaction 为 null
+func (a *API) RevalueAccount(c *gin.Context) {
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	var body struct {
+		MarketValue *int64 `json:"marketValue"`
+		HappenedAt  string `json:"happenedAt"`
+		Remark      string `json:"remark"`
+	}
+	if err := c.ShouldBindJSON(&body); err != nil || body.MarketValue == nil {
+		BadRequest(c, "请填写当前市值")
+		return
+	}
+	in := service.RevalueInput{MarketValue: *body.MarketValue, Remark: body.Remark}
+	if body.HappenedAt != "" {
+		t := parseTimePtr(body.HappenedAt)
+		if t == nil {
+			BadRequest(c, "时间格式无效")
+			return
+		}
+		in.HappenedAt = *t
+	}
+	t, err := a.transactions.Revalue(middleware.GetUserID(c), id, in)
+	if err != nil {
+		BadRequest(c, err.Error())
+		return
+	}
+	OK(c, gin.H{"transaction": t})
 }
 
 // CreditRepayReminders 临近还款日且有欠款的信用卡提醒

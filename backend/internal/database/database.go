@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	mysqldriver "github.com/go-sql-driver/mysql"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
@@ -14,8 +15,33 @@ import (
 	"mybookkeeping/internal/model"
 )
 
+// 远程库建连偶发丢包时，系统默认要等 ~21s 才报错；超时尽快失败，由连接池换一条重试
+const (
+	mysqlDialTimeout = 5 * time.Second
+	mysqlIOTimeout   = 30 * time.Second
+	mysqlMaxConns    = 20
+)
+
+// withTimeouts DSN 未显式配置时补上建连 / 读写超时
+func withTimeouts(dsn string) string {
+	c, err := mysqldriver.ParseDSN(dsn)
+	if err != nil {
+		return dsn
+	}
+	if c.Timeout == 0 {
+		c.Timeout = mysqlDialTimeout
+	}
+	if c.ReadTimeout == 0 {
+		c.ReadTimeout = mysqlIOTimeout
+	}
+	if c.WriteTimeout == 0 {
+		c.WriteTimeout = mysqlIOTimeout
+	}
+	return c.FormatDSN()
+}
+
 func OpenMySQL(cfg *config.Config) (*gorm.DB, error) {
-	db, err := gorm.Open(mysql.Open(cfg.MySQLDSN), &gorm.Config{
+	db, err := gorm.Open(mysql.Open(withTimeouts(cfg.MySQLDSN)), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Warn),
 	})
 	if err != nil {
@@ -25,9 +51,12 @@ func OpenMySQL(cfg *config.Config) (*gorm.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	sqlDB.SetMaxOpenConns(20)
-	sqlDB.SetMaxIdleConns(5)
+	// 空闲上限与最大连接一致：并发请求复用已建好的连接，不必临时向远程库新建
+	sqlDB.SetMaxOpenConns(mysqlMaxConns)
+	sqlDB.SetMaxIdleConns(mysqlMaxConns)
 	sqlDB.SetConnMaxLifetime(time.Hour)
+	// 闲置过久的连接可能已被中间网络设备静默断开，提前回收
+	sqlDB.SetConnMaxIdleTime(10 * time.Minute)
 
 	if err := db.AutoMigrate(
 		&model.User{},

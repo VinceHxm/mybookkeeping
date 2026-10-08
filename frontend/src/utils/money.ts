@@ -10,12 +10,26 @@ export function yuanToFen(yuan: string | number): number {
 }
 
 export function formatMoney(fen: number, type?: string): string {
-  const sign = type === 'income' ? '+' : type === 'expense' ? '-' : ''
+  let sign = type === 'income' ? '+' : type === 'expense' ? '-' : ''
+  if (type === 'revalue') sign = fen >= 0 ? '+' : '-'
   return `${sign}¥${fenToYuan(Math.abs(fen))}`
 }
 
+/** 金额配色：收入、浮盈为绿，其余为红 */
+export function amountClass(t: { type: string; amount: number }): string {
+  if (t.type === 'income' || (t.type === 'revalue' && t.amount >= 0)) return 'amount-income'
+  return 'amount-expense'
+}
+
 export function typeLabel(t: string): string {
-  return ({ expense: '支出', income: '收入', transfer: '转账' } as Record<string, string>)[t] || t
+  return ({ expense: '支出', income: '收入', transfer: '转账', revalue: '市值校准' } as Record<string, string>)[t] || t
+}
+
+/** 等额分期的首期本金（分）：余数并入首期 */
+export function firstShareFen(total: number, periods: number): number {
+  const n = Math.max(1, Math.min(60, Math.floor(periods) || 1))
+  const t = Math.max(0, Math.floor(total))
+  return Math.floor(t / n) + (t % n)
 }
 
 /** 常用外币；输入框也允许手填其它 ISO 代码 */

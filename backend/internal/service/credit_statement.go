@@ -2,7 +2,10 @@ package service
 
 import (
 	"errors"
+	"sort"
 	"time"
+
+	"gorm.io/gorm"
 
 	"mybookkeeping/internal/model"
 )
@@ -21,7 +24,8 @@ type CreditStatement struct {
 	NonInstallmentDue     int64     `json:"nonInstallmentDue"` // 本期一次性入账本金
 	InterestDue           int64     `json:"interestDue"`       // 本期计入应还的利息/手续费
 	DueAmount             int64     `json:"dueAmount"`         // 本期应还 = 本金份额 + 利息（含手填已出账兜底）
-	RepaidAmount          int64     `json:"repaidAmount"`      // 出账后至下期出账前的还款转账合计
+	RepaidAmount          int64     `json:"repaidAmount"`      // 出账后至下期出账前的还款转账 + 退款合计
+	RefundAmount          int64     `json:"refundAmount"`      // 其中退款（记到本卡的收入）
 	RepaidInterest        int64     `json:"repaidInterest"`    // 还款流水上标注的利息（展示拆分）
 	PeriodRemaining       int64     `json:"periodRemaining"`   // 本期待还 = max(0, 本期应还−本期已还)
 	RemainingAfterPay     int64     `json:"remainingAfterPay"` // 还后待还 = 整体待还 − 已出账（即未出账）
@@ -37,6 +41,31 @@ type CreditStatement struct {
 	DisplayOnly           bool      `json:"displayOnly"`
 	Note                  string    `json:"note"`
 	ComputedAt            time.Time `json:"computedAt"`
+	Installments          []CreditInstallmentItem `json:"installments"` // 尚有未出账期数的分期（流水 + 存量计划）
+}
+
+// CreditInstallmentItem 单笔分期进度（只读展示）
+type CreditInstallmentItem struct {
+	Source               string `json:"source"` // transaction | plan
+	SourceID             uint64 `json:"sourceId"`
+	Name                 string `json:"name"`
+	HappenedOn           string `json:"happenedOn,omitempty"` // 消费日（流水分期）
+	PrincipalFen         int64  `json:"principalFen"`         // 分期总本金
+	Periods              int    `json:"periods"`
+	BilledPeriods        int    `json:"billedPeriods"`        // 截至本期出账日已入账期数
+	RemainingFen         int64  `json:"remainingFen"`         // 尚未出账本金
+	NextDueOn            string `json:"nextDueOn"`            // 下一期出账日
+	NextShareFen         int64  `json:"nextShareFen"`         // 下一期本金
+	LastDueOn            string `json:"lastDueOn"`            // 末期出账日
+	InterestFen          int64  `json:"interestFen"`          // 流水分期：手续费合计（计入首期）
+	InterestPerPeriodFen int64  `json:"interestPerPeriodFen"` // 存量计划：每期利息
+}
+
+// creditTxs 计算一张卡账单所需的流水：全部消费 + 本期出账日之后的还款转账与退款
+type creditTxs struct {
+	expenses   []model.Transaction
+	repayments []model.Transaction
+	refunds    []model.Transaction
 }
 
 func (s *AccountService) CreditStatement(userID, accountID uint64, at time.Time) (*CreditStatement, error) {
@@ -47,11 +76,115 @@ func (s *AccountService) CreditStatement(userID, accountID uint64, at time.Time)
 	if acc.Type != "credit" {
 		return nil, errors.New("仅信用卡账户支持账单展示")
 	}
-	if acc.BillingDay < 1 || acc.BillingDay > 28 {
+	if !hasBillingDay(acc) {
 		return nil, errors.New("请先设置账单日（1-28）")
 	}
 	if at.IsZero() {
 		at = time.Now()
+	}
+	byAcc, err := s.loadCreditTxs(userID, []uint64{acc.ID}, lastClosedStatementDate(acc.BillingDay, at))
+	if err != nil {
+		return nil, err
+	}
+	return computeCreditStatement(acc, byAcc[acc.ID], at), nil
+}
+
+// CreditStatements 一次算出全部（未归档、已设账单日）信用卡的账单：账户 1 次查询 + 流水 1 次查询
+func (s *AccountService) CreditStatements(userID uint64, at time.Time) ([]CreditStatement, error) {
+	if at.IsZero() {
+		at = time.Now()
+	}
+	list, err := s.listForCredit(userID)
+	if err != nil {
+		return nil, err
+	}
+	return s.creditStatementsFor(userID, list, at)
+}
+
+// listForCredit 未归档账户 + 存量分期；账单计算用不到附件，不预加载
+func (s *AccountService) listForCredit(userID uint64) ([]model.Account, error) {
+	var list []model.Account
+	err := s.db.Where("user_id = ? AND archived = ?", userID, false).
+		Preload("InstallmentPlans", func(db *gorm.DB) *gorm.DB {
+			return db.Order("sort asc, id asc")
+		}).
+		Order("sort asc, id asc").Find(&list).Error
+	return list, err
+}
+
+func (s *AccountService) creditStatementsFor(userID uint64, list []model.Account, at time.Time) ([]CreditStatement, error) {
+	var cards []*model.Account
+	var ids []uint64
+	var since time.Time
+	for i := range list {
+		a := &list[i]
+		if a.Type != "credit" || a.Archived || !hasBillingDay(a) {
+			continue
+		}
+		cards = append(cards, a)
+		ids = append(ids, a.ID)
+		if stmt := lastClosedStatementDate(a.BillingDay, at); since.IsZero() || stmt.Before(since) {
+			since = stmt
+		}
+	}
+	out := make([]CreditStatement, 0, len(cards))
+	if len(cards) == 0 {
+		return out, nil
+	}
+	byAcc, err := s.loadCreditTxs(userID, ids, since)
+	if err != nil {
+		return nil, err
+	}
+	for _, a := range cards {
+		out = append(out, *computeCreditStatement(a, byAcc[a.ID], at))
+	}
+	return out, nil
+}
+
+func hasBillingDay(a *model.Account) bool {
+	return a.BillingDay >= 1 && a.BillingDay <= 28
+}
+
+// loadCreditTxs 按卡分组取流水；还款 / 退款只取 since（最早的本期出账日）之后的，精确区间在计算时再筛
+func (s *AccountService) loadCreditTxs(userID uint64, ids []uint64, since time.Time) (map[uint64]*creditTxs, error) {
+	var txs []model.Transaction
+	if err := s.db.Where("user_id = ?", userID).
+		Where(s.db.Where("type = ? AND account_id IN ?", "expense", ids).
+			Or("type = ? AND to_account_id IN ? AND happened_at >= ?", "transfer", ids, since).
+			Or("type = ? AND account_id IN ? AND happened_at >= ?", "income", ids, since)).
+		Preload("Category", func(db *gorm.DB) *gorm.DB { return db.Select("id", "name") }).
+		Find(&txs).Error; err != nil {
+		return nil, err
+	}
+	out := make(map[uint64]*creditTxs, len(ids))
+	for _, id := range ids {
+		out[id] = &creditTxs{}
+	}
+	for _, t := range txs {
+		switch t.Type {
+		case "expense":
+			if b := out[t.AccountID]; b != nil {
+				b.expenses = append(b.expenses, t)
+			}
+		case "transfer":
+			if t.ToAccountID != nil {
+				if b := out[*t.ToAccountID]; b != nil {
+					b.repayments = append(b.repayments, t)
+				}
+			}
+		case "income":
+			if b := out[t.AccountID]; b != nil {
+				b.refunds = append(b.refunds, t)
+			}
+		}
+	}
+	return out, nil
+}
+
+// computeCreditStatement 纯计算，不访问数据库；acc 需预载存量分期
+func computeCreditStatement(acc *model.Account, txs *creditTxs, at time.Time) *CreditStatement {
+	if txs == nil {
+		txs = &creditTxs{}
 	}
 	loc := at.Location()
 
@@ -61,15 +194,14 @@ func (s *AccountService) CreditStatement(userID, accountID uint64, at time.Time)
 	repayFrom := time.Date(stmt.Year(), stmt.Month(), stmt.Day(), 0, 0, 0, 0, loc)
 	repayTo := time.Date(nextStmt.Year(), nextStmt.Month(), nextStmt.Day(), 0, 0, 0, 0, loc)
 	cycleTo := cycleEnd.Add(24 * time.Hour)
-
-	var expenses []model.Transaction
-	if err := s.db.Where("user_id = ? AND type = ? AND account_id = ?", userID, "expense", accountID).
-		Find(&expenses).Error; err != nil {
-		return nil, err
+	inRepayWindow := func(t time.Time) bool {
+		return !t.Before(repayFrom) && t.Before(repayTo)
 	}
+	expenses := txs.expenses
 
 	var spentInCycle, installmentDue, nonInstallmentDue, interestDue, futureInstallment int64
 	var nextPeriodInstallment int64
+	installments := make([]CreditInstallmentItem, 0)
 	for _, e := range expenses {
 		if !e.HappenedAt.Before(cycleStart) && e.HappenedAt.Before(cycleTo) {
 			spentInCycle += e.Amount
@@ -79,8 +211,18 @@ func (s *AccountService) CreditStatement(userID, accountID uint64, at time.Time)
 		if periods < 1 {
 			periods = 1
 		}
-		firstDue := firstDueStatementForPurchase(e.HappenedAt, acc.BillingDay)
+		firstDue := firstDueForExpense(e, acc.BillingDay)
 		shares := splitAmountEvenly(e.Amount, periods)
+		if periods > 1 {
+			if item, ok := installmentProgress(firstDue, shares, acc.BillingDay, stmt); ok {
+				item.Source = "transaction"
+				item.SourceID = e.ID
+				item.Name = installmentTxName(e)
+				item.HappenedOn = fmtDate(e.HappenedAt)
+				item.InterestFen = e.InterestFen
+				installments = append(installments, item)
+			}
+		}
 		for i := 0; i < periods; i++ {
 			dueOn := addBillingMonths(firstDue, i, acc.BillingDay)
 			if sameYMD(dueOn, stmt) {
@@ -92,7 +234,7 @@ func (s *AccountService) CreditStatement(userID, accountID uint64, at time.Time)
 				if i == 0 && e.InterestFen > 0 {
 					interestDue += e.InterestFen
 				}
-			} else if dueOn.After(stmt) {
+			} else if dueOn.After(stmt) && periods > 1 {
 				futureInstallment += shares[i]
 				if sameYMD(dueOn, nextStmt) {
 					nextPeriodInstallment += shares[i]
@@ -104,20 +246,33 @@ func (s *AccountService) CreditStatement(userID, accountID uint64, at time.Time)
 	// 存量分期计划：不改余额，按绝对出账日序列拆入本期/后续
 	for _, p := range acc.InstallmentPlans {
 		addPlanShares(p, acc.BillingDay, stmt, nextStmt, &installmentDue, &interestDue, &futureInstallment, &nextPeriodInstallment)
+		if item, ok := planInstallmentProgress(p, acc.BillingDay, stmt); ok {
+			installments = append(installments, item)
+		}
+	}
+	sort.SliceStable(installments, func(i, j int) bool {
+		if installments[i].NextDueOn != installments[j].NextDueOn {
+			return installments[i].NextDueOn < installments[j].NextDueOn
+		}
+		return installments[i].RemainingFen > installments[j].RemainingFen
+	})
+
+	var repaid, repaidInterest int64
+	for _, r := range txs.repayments {
+		if inRepayWindow(r.HappenedAt) {
+			repaid += r.Amount
+			repaidInterest += r.InterestFen
+		}
 	}
 
-	var repayments []model.Transaction
-	if err := s.db.Where(
-		"user_id = ? AND type = ? AND to_account_id = ? AND happened_at >= ? AND happened_at < ?",
-		userID, "transfer", accountID, repayFrom, repayTo,
-	).Find(&repayments).Error; err != nil {
-		return nil, err
+	// 退款（记到本卡的收入）按入账日落在出账后至下期出账前的，视同本期还款
+	var refunded int64
+	for _, r := range txs.refunds {
+		if inRepayWindow(r.HappenedAt) {
+			refunded += r.Amount
+		}
 	}
-	var repaid, repaidInterest int64
-	for _, r := range repayments {
-		repaid += r.Amount
-		repaidInterest += r.InterestFen
-	}
+	repaid += refunded
 
 	dueFromTx := installmentDue + nonInstallmentDue + interestDue
 
@@ -196,6 +351,7 @@ func (s *AccountService) CreditStatement(userID, accountID uint64, at time.Time)
 		InterestDue:            interestDue,
 		DueAmount:              due,
 		RepaidAmount:           repaid,
+		RefundAmount:           refunded,
 		RepaidInterest:         repaidInterest,
 		PeriodRemaining:        periodRemaining,
 		RemainingAfterPay:      afterPay,
@@ -211,7 +367,62 @@ func (s *AccountService) CreditStatement(userID, accountID uint64, at time.Time)
 		DisplayOnly:            true,
 		Note:                   note,
 		ComputedAt:             at,
-	}, nil
+		Installments:           installments,
+	}
+}
+
+// installmentProgress 按出账日序列统计分期进度；全部期数已出账则返回 false
+func installmentProgress(firstDue time.Time, shares []int64, billingDay int, stmt time.Time) (CreditInstallmentItem, bool) {
+	item := CreditInstallmentItem{Periods: len(shares)}
+	for i, share := range shares {
+		item.PrincipalFen += share
+		dueOn := addBillingMonths(firstDue, i, billingDay)
+		if !dueOn.After(stmt) {
+			item.BilledPeriods++
+			continue
+		}
+		if item.NextDueOn == "" {
+			item.NextDueOn = fmtDate(dueOn)
+			item.NextShareFen = share
+		}
+		item.RemainingFen += share
+		item.LastDueOn = fmtDate(dueOn)
+	}
+	return item, item.RemainingFen > 0
+}
+
+func planInstallmentProgress(p model.CreditInstallmentPlan, billingDay int, stmt time.Time) (CreditInstallmentItem, bool) {
+	periods := p.Periods
+	if periods < 1 {
+		periods = 1
+	}
+	firstDue, err := time.ParseInLocation("2006-01-02", p.FirstDueOn, stmt.Location())
+	if err != nil {
+		return CreditInstallmentItem{}, false
+	}
+	firstDue = clampDay(firstDue.Year(), firstDue.Month(), billingDay, stmt.Location())
+	item, ok := installmentProgress(firstDue, splitAmountEvenly(p.PrincipalFen, periods), billingDay, stmt)
+	if !ok {
+		return item, false
+	}
+	item.Source = "plan"
+	item.SourceID = p.ID
+	item.Name = p.Name
+	if item.Name == "" {
+		item.Name = "存量分期"
+	}
+	item.InterestPerPeriodFen = p.InterestPerPeriodFen
+	return item, true
+}
+
+func installmentTxName(e model.Transaction) string {
+	if e.Remark != "" {
+		return e.Remark
+	}
+	if e.Category != nil && e.Category.Name != "" {
+		return e.Category.Name
+	}
+	return "分期消费"
 }
 
 // addPlanShares 将存量分期按 firstDueOn 起的绝对出账日序列拆入本期/下期/后续
@@ -303,6 +514,15 @@ func firstDueStatementForPurchase(happenedAt time.Time, billingDay int) time.Tim
 	return nextStatementDate(thisStmt, billingDay)
 }
 
+// firstDueForExpense 刷卡首期出账日；分期可按 InstallmentDeferCycles 推迟到之后的账单
+func firstDueForExpense(e model.Transaction, billingDay int) time.Time {
+	firstDue := firstDueStatementForPurchase(e.HappenedAt, billingDay)
+	if e.InstallmentPeriods > 1 && e.InstallmentDeferCycles > 0 {
+		firstDue = addBillingMonths(firstDue, e.InstallmentDeferCycles, billingDay)
+	}
+	return firstDue
+}
+
 func addBillingMonths(stmt time.Time, n, billingDay int) time.Time {
 	t := stmt.AddDate(0, n, 0)
 	return clampDay(t.Year(), t.Month(), billingDay, stmt.Location())
@@ -349,7 +569,37 @@ func (s *AccountService) CreditRepayReminders(userID uint64, at time.Time) ([]Cr
 	if at.IsZero() {
 		at = time.Now()
 	}
-	list, err := s.List(userID, false)
+	list, err := s.listForCredit(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	today := time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, at.Location())
+	// 仅还款日前一天或当天的卡才需要算账单
+	type dueAt struct {
+		day  int
+		due  time.Time
+		days int
+	}
+	var near []model.Account
+	dueInfo := map[uint64]dueAt{}
+	for _, acc := range list {
+		if acc.Type != "credit" || acc.Archived || acc.PaymentDueDay < 1 || acc.PaymentDueDay > 28 || !hasBillingDay(&acc) {
+			continue
+		}
+		due := relevantPaymentDueDate(acc.BillingDay, acc.PaymentDueDay, today)
+		days := int(due.Sub(today).Hours() / 24)
+		if days < 0 || days > 1 {
+			continue
+		}
+		near = append(near, acc)
+		dueInfo[acc.ID] = dueAt{acc.PaymentDueDay, due, days}
+	}
+	out := make([]CreditRepayReminder, 0)
+	if len(near) == 0 {
+		return out, nil
+	}
+	stmts, err := s.creditStatementsFor(userID, near, at)
 	if err != nil {
 		return nil, err
 	}
@@ -358,7 +608,7 @@ func (s *AccountService) CreditRepayReminders(userID uint64, at time.Time) ([]Cr
 	var user model.User
 	if err := s.db.Select("id", "default_account_id").Where("id = ?", userID).First(&user).Error; err == nil && user.DefaultAccountID != nil {
 		for i := range list {
-			if list[i].ID == *user.DefaultAccountID && list[i].Type != "credit" && !list[i].Archived {
+			if list[i].ID == *user.DefaultAccountID && list[i].Type != "credit" {
 				defaultFrom = &list[i]
 				break
 			}
@@ -366,42 +616,24 @@ func (s *AccountService) CreditRepayReminders(userID uint64, at time.Time) ([]Cr
 	}
 	if defaultFrom == nil {
 		for i := range list {
-			if list[i].Type != "credit" && !list[i].Archived {
+			if list[i].Type != "credit" {
 				defaultFrom = &list[i]
 				break
 			}
 		}
 	}
-
-	today := time.Date(at.Year(), at.Month(), at.Day(), 0, 0, 0, 0, at.Location())
-	out := make([]CreditRepayReminder, 0)
-	for _, acc := range list {
-		if acc.Type != "credit" || acc.Archived || acc.PaymentDueDay < 1 || acc.PaymentDueDay > 28 {
-			continue
-		}
-		if acc.BillingDay < 1 || acc.BillingDay > 28 {
-			continue
-		}
-		due := relevantPaymentDueDate(acc.BillingDay, acc.PaymentDueDay, today)
-		days := int(due.Sub(today).Hours() / 24)
-		// 仅还款日前一天或当天
-		if days < 0 || days > 1 {
-			continue
-		}
-		stmt, err := s.CreditStatement(userID, acc.ID, at)
-		if err != nil {
-			continue
-		}
+	for _, stmt := range stmts {
 		amount := stmt.PeriodRemaining
 		if amount <= 0 {
 			continue
 		}
+		info := dueInfo[stmt.AccountID]
 		item := CreditRepayReminder{
-			AccountID:     acc.ID,
-			AccountName:   acc.Name,
-			PaymentDueDay: acc.PaymentDueDay,
-			DueDate:       fmtDate(due),
-			DaysUntilDue:  days,
+			AccountID:     stmt.AccountID,
+			AccountName:   stmt.AccountName,
+			PaymentDueDay: info.day,
+			DueDate:       fmtDate(info.due),
+			DaysUntilDue:  info.days,
 			AmountFen:     amount,
 		}
 		if defaultFrom != nil {

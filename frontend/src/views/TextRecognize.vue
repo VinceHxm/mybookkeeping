@@ -188,8 +188,8 @@ const selectedCount = computed(() => items.value.filter((r) => r.selected).lengt
 
 onMounted(async () => {
   await Promise.all([
-    accounts.load(),
-    categories.load(),
+    accounts.ensure(),
+    categories.ensure(),
     auth.fetchMe().catch(() => {}),
   ])
 })

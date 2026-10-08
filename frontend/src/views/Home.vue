@@ -12,12 +12,30 @@
             <div class="muted">本月收入</div>
             <div class="big amount-income">¥{{ fenToYuan(summary?.monthIncome || 0) }}</div>
           </div>
+          <div class="summary-divider wide-only" aria-hidden="true" />
+          <router-link to="/stats" class="summary-cell summary-link wide-only">
+            <div class="muted">本月结余 <v-icon size="14">mdi-chevron-right</v-icon></div>
+            <div class="big" :class="monthNet >= 0 ? 'amount-income' : 'amount-expense'">
+              {{ monthNet < 0 ? '-' : '' }}¥{{ fenToYuan(Math.abs(monthNet)) }}
+            </div>
+          </router-link>
         </div>
       </header>
     </section>
 
     <section class="home-mid anim-in" style="--d: 80ms">
-      <div v-if="repayReminders.length || pendingCount" class="repay-tags">
+      <div v-if="repayReminders.length || pendingCount || expiringVouchers" class="repay-tags">
+        <router-link
+          v-if="expiringVouchers"
+          class="repay-tag voucher-tag"
+          :to="{ path: '/transactions', query: { voucher: 'pending' } }"
+        >
+          <v-icon size="14" start>mdi-ticket-percent-outline</v-icon>
+          <span class="repay-tag-text">
+            {{ expiringVouchers }} 张团购券快过期
+            <small>3 天内到期或已过期，记得核销或退款</small>
+          </span>
+        </router-link>
         <router-link v-if="pendingCount" class="repay-tag pending-tag" :to="pendingRoute">
           <v-icon size="14" start>mdi-timer-sand</v-icon>
           <span class="repay-tag-text">
@@ -76,6 +94,8 @@
       </div>
     </section>
 
+    <HomeInsights v-if="wide" :data="insights" class="home-insights anim-in" style="--d: 110ms" />
+
     <section class="home-bottom anim-in" style="--d: 140ms">
       <div class="bottom-head">
         <h2 class="section-label tight">最近流水</h2>
@@ -85,9 +105,9 @@
       <div v-if="!tx.recent.length" class="empty-tip">还没有记录，点上方按钮开始记账</div>
       <v-list v-else bg-color="transparent" class="recent">
         <v-list-item
-          v-for="(item, i) in tx.recent"
+          v-for="(item, i) in recentShown"
           :key="item.id"
-          :to="`/transactions/${item.id}`"
+          :to="item.type === 'revalue' ? `/accounts/${item.accountId}/ledger` : `/transactions/${item.id}`"
           rounded="lg"
           class="recent-row surface-row row-in"
           :style="{ '--d': `${160 + i * 40}ms` }"
@@ -107,7 +127,7 @@
           </v-list-item-subtitle>
           <template #append>
             <div class="amt-col">
-              <span :class="item.type === 'income' ? 'amount-income' : 'amount-expense'">
+              <span :class="amountClass(item)">
                 {{ formatMoney(item.amount, item.type) }}
               </span>
               <span v-if="item.foreignCurrency" class="fx-line">
@@ -160,22 +180,33 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import dayjs from 'dayjs'
 import http from '../api/http'
 import { useTransactionStore, type Transaction } from '../stores/transaction'
-import { useAccountStore, type CreditRepayReminder } from '../stores/account'
-import { fenToYuan, formatForeign, formatMoney, txSubCategory, txTitle, typeLabel } from '../utils/money'
+import type { CreditRepayReminder } from '../stores/account'
+import { amountClass, fenToYuan, formatForeign, formatMoney, txSubCategory, txTitle, typeLabel } from '../utils/money'
 import type { Template } from '../components/TemplateEditForm.vue'
+import HomeInsights, { type HomeInsightsData } from '../components/HomeInsights.vue'
+import { useBreakpoint } from '../composables/useBreakpoint'
 
 const tx = useTransactionStore()
-const accounts = useAccountStore()
 const router = useRouter()
+const { width } = useBreakpoint()
+/** 与样式里两栏断点一致；宽屏多展示几条最近流水和本月概览 */
+const wide = computed(() => width.value >= 768)
+const NARROW_RECENT = 5
+const WIDE_RECENT = 10
+const insights = ref<HomeInsightsData | null>(null)
+/** 宽屏取回的 10 条在窗口缩窄后只显示 5 条，不必重新请求 */
+const recentShown = computed(() => (wide.value ? tx.recent : tx.recent.slice(0, NARROW_RECENT)))
 const summary = ref<{ monthExpense: number; monthIncome: number } | null>(null)
+const monthNet = computed(() => (summary.value?.monthIncome || 0) - (summary.value?.monthExpense || 0))
 const repayReminders = ref<CreditRepayReminder[]>([])
 const pendingCount = ref(0)
 const pendingFirst = ref<Transaction | null>(null)
+const expiringVouchers = ref(0)
 const pendingRoute = computed(() =>
   pendingCount.value === 1 && pendingFirst.value
     ? `/transactions/${pendingFirst.value.id}`
@@ -287,10 +318,7 @@ async function quickUse(t: Template) {
     confirmOpen.value = false
     pendingTpl.value = null
     showFlash(`已记「${t.name}」¥${fenToYuan(amount)}`)
-    await Promise.all([
-      tx.loadRecent(),
-      http.get('/stats/summary').then((r) => { summary.value = r.data }),
-    ])
+    await refreshHome()
   } catch (e: any) {
     showFlash(e?.message || '记账失败')
   } finally {
@@ -298,29 +326,24 @@ async function quickUse(t: Template) {
   }
 }
 
-async function loadPending() {
-  try {
-    const { data } = await http.get('/transactions', { params: { pending: 1, limit: 1 } })
-    pendingCount.value = Number(data?.total) || 0
-    pendingFirst.value = data?.items?.[0] || null
-  } catch {
-    pendingCount.value = 0
-    pendingFirst.value = null
-  }
-}
-
 async function refreshHome() {
-  const [{ data: tpls }] = await Promise.all([
-    http.get('/templates').catch(() => ({ data: [] })),
-    tx.loadRecent(),
-    http.get('/stats/summary').then((r) => { summary.value = r.data }),
-    accounts.creditRepayReminders().then((list) => { repayReminders.value = list }).catch(() => {}),
-    loadPending(),
-  ])
-  templates.value = (tpls || []).slice(0, 9)
+  const params = wide.value ? { recent: WIDE_RECENT, insights: 1 } : undefined
+  const { data } = await http.get('/home/overview', { params })
+  insights.value = data?.insights || null
+  templates.value = data?.templates || []
+  tx.recent = data?.recent || []
+  summary.value = data?.summary || null
+  repayReminders.value = data?.repayReminders || []
+  pendingCount.value = Number(data?.pendingCount) || 0
+  pendingFirst.value = data?.pendingFirst || null
+  expiringVouchers.value = Number(data?.expiringVouchers) || 0
 }
 
 onMounted(refreshHome)
+// 窄屏打开后拉宽（转横屏、拖大窗口）时补取一次宽屏数据；拉窄不需要请求
+watch(wide, (isWide) => {
+  if (isWide && !insights.value) refreshHome()
+})
 </script>
 
 <style scoped>
@@ -450,6 +473,12 @@ onMounted(refreshHome)
   color: #8a5a10;
   background: color-mix(in srgb, #d99a2b 16%, var(--surface-solid, #fff));
   border-color: color-mix(in srgb, #d99a2b 38%, transparent);
+}
+
+.voucher-tag {
+  color: #2b6aa3;
+  background: color-mix(in srgb, #3b82c4 14%, var(--surface-solid, #fff));
+  border-color: color-mix(in srgb, #3b82c4 35%, transparent);
 }
 
 .amt-col { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
@@ -837,5 +866,81 @@ onMounted(refreshHome)
   .fab-core :deep(.v-icon) { font-size: 30px !important; }
   .fab-label { font-size: 0.86rem; letter-spacing: 0.06em; }
   .home-bottom { max-height: clamp(130px, 30vh, 200px); }
+}
+
+.wide-only { display: none; }
+
+/* 平板 / 宽屏：两栏仪表盘——左侧记一笔与模板，右侧提醒与最近流水；整页自然滚动 */
+@media (min-width: 768px) {
+  .home-page,
+  .app-shell--mobile-nav .home-page {
+    display: grid;
+    grid-template-columns: minmax(300px, 5fr) minmax(0, 7fr);
+    grid-template-areas:
+      'top top'
+      'mid bottom'
+      'insights bottom';
+    /* 右侧流水较长时，多出的高度给最后一行，左侧两张卡保持紧挨 */
+    grid-template-rows: auto auto 1fr;
+    align-content: start;
+    gap: 16px 20px;
+    height: auto;
+    max-height: none;
+    min-height: 0;
+    overflow: visible;
+    padding-bottom: calc(var(--nav-total-h) + 28px);
+  }
+  .home-top { grid-area: top; }
+
+  .wide-only { display: block; }
+  .summary { padding: 18px 12px; }
+  .summary-grid { grid-template-columns: 1fr auto 1fr auto 1fr; }
+  .summary-link { color: inherit; text-decoration: none; border-radius: 12px; }
+  .summary-link:hover { background: var(--primary-soft); }
+  .big { font-size: clamp(1.4rem, 2.6vw, 1.9rem); }
+
+  .home-mid {
+    grid-area: mid;
+    align-self: start;
+    overflow: visible;
+    padding: 28px 16px 22px;
+    gap: 16px;
+    background: var(--surface);
+    border: 1px solid var(--surface-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-soft);
+  }
+  .home-mid > :first-child,
+  .home-mid > :last-child { margin-top: 0; margin-bottom: 0; }
+  .repay-tags { max-width: 100%; }
+  .fab-record { width: 168px; height: 168px; }
+  .tpl-block { width: 100%; max-width: none; margin-top: 8px; padding: 0 4px; }
+  .tpl-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow: visible;
+    padding: 0;
+  }
+  .tpl-btn { width: auto; }
+  .tpl-hint { display: block; }
+
+  .home-insights { grid-area: insights; align-self: start; }
+  .home-bottom { grid-area: bottom; align-self: start; max-height: none; padding-bottom: 0; }
+  .section-label.tight { margin: 2px 0 10px; }
+  .recent {
+    overflow: visible;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .recent-row { min-height: 60px !important; }
+  .recent-row:last-child { margin-bottom: 0; }
+
+  /* 页面不再定高，提示条改为相对视口固定 */
+  .home-flash { position: fixed; bottom: calc(var(--nav-total-h) + 24px); }
+}
+
+/* 横屏手机 / 矮平板：大按钮别太占高 */
+@media (min-width: 768px) and (max-height: 620px) {
+  .fab-record { width: 120px; height: 120px; }
 }
 </style>

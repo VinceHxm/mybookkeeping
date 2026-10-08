@@ -142,9 +142,21 @@ body {
     padding-bottom: 36px;
     padding-left: max(var(--content-pad-x), var(--sal));
   }
+  /* 侧栏为 fixed：页面最大宽度要把侧栏算进去，内容才会在侧栏右侧区域居中且不被压窄 */
   .app-shell--desktop .page {
+    max-width: calc(var(--page-max) + var(--nav-rail-width));
     padding-left: calc(var(--content-pad-x) + var(--nav-rail-width));
   }
+}
+
+/* 单表单页（编辑页 / 文字识别）在平板及以上收窄居中，避免输入框横向拉满 */
+@media (min-width: 600px) {
+  .page.edit-page { max-width: 760px; }
+  .page.recognize-page { max-width: 820px; }
+}
+@media (min-width: 960px) {
+  .app-shell--desktop .page.edit-page { max-width: calc(760px + var(--nav-rail-width)); }
+  .app-shell--desktop .page.recognize-page { max-width: calc(820px + var(--nav-rail-width)); }
 }
 
 .page-title {
@@ -304,6 +316,30 @@ body {
   box-shadow: var(--shadow-soft);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
+}
+
+/* 列表卡片：手机单列（不改原样），平板及以上按可用宽度自动分列 */
+@media (min-width: 768px) {
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    column-gap: 14px;
+    align-items: stretch;
+  }
+  .card-grid--wide { grid-template-columns: repeat(auto-fill, minmax(400px, 1fr)); }
+  .card-grid--compact { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+  .card-grid > .empty-tip { grid-column: 1 / -1; }
+  /* 同一行卡片等高：外层被拉伸后，内层卡片跟着撑满，避免底边参差 */
+  .card-grid > .swipe-row { display: flex; flex-direction: column; }
+  .card-grid > .swipe-row > .swipe-front { flex: 1 1 auto; display: flex; flex-direction: column; }
+  .card-grid > .swipe-row > .swipe-front > .entity-card { flex: 1 1 auto; }
+}
+
+/* 子页标题栏（返回 / 标题 / 新建）：宽屏留出呼吸感 */
+@media (min-width: 960px) {
+  .toolbar { margin: 4px 0 14px; }
+  .page-tip,
+  .page-hint { max-width: 760px; }
 }
 
 .surface-row {

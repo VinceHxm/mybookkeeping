@@ -7,6 +7,7 @@
     </div>
     <p class="hint">后台每分钟检查到期项并自动生成流水</p>
 
+    <div class="card-grid">
     <EntityCard
       v-for="s in list"
       :key="s.id"
@@ -35,6 +36,7 @@
         <div>下次执行 {{ formatNext(s.nextRunAt) }}</div>
       </template>
     </EntityCard>
+    </div>
     <div v-if="!list.length" class="empty-tip">暂无周期记账</div>
 
     <v-dialog v-if="!isMobile" v-model="dialog" max-width="500" scrollable>

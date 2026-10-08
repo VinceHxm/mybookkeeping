@@ -36,13 +36,13 @@
       </header>
       <div class="form-section__body">
         <div class="form-section__group">
-          <div class="pending-head">
-            <div class="pending-copy">
-              <div class="pending-title">金额待确认</div>
-              <div class="pending-sub">生成的流水先按上方预估金额入账并标记「待确认」，等账单出来后改成实际金额</div>
-            </div>
+          <MetaHead
+            icon="mdi-timer-sand"
+            title="金额待确认"
+            subtitle="生成的流水先按上方预估金额入账并标记「待确认」，等账单出来后改成实际金额"
+          >
             <v-switch v-model="amountPending" color="primary" density="compact" hide-details inset />
-          </div>
+          </MetaHead>
         </div>
         <div class="form-section__group">
           <ForeignPaymentFields
@@ -207,6 +207,7 @@ import dayjs from 'dayjs'
 import http from '../api/http'
 import NativeDateField from './NativeDateField.vue'
 import ForeignPaymentFields from './ForeignPaymentFields.vue'
+import MetaHead from './MetaHead.vue'
 import { useAccountStore } from '../stores/account'
 import { useCategoryStore } from '../stores/category'
 import { fenToYuan, yuanToFen } from '../utils/money'
@@ -358,7 +359,7 @@ function fillFrom(s: any | null | undefined) {
 }
 
 async function load() {
-  await Promise.all([accounts.load(), categories.load()])
+  await Promise.all([accounts.ensure(), categories.ensure()])
   if (props.initial) fillFrom(props.initial)
   else if (props.scheduleId) {
     const { data } = await http.get('/schedules')
@@ -412,11 +413,6 @@ defineExpose({ save, saving })
 .interval-row { display: flex; align-items: center; gap: 8px; }
 .interval-input { flex: 0 0 96px; }
 .unit-select { flex: 1; min-width: 0; }
-.pending-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; min-width: 0; }
-.pending-head > .v-switch { flex-shrink: 0; }
-.pending-copy { min-width: 0; flex: 1; }
-.pending-title { font-weight: 700; font-size: 0.98rem; line-height: 1.2; }
-.pending-sub { color: var(--muted); font-size: 0.8rem; margin-top: 2px; line-height: 1.4; overflow-wrap: anywhere; }
 .quick-days { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .rule-hint {
   margin-top: 6px;

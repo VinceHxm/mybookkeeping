@@ -7,6 +7,7 @@
     </div>
     <p class="page-hint">先定名称与基础折扣，再按需打开免费日、阶梯、时段等模块。原价可空；记账手填金额始终为准。</p>
 
+    <div class="card-grid">
     <EntityCard
       v-for="r in list"
       :key="r.id"
@@ -33,6 +34,7 @@
         </div>
       </template>
     </EntityCard>
+    </div>
     <p v-if="!list.length" class="empty">暂无规则，点右上角添加</p>
 
     <DeleteConfirmDialog

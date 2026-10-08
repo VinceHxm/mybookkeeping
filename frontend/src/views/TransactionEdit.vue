@@ -1,5 +1,5 @@
 <template>
-  <div class="page">
+  <div class="page te-page">
     <div class="toolbar">
       <v-btn icon="mdi-arrow-left" variant="text" @click="$router.back()" />
       <h1>{{ isEdit ? '编辑流水' : '记一笔' }}</h1>
@@ -7,12 +7,15 @@
       <span v-else style="width:40px" />
     </div>
 
+    <div class="te-layout">
+    <div class="te-main">
+
     <div v-if="!isEdit" class="ai-row mb-3">
       <v-btn variant="tonal" color="secondary" class="flex1" to="/transactions/recognize">
         <v-icon start>mdi-robot</v-icon>
         文字识别
       </v-btn>
-      <v-btn variant="tonal" color="secondary" class="flex1" @click="openAI('image')">
+      <v-btn variant="tonal" color="secondary" class="flex1" @click="showAI = true">
         <v-icon start>mdi-camera</v-icon>
         票据识图
       </v-btn>
@@ -41,45 +44,28 @@
         <v-btn value="income" class="flex1" size="small">收入</v-btn>
       </v-btn-toggle>
     </div>
+    <div v-if="!isEdit && uiMode === 'flow' && flowKind === 'income'" class="mb-3">
+      <v-btn variant="tonal" color="info" block @click="refundOpen = true">
+        <v-icon start>mdi-ticket-percent-outline</v-icon>
+        从待核销团购券退款
+      </v-btn>
+    </div>
     <p v-else-if="uiMode === 'repay'" class="mode-hint mb-3">
       信用账户还款写这里：从银行卡 / 支付宝等转入信用卡、花呗等，<strong>不计入本月支出</strong>。
     </p>
     <p v-else class="mode-hint mb-3">账户之间挪钱（还信用卡 / 花呗请用「还款」）。</p>
 
-    <section v-if="!isEdit && uiMode === 'flow' && flowKind === 'expense'" class="form-section mb-3">
-      <div class="form-section__body">
-      <div class="meta-head">
-        <div class="meta-title-row">
-          <v-icon size="20" color="primary">mdi-ticket-percent-outline</v-icon>
-          <div class="meta-copy">
-            <div class="meta-title">计费规则</div>
-            <div class="meta-sub">主要用于累计折扣标记；金额以手填为准</div>
-          </div>
-        </div>
-        <v-switch v-model="fareEnabled" color="primary" density="compact" hide-details inset @update:model-value="onFareToggle" />
-      </div>
-      <template v-if="fareEnabled">
-        <v-select
-          v-model="form.fareRuleId"
-          :items="fareRuleItems"
-          item-title="title"
-          item-value="value"
-          label="选择规则"
-          variant="outlined"
-          density="compact"
-          hide-details
-          class="field"
-          @update:model-value="onFareRulePicked"
-        />
-        <div class="fare-actions">
-          <v-btn size="small" variant="tonal" color="primary" :loading="farePreviewLoading" :disabled="!form.fareRuleId" @click="applySuggestedFare(true)">
-            填入建议价
-          </v-btn>
-          <span v-if="fareHint" class="fare-hint">{{ fareHint }}</span>
-        </div>
-      </template>
-      </div>
-    </section>
+    <FareRuleSection
+      v-if="!isEdit && uiMode === 'flow' && flowKind === 'expense'"
+      v-model:enabled="fareEnabled"
+      v-model:rule-id="form.fareRuleId"
+      :items="fareRuleItems"
+      :loading="farePreviewLoading"
+      :hint="fareHint"
+      @toggle="onFareToggle"
+      @picked="onFareRulePicked"
+      @apply="applySuggestedFare(true)"
+    />
 
     <div v-if="wasPending" class="pending-box mb-3">
       <div class="pending-title">
@@ -107,7 +93,7 @@
       hide-details
       class="amount-field mb-3"
       prefix="¥"
-      @update:model-value="onAmountManualEdit"
+      @update:model-value="repay.onAmountManualEdit"
     />
 
     <section v-if="form.type !== 'transfer'" class="form-section mb-3">
@@ -122,402 +108,215 @@
       </div>
     </section>
 
-    <section v-if="showCreditExtras" class="form-section mb-3">
-      <div class="form-section__body">
-      <div v-if="repayStatement" class="repay-stmt mb-2">
-        <div class="repay-stmt-row">
-          <span>本期已还</span><strong>¥{{ fenToYuan(repayStatement.repaidAmount) }}</strong>
-        </div>
-        <div class="repay-stmt-row">
-          <span>本期待还</span><strong>¥{{ fenToYuan(repayStatement.periodRemaining) }}</strong>
-        </div>
-        <div class="repay-stmt-row">
-          <span>{{ repayStatement.periodRemaining === 0 && (repayStatement.remainingAfterPay || 0) > 0 ? '剩余已用' : '还后待还' }}</span>
-          <strong class="warn">¥{{ fenToYuan(repayStatement.remainingAfterPay) }}</strong>
-        </div>
-        <div class="repay-stmt-row">
-          <span>整体待还</span><strong>¥{{ fenToYuan(repayTotalOutstanding) }}</strong>
-        </div>
-        <div
-          v-if="repayStatement.periodRemaining === 0 && (repayStatement.nextPeriodEstimate || 0) > 0"
-          class="repay-stmt-row"
-        >
-          <span>预计下次出账</span><strong>¥{{ fenToYuan(repayStatement.nextPeriodEstimate || 0) }}</strong>
-        </div>
-        <div class="repay-stmt-hint">
-          <template v-if="repayStatement.periodRemaining === 0 && (repayStatement.remainingAfterPay || 0) > 0">
-            本期已还清。「剩余已用」是卡上还欠总额；还款默认按本期待还（现为 0），提前还款可加载整体待还。
-          </template>
-          <template v-else>
-            默认按本期待还预填；提前还款可加载整体待还
-          </template>
-          <template v-if="(repayStatement.futureInstallment || 0) > 0">
-            · 尚未出账分期 ¥{{ fenToYuan(repayStatement.futureInstallment) }}
-          </template>
-        </div>
-      </div>
-
-      <button
-        type="button"
-        class="credit-toggle"
-        :class="{ 'is-active': hasCreditPlan, 'is-open': creditExtrasOpen }"
-        :aria-expanded="creditExtrasOpen"
-        @click="creditExtrasOpen = !creditExtrasOpen"
-      >
-        <v-icon size="20" color="primary">mdi-credit-card-clock-outline</v-icon>
-        <span class="credit-toggle__title">{{ isCreditExpense ? '分期 / 手续费' : '还款分期 / 利息' }}</span>
-        <span class="credit-toggle__summary">{{ creditPlanSummary }}</span>
-        <v-icon size="18" class="credit-toggle__chevron">mdi-chevron-down</v-icon>
-      </button>
-
-      <v-expand-transition>
-        <div v-show="creditExtrasOpen" class="credit-panel">
-          <div class="meta-sub mb-2">
-            {{ isCreditExpense
-              ? '仅影响账单展示拆分；账户余额按上方金额变动'
-              : '建议金额=本期本金份额+利息；可改，保存以手填为准' }}
-          </div>
-          <div class="period-row mb-2">
-            <v-chip-group
-              :model-value="form.installmentPeriods"
-              selected-class="text-primary"
-              class="period-chips"
-              @update:model-value="onPeriodChipPicked"
-            >
-              <v-chip
-                v-for="p in periodPresets"
-                :key="p"
-                :value="p"
-                size="small"
-                variant="outlined"
-                filter
-              >{{ p === 1 ? (isCreditExpense ? '不分期' : '一次还清') : `${p} 期` }}</v-chip>
-            </v-chip-group>
-            <v-text-field
-              v-model.number="form.installmentPeriods"
-              label="期数"
-              type="number"
-              min="1"
-              max="60"
-              variant="outlined"
-              density="compact"
-              hide-details
-              class="period-input"
-              @update:model-value="onRepayPlanChanged"
-            />
-          </div>
-          <v-text-field
-            v-model="interestYuan"
-            label="利息 / 手续费（元）"
-            type="number"
-            inputmode="decimal"
-            variant="outlined"
-            density="compact"
-            hide-details
-            prefix="¥"
-            class="mb-1"
-            @update:model-value="onRepayPlanChanged"
-          />
-          <div v-if="creditExtraHint" class="fare-hint">{{ creditExtraHint }}</div>
-        </div>
-      </v-expand-transition>
-      <div v-if="isCreditRepay || isRepayMode" class="repay-actions mt-2">
-        <v-btn
-          size="small"
-          variant="tonal"
-          color="primary"
-          :loading="repayStmtLoading"
-          @click="applyRepaySuggestion(true)"
-        >按本期待还</v-btn>
-        <v-btn
-          size="small"
-          variant="outlined"
-          color="primary"
-          :disabled="!repayTotalOutstanding"
-          @click="applyEarlyRepay"
-        >提前还款</v-btn>
-      </div>
-      </div>
-    </section>
+    <CreditExtrasPanel
+      v-if="showCreditExtras"
+      v-model:periods="installmentPeriods"
+      v-model:interest-yuan="interestYuan"
+      v-model:defer-cycles="form.installmentDeferCycles"
+      :billing-day="creditBillingDay"
+      :happened-at="happenedLocal"
+      :statement="repay.statement.value"
+      :total-outstanding="repay.totalOutstanding.value"
+      :is-credit-expense="isCreditExpense"
+      :show-repay-actions="repayActive"
+      :repay-loading="repay.loading.value"
+      :amount-fen="yuanToFen(amountYuan || '0')"
+      :repay-base-fen="repay.baseFen.value"
+      @plan-changed="repay.onPlanChanged"
+      @suggest="repay.apply(true)"
+      @early-repay="repay.applyEarlyRepay"
+    />
 
     <section class="form-section mb-3">
       <header class="form-section__head">
         <h3 class="form-section__title">明细</h3>
       </header>
       <div class="form-section__body">
-    <v-select
-      v-model="form.accountId"
-      :items="accounts.list"
-      item-title="name"
-      item-value="id"
-      :label="form.type === 'transfer' ? '转出账户' : '账户'"
-      variant="outlined"
-      hide-details
-      class="field"
-    />
-    <v-select
-      v-if="form.type === 'transfer'"
-      v-model="form.toAccountId"
-      :items="transferToOptions"
-      item-title="name"
-      item-value="id"
-      :label="isRepayMode || isCreditRepay ? '信用卡账户' : '转入账户'"
-      variant="outlined"
-      hide-details
-      class="field"
-    />
-    <div v-else class="form-field-row field">
-      <v-select
-        v-model="form.categoryId"
-        :items="form.type === 'expense' ? categories.expenseOptions : categories.incomeOptions"
-        item-title="name"
-        item-value="id"
-        label="分类"
-        variant="outlined"
-        class="flex1"
-        hide-details
-      />
-      <v-btn
-        icon="mdi-plus"
-        variant="tonal"
-        color="primary"
-        title="新增分类"
-        @click="openQuickCategory"
-      />
-    </div>
-
-    <div class="form-field-row field">
-      <v-select
-        v-model="form.tagIds"
-        :items="tags.list"
-        item-title="name"
-        item-value="id"
-        label="标签"
-        multiple
-        chips
-        closable-chips
-        variant="outlined"
-        class="flex1"
-        hide-details
-      />
-      <v-btn
-        icon="mdi-plus"
-        variant="tonal"
-        color="primary"
-        title="新增标签"
-        @click="openQuickTag"
-      />
-    </div>
-
-    <v-text-field v-model="form.remark" label="备注" variant="outlined" hide-details class="field" />
-    <NativeDateField v-model="happenedLocal" label="时间" type="datetime-local" variant="outlined" hide-details class="field field--last" />
-      </div>
-    </section>
-
-    <section v-if="isEdit" class="form-section mb-3">
-      <div class="form-section__body">
-      <div class="meta-head">
-        <div class="meta-title-row">
-          <v-icon size="20" color="primary">mdi-ticket-percent-outline</v-icon>
-          <div class="meta-copy">
-            <div class="meta-title">计费规则</div>
-            <div class="meta-sub">累计折扣标记；金额以手填为准</div>
-          </div>
-        </div>
-        <v-switch v-model="fareEnabled" color="primary" density="compact" hide-details inset @update:model-value="onFareToggle" />
-      </div>
-      <template v-if="fareEnabled">
         <v-select
-          v-model="form.fareRuleId"
-          :items="fareRuleItems"
-          item-title="title"
-          item-value="value"
-          label="选择规则"
+          v-model="form.accountId"
+          :items="accounts.list"
+          item-title="name"
+          item-value="id"
+          :label="form.type === 'transfer' ? '转出账户' : '账户'"
           variant="outlined"
-          density="compact"
           hide-details
           class="field"
-          @update:model-value="onFareRulePicked"
         />
-        <div class="fare-actions">
-          <v-btn size="small" variant="tonal" color="primary" :loading="farePreviewLoading" :disabled="!form.fareRuleId" @click="applySuggestedFare(true)">
-            填入建议价
-          </v-btn>
-          <span v-if="fareHint" class="fare-hint">{{ fareHint }}</span>
+        <v-select
+          v-if="form.type === 'transfer'"
+          v-model="form.toAccountId"
+          :items="transferToOptions"
+          item-title="name"
+          item-value="id"
+          :label="repayActive ? '信用卡账户' : '转入账户'"
+          variant="outlined"
+          hide-details
+          class="field"
+        />
+        <div v-else class="form-field-row field">
+          <v-select
+            v-model="form.categoryId"
+            :items="form.type === 'expense' ? categories.expenseOptions : categories.incomeOptions"
+            item-title="name"
+            item-value="id"
+            label="分类"
+            variant="outlined"
+            class="flex1"
+            hide-details
+          />
+          <v-btn icon="mdi-plus" variant="tonal" color="primary" title="新增分类" @click="showQuickCategory = true" />
         </div>
-      </template>
+
+        <div class="form-field-row field">
+          <v-select
+            v-model="form.tagIds"
+            :items="tags.list"
+            item-title="name"
+            item-value="id"
+            label="标签"
+            multiple
+            chips
+            closable-chips
+            variant="outlined"
+            class="flex1"
+            hide-details
+          />
+          <v-btn icon="mdi-plus" variant="tonal" color="primary" title="新增标签" @click="showQuickTag = true" />
+        </div>
+
+        <v-text-field v-model="form.remark" label="备注" variant="outlined" hide-details class="field" />
+        <NativeDateField v-model="happenedLocal" label="时间" type="datetime-local" variant="outlined" hide-details class="field field--last" />
       </div>
     </section>
 
+    <section v-if="form.type === 'expense'" class="form-section mb-3">
+      <header class="form-section__head voucher-head">
+        <h3 class="form-section__title">
+          团购券
+          <v-chip
+            v-if="isEdit && voucherStatus"
+            size="x-small"
+            :color="voucherStatusColor[voucherStatus]"
+            variant="tonal"
+            class="ml-1"
+          >{{ voucherStatusLabel[voucherStatus] }}</v-chip>
+        </h3>
+        <v-switch
+          v-model="voucherOn"
+          color="primary"
+          density="compact"
+          hide-details
+          inset
+          :disabled="voucherStatus === 'refunded'"
+        />
+      </header>
+      <div v-if="voucherOn" class="form-section__body">
+        <NativeDateField
+          v-model="voucherExpireOn"
+          label="过期日（可选）"
+          variant="outlined"
+          hide-details
+          class="field"
+        />
+        <p v-if="voucherStatus === 'refunded'" class="form-section__tip">
+          这张券已退款。要撤销，删除对应的退款流水即可恢复为待核销。
+        </p>
+        <p v-else class="form-section__tip">
+          先买后用的券打开此开关，会标记为待核销；用掉后点「一键核销」，过期自动退款时点「退款」直接生成退款收入。
+        </p>
+        <div v-if="isEdit && savedVoucherStatus && voucherStatus !== 'refunded'" class="voucher-ops">
+          <v-btn
+            v-if="voucherStatus === 'pending'"
+            size="small"
+            variant="tonal"
+            color="success"
+            :loading="voucherBusy"
+            @click="toggleUsed('used')"
+          >一键核销</v-btn>
+          <v-btn
+            v-else
+            size="small"
+            variant="text"
+            :loading="voucherBusy"
+            @click="toggleUsed('pending')"
+          >撤销核销</v-btn>
+          <v-btn size="small" variant="tonal" color="info" @click="refundOpen = true">退款</v-btn>
+        </div>
+      </div>
+    </section>
+
+    <div v-if="refundOfId" class="refund-link mb-3">
+      <v-icon size="16">mdi-ticket-percent-outline</v-icon>
+      <span class="flex1">这是一笔团购券退款，删除后原券会恢复为待核销。</span>
+      <v-btn size="small" variant="text" color="primary" :to="`/transactions/${refundOfId}`">查看原券</v-btn>
+    </div>
+
+    <FareRuleSection
+      v-if="isEdit"
+      v-model:enabled="fareEnabled"
+      v-model:rule-id="form.fareRuleId"
+      :items="fareRuleItems"
+      :loading="farePreviewLoading"
+      :hint="fareHint"
+      @toggle="onFareToggle"
+      @picked="onFareRulePicked"
+      @apply="applySuggestedFare(true)"
+    />
+    </div>
+
+    <aside class="te-side">
     <AttachmentUpload v-model="attachmentIds" :existing="existingAttachments" />
 
-    <section class="form-section mb-4">
-      <div class="form-section__body">
-      <div class="meta-head">
-        <div class="meta-title-row">
-          <v-icon size="20" color="primary">
-            {{ form.geoMode === 'route' ? 'mdi-map-marker-path' : 'mdi-map-marker-outline' }}
-          </v-icon>
-          <div class="meta-copy">
-            <div class="meta-title">地点</div>
-            <div class="meta-sub">消费位置或路费起终点，可选</div>
-          </div>
-        </div>
-        <v-chip v-if="geoLabel" size="small" color="primary" variant="tonal">
-          {{ form.geoMode === 'route' ? '行程' : '位置' }}
-        </v-chip>
-      </div>
-
-      <button v-if="!geoLabel" type="button" class="loc-empty" @click="showMap = true">
-        <v-icon size="28" color="primary">mdi-map-search-outline</v-icon>
-        <div class="loc-empty-text">
-          <strong>添加地点</strong>
-          <span>点选地图，或一键定位当前位置</span>
-        </div>
-        <v-icon size="20" color="primary">mdi-chevron-right</v-icon>
-      </button>
-
-      <div v-else class="loc-filled">
-        <div class="loc-preview" @click="showMap = true">
-          <div class="loc-kicker">{{ form.geoMode === 'route' ? '已选行程' : '已选位置' }}</div>
-          <div class="loc-main">{{ geoPrimary }}</div>
-          <div v-if="geoSecondary" class="loc-second">{{ geoSecondary }}</div>
-        </div>
-        <div class="loc-actions">
-          <v-btn variant="tonal" color="primary" @click="showMap = true">
-            <v-icon start>mdi-pencil-outline</v-icon>
-            修改
-          </v-btn>
-          <v-btn variant="text" color="error" @click="clearGeo">
-            <v-icon start>mdi-close</v-icon>
-            清除
-          </v-btn>
-        </div>
-      </div>
-      </div>
-    </section>
+    <LocationSection v-model:geo="geo" />
+    </aside>
+    </div>
 
     <v-alert v-if="error" type="error" class="mb-3" density="compact">{{ error }}</v-alert>
     <div class="save-bar">
       <v-btn color="primary" block size="large" class="hero-cta" :loading="saving" @click="onSave">保存</v-btn>
     </div>
 
-    <v-dialog
-      v-model="showMap"
-      :fullscreen="mapFullscreen"
-      :max-width="mapFullscreen ? undefined : 960"
-      transition="dialog-bottom-transition"
-    >
-      <div class="map-dialog-shell" :class="{ 'is-full': mapFullscreen }">
-        <AmapPicker
-          v-if="showMap"
-          :initial-mode="form.geoMode === 'route' ? 'route' : 'point'"
-          :initial-lng="form.geoLng"
-          :initial-lat="form.geoLat"
-          :initial-name="form.geoName"
-          :initial-end-lng="form.geoEndLng"
-          :initial-end-lat="form.geoEndLat"
-          :initial-end-name="form.geoEndName"
-          @pick="onPick"
-          @close="showMap = false"
-        />
-      </div>
-    </v-dialog>
-
-    <v-dialog v-model="showQuickCategory" max-width="400">
-      <v-card>
-        <v-card-title>新增分类</v-card-title>
-        <v-card-text>
-          <v-text-field
-            v-model="quickCategoryName"
-            label="分类名称"
-            variant="outlined"
-            autofocus
-            @keyup.enter="saveQuickCategory"
-          />
-          <p class="hint">将创建为当前「{{ form.type === 'income' ? '收入' : '支出' }}」分类，可稍后在分类管理里调整层级。</p>
-          <v-alert v-if="quickError" type="error" density="compact" class="mt-2">{{ quickError }}</v-alert>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn variant="text" @click="showQuickCategory = false">取消</v-btn>
-          <v-btn color="primary" :loading="quickSaving" @click="saveQuickCategory">创建并选用</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-
-    <v-dialog v-model="showQuickTag" max-width="400">
-      <v-card>
-        <v-card-title>新增标签</v-card-title>
-        <v-card-text>
-          <v-text-field
-            v-model="quickTagName"
-            label="标签名称"
-            variant="outlined"
-            autofocus
-            @keyup.enter="saveQuickTag"
-          />
-          <v-alert v-if="quickError" type="error" density="compact" class="mt-2">{{ quickError }}</v-alert>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn variant="text" @click="showQuickTag = false">取消</v-btn>
-          <v-btn color="primary" :loading="quickSaving" @click="saveQuickTag">创建并选用</v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
-
-    <v-dialog v-model="showAI" max-width="520">
-      <v-card>
-        <v-card-title>票据识图</v-card-title>
-        <v-card-text>
-          <p class="hint">上传小票 / 支付截图，由 DeepSeek 多模态模型识别</p>
-          <input
-            ref="fileInput"
-            type="file"
-            accept="image/jpeg,image/png,image/gif,image/webp,image/*"
-            capture="environment"
-            class="hidden-file"
-            @change="onFileChange"
-          />
-          <div v-if="aiPreview" class="preview mb-3">
-            <img :src="aiPreview" alt="预览" />
-          </div>
-          <v-btn variant="tonal" block class="mb-3" @click="fileInput?.click()">
-            <v-icon start>mdi-image</v-icon>
-            {{ aiFile ? '重新选择图片' : '选择 / 拍摄图片' }}
-          </v-btn>
-          <v-text-field v-model="aiHint" label="补充说明（可选）" variant="outlined" hint="如：用招商信用卡付的" persistent-hint />
-          <v-alert v-if="aiError" type="error" density="compact" class="mt-2">{{ aiError }}</v-alert>
-        </v-card-text>
-        <v-card-actions>
-          <v-spacer />
-          <v-btn variant="text" @click="showAI = false">取消</v-btn>
-          <v-btn color="primary" :loading="aiLoading" :disabled="!aiFile" @click="onAI">
-            识别并填入
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <QuickNameDialog
+      v-model="showQuickCategory"
+      title="新增分类"
+      label="分类名称"
+      :hint="`将创建为当前「${form.type === 'income' ? '收入' : '支出'}」分类，可稍后在分类管理里调整层级。`"
+      :save="createCategory"
+    />
+    <QuickNameDialog v-model="showQuickTag" title="新增标签" label="标签名称" :save="createTag" />
+    <ReceiptRecognizeDialog v-model="showAI" @recognized="applyRecognized" @attached="onReceiptAttached" />
+    <VoucherRefundDialog v-model="refundOpen" :voucher="refundVoucher" @refunded="onRefunded" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import dayjs from 'dayjs'
 import http from '../api/http'
-import { useAccountStore, type CreditStatement } from '../stores/account'
+import { useAccountStore } from '../stores/account'
 import { useCategoryStore } from '../stores/category'
 import { useTagStore } from '../stores/tag'
-import { useTransactionStore } from '../stores/transaction'
+import {
+  useTransactionStore,
+  voucherStatusColor,
+  voucherStatusLabel,
+  type Transaction,
+  type VoucherStatus,
+} from '../stores/transaction'
 import { useAuthStore } from '../stores/auth'
+import { useRepaySuggestion } from '../composables/useRepaySuggestion'
 import { yuanToFen, fenToYuan } from '../utils/money'
 import { cityAllowsAuto, getCachedCity } from '../utils/fare'
-import AmapPicker, { type GeoPickResult } from '../components/AmapPicker.vue'
 import AttachmentUpload from '../components/AttachmentUpload.vue'
 import NativeDateField from '../components/NativeDateField.vue'
 import ForeignPaymentFields from '../components/ForeignPaymentFields.vue'
+import FareRuleSection from '../components/FareRuleSection.vue'
+import CreditExtrasPanel from '../components/CreditExtrasPanel.vue'
+import LocationSection, { type GeoValue } from '../components/LocationSection.vue'
+import QuickNameDialog from '../components/QuickNameDialog.vue'
+import ReceiptRecognizeDialog from '../components/ReceiptRecognizeDialog.vue'
+import VoucherRefundDialog from '../components/VoucherRefundDialog.vue'
 
 const props = defineProps<{ id?: string }>()
 const route = useRoute()
@@ -540,33 +339,17 @@ const amountYuan = ref('')
 const happenedLocal = ref(dayjs().format('YYYY-MM-DDTHH:mm'))
 const attachmentIds = ref<number[]>([])
 const existingAttachments = ref<{ id: number; url: string }[]>([])
-const showMap = ref(false)
-const mapFullscreen = ref(typeof window === 'undefined' ? true : window.innerWidth < 960)
 const saving = ref(false)
 const error = ref('')
 
-function onMapViewport() {
-  mapFullscreen.value = window.innerWidth < 960
-}
 const templates = ref<any[]>([])
 const fareRules = ref<any[]>([])
 const fareEnabled = ref(false)
 const farePreviewLoading = ref(false)
 const fareHint = ref('')
 const showAI = ref(false)
-const aiHint = ref('')
-const aiFile = ref<File | null>(null)
-const aiPreview = ref('')
-const fileInput = ref<HTMLInputElement | null>(null)
-const aiLoading = ref(false)
-const aiError = ref('')
-
 const showQuickCategory = ref(false)
 const showQuickTag = ref(false)
-const quickCategoryName = ref('')
-const quickTagName = ref('')
-const quickSaving = ref(false)
-const quickError = ref('')
 
 const form = reactive({
   type: 'expense' as 'expense' | 'income' | 'transfer',
@@ -584,6 +367,7 @@ const form = reactive({
   geoEndName: '',
   fareRuleId: null as number | null,
   installmentPeriods: 1,
+  installmentDeferCycles: 0,
 })
 const interestYuan = ref('0')
 const fxEnabled = ref(false)
@@ -592,14 +376,69 @@ const fxAmountYuan = ref('')
 /** 编辑的流水原本是否待确认；保存时默认清除，勾选 keepPending 则保留 */
 const wasPending = ref(false)
 const keepPending = ref(false)
-const repayStatement = ref<CreditStatement | null>(null)
-const repayStmtLoading = ref(false)
-/** 还款金额是否仍由账单/期数自动回填（手改金额后关闭） */
-const repayAmountAuto = ref(true)
-/** 用于计算还款建议本金的基准（分）：优先本期待还 */
-const repayPrincipalBaseFen = ref(0)
-let applyingRepaySuggestion = false
 let syncingUiMode = false
+
+const voucherOn = ref(false)
+/** 当前券状态（开关打开且原本非券时为 pending） */
+const voucherStatus = ref<VoucherStatus>('')
+/** 库内已保存的券状态；核销 / 退款按钮只对已保存的券可用 */
+const savedVoucherStatus = ref<VoucherStatus>('')
+const voucherExpireOn = ref('')
+const voucherBusy = ref(false)
+const refundOpen = ref(false)
+const refundOfId = ref<number | null>(null)
+const editingTx = ref<Transaction | null>(null)
+/** 编辑页退款：直接退当前这张券；新建收入页：弹窗里挑券 */
+const refundVoucher = computed(() => (isEdit.value ? editingTx.value : null))
+
+watch(voucherOn, (on) => {
+  if (on && !voucherStatus.value) voucherStatus.value = 'pending'
+  if (!on && voucherStatus.value !== 'refunded') voucherStatus.value = ''
+})
+
+async function toggleUsed(status: 'pending' | 'used') {
+  voucherBusy.value = true
+  try {
+    const t = await tx.setVoucherStatus(editId.value, status)
+    voucherStatus.value = t.voucherStatus || ''
+    savedVoucherStatus.value = voucherStatus.value
+    editingTx.value = t
+  } catch (e: any) {
+    error.value = e?.message || '操作失败'
+  } finally {
+    voucherBusy.value = false
+  }
+}
+
+async function onRefunded() {
+  await router.replace('/transactions')
+}
+
+const geo = computed<GeoValue>({
+  get: () => ({
+    mode: form.geoMode,
+    lng: form.geoLng,
+    lat: form.geoLat,
+    name: form.geoName,
+    endLng: form.geoEndLng,
+    endLat: form.geoEndLat,
+    endName: form.geoEndName,
+  }),
+  set: (v) => {
+    form.geoMode = v.mode
+    form.geoLng = v.lng
+    form.geoLat = v.lat
+    form.geoName = v.name
+    form.geoEndLng = v.endLng
+    form.geoEndLat = v.endLat
+    form.geoEndName = v.endName
+  },
+})
+
+const installmentPeriods = computed({
+  get: () => Math.max(1, Number(form.installmentPeriods) || 1),
+  set: (v: number) => { form.installmentPeriods = v },
+})
 
 const fareRuleItems = computed(() =>
   (fareRules.value || [])
@@ -618,71 +457,17 @@ const isCreditExpense = computed(() => {
   if (form.type !== 'expense' || !form.accountId) return false
   return accounts.list.some((a) => a.id === form.accountId && a.type === 'credit')
 })
-const showCreditExtras = computed(() => isCreditExpense.value || isCreditRepay.value || isRepayMode.value)
-
-const repayTotalOutstanding = computed(() => {
-  const s = repayStatement.value
-  if (!s) return 0
-  return s.totalOutstanding ?? s.outstandingBalance ?? 0
-})
-
-function firstShareFen(total: number, periods: number) {
-  const n = Math.max(1, Math.min(60, Math.floor(periods) || 1))
-  const t = Math.max(0, Math.floor(total))
-  const base = Math.floor(t / n)
-  return base + (t % n)
-}
-
-const periodPresets = [1, 3, 6, 12, 24]
-const creditExtrasOpen = ref(false)
-const hasCreditPlan = computed(() =>
-  (Number(form.installmentPeriods) || 1) > 1 || yuanToFen(interestYuan.value || '0') > 0,
+const creditBillingDay = computed(() =>
+  isCreditExpense.value ? accounts.list.find((a) => a.id === form.accountId)?.billingDay || 0 : 0,
 )
-const creditPlanSummary = computed(() => {
-  const periods = Math.max(1, Number(form.installmentPeriods) || 1)
-  const interest = yuanToFen(interestYuan.value || '0')
-  const parts: string[] = []
-  if (periods > 1) {
-    parts.push(`${periods} 期`)
-    if (isCreditExpense.value && amountYuan.value) {
-      parts.push(`每期约 ¥${fenToYuan(Math.floor(yuanToFen(amountYuan.value) / periods))}`)
-    }
-  } else {
-    parts.push(isCreditExpense.value ? '不分期' : '一次还清')
-  }
-  if (interest > 0) parts.push(`${isCreditExpense.value ? '手续费' : '利息'} ¥${fenToYuan(interest)}`)
-  return parts.join(' · ')
-})
-watch(hasCreditPlan, (v) => { if (v) creditExtrasOpen.value = true })
+const repayActive = computed(() => isCreditRepay.value || isRepayMode.value)
+const showCreditExtras = computed(() => isCreditExpense.value || repayActive.value)
 
-function onPeriodChipPicked(v: unknown) {
-  if (v == null) return
-  form.installmentPeriods = Number(v)
-  onRepayPlanChanged()
-}
-
-const creditExtraHint = computed(() => {
-  const periods = Math.max(1, Number(form.installmentPeriods) || 1)
-  if (isCreditExpense.value) {
-    if (periods <= 1 || !amountYuan.value) return ''
-    const total = yuanToFen(amountYuan.value)
-    const first = firstShareFen(total, periods)
-    const rest = Math.floor(total / periods)
-    return `约首期本金 ¥${fenToYuan(first)}，其后每期 ¥${fenToYuan(rest)}（利息计入首期出账）`
-  }
-  if (!(isCreditRepay.value || isRepayMode.value)) return ''
-  const base = repayPrincipalBaseFen.value
-  if (base <= 0) return '暂无本期待还，可手填金额；利息单独填写。'
-  const principal = firstShareFen(base, periods)
-  const interest = yuanToFen(interestYuan.value || '0')
-  const total = principal + interest
-  if (periods <= 1) {
-    return interest > 0
-      ? `建议一次还清：本金 ¥${fenToYuan(principal)} + 利息 ¥${fenToYuan(interest)} = ¥${fenToYuan(total)}`
-      : `建议还清待还本金 ¥${fenToYuan(principal)}`
-  }
-  const rest = Math.floor(base / periods)
-  return `本次建议：本金 ¥${fenToYuan(principal)} + 利息 ¥${fenToYuan(interest)} = ¥${fenToYuan(total)}；其后约 ${periods - 1} 期、每期本金约 ¥${fenToYuan(rest)}（下期再记一笔转账）`
+const repay = useRepaySuggestion({
+  amountYuan,
+  interestYuan,
+  periods: installmentPeriods,
+  active: repayActive,
 })
 
 const transferToOptions = computed(() => {
@@ -692,82 +477,6 @@ const transferToOptions = computed(() => {
     return credits.length ? credits : list
   }
   return list
-})
-
-function onAmountManualEdit() {
-  if (applyingRepaySuggestion) return
-  if (isCreditRepay.value || isRepayMode.value) repayAmountAuto.value = false
-}
-
-function onRepayPlanChanged() {
-  if (isCreditRepay.value || isRepayMode.value) applyRepaySuggestion(false)
-}
-
-function applyRepaySuggestion(force: boolean) {
-  if (!(isCreditRepay.value || isRepayMode.value)) return
-  if (!force && !repayAmountAuto.value) return
-  const periods = Math.max(1, Number(form.installmentPeriods) || 1)
-  const base = repayPrincipalBaseFen.value
-  if (base <= 0 && !force) return
-  const principal = firstShareFen(base, periods)
-  const interest = yuanToFen(interestYuan.value || '0')
-  applyingRepaySuggestion = true
-  amountYuan.value = fenToYuan(principal + interest)
-  repayAmountAuto.value = true
-  queueMicrotask(() => { applyingRepaySuggestion = false })
-}
-
-/** 提前还款：预填整体待还（已用额度） */
-function applyEarlyRepay() {
-  const total = repayTotalOutstanding.value
-  if (total <= 0) return
-  repayPrincipalBaseFen.value = total
-  form.installmentPeriods = 1
-  applyRepaySuggestion(true)
-}
-
-async function loadRepayStatement(accountId?: number) {
-  const id = accountId || form.toAccountId
-  if (!id) {
-    repayStatement.value = null
-    return
-  }
-  const acc = accounts.list.find((a) => a.id === id)
-  if (!acc || acc.type !== 'credit' || !acc.billingDay) {
-    repayStatement.value = null
-    return
-  }
-  repayStmtLoading.value = true
-  try {
-    const stmt = await accounts.creditStatement(id)
-    repayStatement.value = stmt
-    const base = stmt.periodRemaining > 0
-      ? stmt.periodRemaining
-      : (stmt.dueAmount > 0 ? stmt.dueAmount : 0)
-    repayPrincipalBaseFen.value = base
-    applyRepaySuggestion(false)
-  } catch {
-    repayStatement.value = null
-  } finally {
-    repayStmtLoading.value = false
-  }
-}
-
-const geoLabel = computed(() => {
-  if (form.geoMode === 'route' && form.geoName && form.geoEndName) {
-    return `${form.geoName} → ${form.geoEndName}`
-  }
-  return form.geoName || ''
-})
-
-const geoPrimary = computed(() => {
-  if (form.geoMode === 'route') return form.geoName || ''
-  return form.geoName || ''
-})
-
-const geoSecondary = computed(() => {
-  if (form.geoMode === 'route' && form.geoEndName) return `→ ${form.geoEndName}`
-  return ''
 })
 
 watch(() => form.type, (t, prev) => {
@@ -824,7 +533,7 @@ function enterUiMode(mode: 'flow' | 'transfer' | 'repay', useDefaultAccount = tr
       form.type = flowKind.value
       form.toAccountId = undefined
       if (form.remark === '信用卡还款') form.remark = ''
-      repayStatement.value = null
+      repay.reset()
       if (useDefaultAccount) applyDefaultAccount(flowKind.value)
     } else if (mode === 'transfer') {
       form.type = 'transfer'
@@ -834,13 +543,13 @@ function enterUiMode(mode: 'flow' | 'transfer' | 'repay', useDefaultAccount = tr
       if (form.toAccountId && accounts.list.some((a) => a.id === form.toAccountId && a.type === 'credit')) {
         form.toAccountId = undefined
       }
-      repayStatement.value = null
+      repay.reset()
       if (useDefaultAccount) applyDefaultAccount('transfer')
     } else {
       form.type = 'transfer'
       form.categoryId = undefined
       form.remark = form.remark || '信用卡还款'
-      repayAmountAuto.value = true
+      repay.auto.value = true
       form.installmentPeriods = Math.max(1, form.installmentPeriods || 1)
       if (useDefaultAccount) applyDefaultAccount('repay')
       const credit =
@@ -851,7 +560,7 @@ function enterUiMode(mode: 'flow' | 'transfer' | 'repay', useDefaultAccount = tr
         form.accountId = accounts.list.find((a) => a.id !== form.toAccountId && a.type !== 'credit')?.id
           || accounts.list.find((a) => a.id !== form.toAccountId)?.id
       }
-      void loadRepayStatement(credit?.id)
+      void repay.load(credit?.id ?? form.toAccountId)
     }
   } finally {
     void nextTick(() => { syncingUiMode = false })
@@ -860,12 +569,9 @@ function enterUiMode(mode: 'flow' | 'transfer' | 'repay', useDefaultAccount = tr
 
 /** 主数据：已有缓存则跳过，避免编辑页再等一轮远程库 */
 async function ensureCoreStores() {
-  const jobs: Promise<unknown>[] = []
-  if (!accounts.list.length) jobs.push(accounts.load())
-  if (!categories.list.length) jobs.push(categories.load())
-  if (!tags.list.length) jobs.push(tags.load())
+  const jobs: Promise<unknown>[] = [accounts.ensure(), categories.ensure(), tags.ensure()]
   if (!auth.profile) jobs.push(auth.fetchMe().catch(() => {}))
-  if (jobs.length) await Promise.all(jobs)
+  await Promise.all(jobs)
 }
 
 async function loadSideData() {
@@ -880,6 +586,7 @@ async function loadSideData() {
 }
 
 function applyEditTransaction(t: Awaited<ReturnType<typeof tx.get>>) {
+  if (t.type === 'revalue') return
   syncingUiMode = true
   form.type = t.type
   if (t.type === 'expense' || t.type === 'income') {
@@ -903,6 +610,7 @@ function applyEditTransaction(t: Awaited<ReturnType<typeof tx.get>>) {
   form.geoEndName = t.geoEndName || ''
   form.fareRuleId = t.fareRuleId || null
   form.installmentPeriods = t.installmentPeriods || 1
+  form.installmentDeferCycles = t.installmentDeferCycles || 0
   interestYuan.value = fenToYuan(t.interestFen || 0)
   fareEnabled.value = !!t.fareRuleId
   amountYuan.value = fenToYuan(t.amount)
@@ -911,6 +619,12 @@ function applyEditTransaction(t: Awaited<ReturnType<typeof tx.get>>) {
   fxAmountYuan.value = t.foreignAmount ? fenToYuan(t.foreignAmount) : ''
   wasPending.value = !!t.amountPending
   keepPending.value = false
+  editingTx.value = t
+  voucherStatus.value = t.voucherStatus || ''
+  savedVoucherStatus.value = voucherStatus.value
+  voucherOn.value = !!t.voucherStatus
+  voucherExpireOn.value = t.voucherExpireOn || ''
+  refundOfId.value = t.refundOfId || null
   happenedLocal.value = dayjs(t.happenedAt).format('YYYY-MM-DDTHH:mm')
   existingAttachments.value = (t.attachments || []).map((a) => ({ id: a.id, url: a.url }))
   attachmentIds.value = existingAttachments.value.map((a) => a.id)
@@ -919,9 +633,6 @@ function applyEditTransaction(t: Awaited<ReturnType<typeof tx.get>>) {
 }
 
 onMounted(async () => {
-  window.addEventListener('resize', onMapViewport)
-  onMapViewport()
-
   // 模板/计费不挡类型与标签回显
   void loadSideData()
 
@@ -931,9 +642,13 @@ onMounted(async () => {
 
   if (txP) {
     const [t] = await Promise.all([txP, storesP])
+    if (t.type === 'revalue') {
+      void router.replace(`/accounts/${t.accountId}/ledger`)
+      return
+    }
     applyEditTransaction(t)
     if (uiMode.value === 'repay' && form.toAccountId) {
-      void loadRepayStatement(form.toAccountId)
+      void repay.load(form.toAccountId)
     }
     return
   }
@@ -968,18 +683,15 @@ onMounted(async () => {
       if (preferred) form.accountId = preferred.id
     }
     const qFen = Number(route.query.amountFen || 0)
-    if (qFen > 0) {
-      repayPrincipalBaseFen.value = qFen
-      repayAmountAuto.value = true
-    }
+    repay.presetBase(qFen)
     enterUiMode('repay', false)
     if (credit) form.toAccountId = credit.id
     if (form.accountId === form.toAccountId) {
       form.accountId = accounts.list.find((a) => a.id !== form.toAccountId && a.type !== 'credit')?.id
         || accounts.list.find((a) => a.id !== form.toAccountId)?.id
     }
-    if (qFen > 0) applyRepaySuggestion(true)
-    await loadRepayStatement(credit?.id)
+    if (qFen > 0) repay.apply(true)
+    await repay.load(credit?.id ?? form.toAccountId)
   }
 
   // 首页快捷模板缺字段时跳转至此，预填模板供编辑
@@ -991,34 +703,16 @@ onMounted(async () => {
   }
 })
 
-onUnmounted(() => {
-  window.removeEventListener('resize', onMapViewport)
-})
-
-function openAI(_mode?: 'text' | 'image') {
-  aiError.value = ''
-  showAI.value = true
-}
-
 watch(
   () => form.toAccountId,
   (id) => {
     if (isEdit.value) return
     if (form.type === 'transfer' && id && accounts.list.some((a) => a.id === id && a.type === 'credit')) {
-      repayAmountAuto.value = true
-      void loadRepayStatement(id)
+      repay.auto.value = true
+      void repay.load(id)
     }
   },
 )
-
-function onFileChange(e: Event) {
-  const input = e.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file) return
-  aiFile.value = file
-  if (aiPreview.value) URL.revokeObjectURL(aiPreview.value)
-  aiPreview.value = URL.createObjectURL(file)
-}
 
 function applyRecognized(data: any) {
   if (data.type) {
@@ -1041,6 +735,11 @@ function applyRecognized(data: any) {
   if (data.tagIds) form.tagIds = data.tagIds
   if (data.remark) form.remark = data.remark
   if (data.happenedAt) happenedLocal.value = dayjs(data.happenedAt).format('YYYY-MM-DDTHH:mm')
+}
+
+function onReceiptAttached(att: { id: number; url: string }) {
+  attachmentIds.value = [...attachmentIds.value, att.id]
+  existingAttachments.value = [...existingAttachments.value, att]
 }
 
 async function applyTemplate(t: any) {
@@ -1102,7 +801,7 @@ async function applyTemplate(t: any) {
 
 const applyingTemplateFare = ref(false)
 
-function onFareToggle(on: unknown) {
+function onFareToggle(on: boolean) {
   if (!on) {
     form.fareRuleId = null
     fareHint.value = ''
@@ -1147,116 +846,15 @@ async function applySuggestedFare(force = false, baseFen?: number) {
   }
 }
 
-function openQuickCategory() {
-  quickCategoryName.value = ''
-  quickError.value = ''
-  showQuickCategory.value = true
+async function createCategory(name: string) {
+  if (form.type === 'transfer') throw new Error('转账无需分类')
+  const cat = await categories.create({ name, kind: form.type, icon: 'mdi-shape', sort: 0 })
+  form.categoryId = cat.id
 }
 
-function openQuickTag() {
-  quickTagName.value = ''
-  quickError.value = ''
-  showQuickTag.value = true
-}
-
-async function saveQuickCategory() {
-  const name = quickCategoryName.value.trim()
-  if (!name) { quickError.value = '请输入分类名称'; return }
-  if (form.type === 'transfer') { quickError.value = '转账无需分类'; return }
-  quickSaving.value = true
-  quickError.value = ''
-  try {
-    const cat = await categories.create({
-      name,
-      kind: form.type,
-      icon: 'mdi-shape',
-      sort: 0,
-    })
-    form.categoryId = cat.id
-    showQuickCategory.value = false
-  } catch (e: any) {
-    quickError.value = e.message || '创建失败'
-  } finally {
-    quickSaving.value = false
-  }
-}
-
-async function saveQuickTag() {
-  const name = quickTagName.value.trim()
-  if (!name) { quickError.value = '请输入标签名称'; return }
-  quickSaving.value = true
-  quickError.value = ''
-  try {
-    const tag = await tags.create({ name, color: '#1b7f5a', sort: 0 })
-    if (!form.tagIds.includes(tag.id)) form.tagIds = [...form.tagIds, tag.id]
-    showQuickTag.value = false
-  } catch (e: any) {
-    quickError.value = e.message || '创建失败'
-  } finally {
-    quickSaving.value = false
-  }
-}
-
-function clearGeo() {
-  form.geoMode = ''
-  form.geoLng = null
-  form.geoLat = null
-  form.geoName = ''
-  form.geoEndLng = null
-  form.geoEndLat = null
-  form.geoEndName = ''
-}
-
-function onPick(p: GeoPickResult) {
-  form.geoMode = p.mode
-  form.geoLng = p.lng
-  form.geoLat = p.lat
-  form.geoName = p.name
-  if (p.mode === 'route') {
-    form.geoEndLng = p.endLng ?? null
-    form.geoEndLat = p.endLat ?? null
-    form.geoEndName = p.endName || ''
-  } else {
-    form.geoEndLng = null
-    form.geoEndLat = null
-    form.geoEndName = ''
-  }
-  showMap.value = false
-}
-
-async function onAI() {
-  aiError.value = ''
-  aiLoading.value = true
-  try {
-    if (!aiFile.value) {
-      aiError.value = '请先选择图片'
-      return
-    }
-    const fd = new FormData()
-    fd.append('file', aiFile.value)
-    if (aiHint.value.trim()) fd.append('hint', aiHint.value.trim())
-    const { data } = await http.post('/ai/recognize-image', fd, {
-      timeout: 120000,
-    })
-    applyRecognized(data)
-    try {
-      const up = new FormData()
-      up.append('file', aiFile.value)
-      const att = await http.post('/attachments', up)
-      if (att.data?.id) {
-        attachmentIds.value = [...attachmentIds.value, att.data.id]
-        existingAttachments.value = [
-          ...existingAttachments.value,
-          { id: att.data.id, url: att.data.url },
-        ]
-      }
-    } catch { /* 附件可选 */ }
-    showAI.value = false
-  } catch (e: any) {
-    aiError.value = e.message || '识别失败'
-  } finally {
-    aiLoading.value = false
-  }
+async function createTag(name: string) {
+  const tag = await tags.create({ name, color: '#1b7f5a', sort: 0 })
+  if (!form.tagIds.includes(tag.id)) form.tagIds = [...form.tagIds, tag.id]
 }
 
 async function onSave() {
@@ -1279,6 +877,8 @@ async function onSave() {
       amountPending: wasPending.value && keepPending.value,
       foreignCurrency: useFx ? fxCode : '',
       foreignAmount: fxFen,
+      voucherStatus: (form.type === 'expense' && voucherOn.value ? voucherStatus.value || 'pending' : '') as VoucherStatus,
+      voucherExpireOn: form.type === 'expense' && voucherOn.value ? voucherExpireOn.value : '',
       type: form.type,
       amount,
       accountId: form.accountId,
@@ -1294,8 +894,9 @@ async function onSave() {
       geoEndLat: form.geoMode === 'route' ? form.geoEndLat : null,
       geoEndName: form.geoMode === 'route' ? form.geoEndName : '',
       fareRuleId: fareEnabled.value && form.fareRuleId ? form.fareRuleId : null,
-      installmentPeriods: showCreditExtras.value ? Math.max(1, Number(form.installmentPeriods) || 1) : 1,
+      installmentPeriods: showCreditExtras.value ? installmentPeriods.value : 1,
       interestFen: showCreditExtras.value ? yuanToFen(interestYuan.value || '0') : 0,
+      installmentDeferCycles: isCreditExpense.value && installmentPeriods.value > 1 ? form.installmentDeferCycles : 0,
       happenedAt: dayjs(happenedLocal.value).toISOString(),
       attachmentIds: attachmentIds.value,
     }
@@ -1344,6 +945,40 @@ async function onDelete() {
   .tpls { flex-wrap: wrap; overflow: visible; }
 }
 
+/* 平板 / 窄桌面：单列但收窄居中，避免表单横向拉满 */
+@media (min-width: 600px) and (max-width: 959px) {
+  .te-page { max-width: 760px; }
+}
+@media (min-width: 960px) and (max-width: 1199px) {
+  .te-page { max-width: calc(760px + var(--nav-rail-width)); }
+}
+
+/* 宽屏：主表单在左，附件 / 地点在右 */
+@media (min-width: 1200px) {
+  .te-page { max-width: calc(1160px + var(--nav-rail-width)); }
+  .te-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+    gap: 24px;
+    align-items: start;
+  }
+}
+
+/* 桌面：保存按钮吸底右对齐 */
+@media (min-width: 960px) {
+  .save-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 8px;
+    padding: 14px 0 18px;
+    background: linear-gradient(180deg, transparent, var(--bg) 40%);
+  }
+  .save-bar .hero-cta { width: 280px !important; }
+}
+
 @media (max-width: 959px) {
   .save-bar {
     position: sticky;
@@ -1354,7 +989,6 @@ async function onDelete() {
     background: linear-gradient(180deg, transparent, var(--bg) 30%);
   }
 }
-.hint { color: var(--muted); font-size: 0.85rem; margin-bottom: 8px; }
 .pending-box {
   padding: 10px 12px 4px;
   border-radius: 12px;
@@ -1377,6 +1011,20 @@ async function onDelete() {
   overflow-wrap: anywhere;
 }
 [data-theme='dark'] .pending-title { color: #f0c36a; }
+.voucher-head { display: flex; align-items: center; justify-content: space-between; }
+.voucher-head :deep(.v-switch) { flex: 0 0 auto; }
+.voucher-ops { display: flex; gap: 8px; margin-top: 8px; }
+.refund-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 4px 6px 10px;
+  border-radius: 10px;
+  font-size: 0.8rem;
+  color: #2b6aa3;
+  background: color-mix(in srgb, #3b82c4 12%, transparent);
+}
+[data-theme='dark'] .refund-link { color: #9cc7ef; }
 .flow-sub {
   display: flex;
   justify-content: stretch;
@@ -1393,237 +1041,5 @@ async function onDelete() {
   color: var(--muted);
   overflow-wrap: anywhere;
   word-break: break-word;
-}
-.repay-stmt {
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: var(--primary-soft, rgba(27, 127, 90, 0.1));
-  border: 1px solid var(--surface-border);
-  min-width: 0;
-}
-.repay-stmt-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 0.8rem;
-  line-height: 1.6;
-  min-width: 0;
-}
-.repay-stmt-row span { color: var(--muted); flex-shrink: 0; }
-.repay-stmt-row strong {
-  font-family: var(--font-display);
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  overflow-wrap: anywhere;
-}
-.repay-stmt-row .warn { color: #c45c3e; }
-.repay-stmt-hint {
-  margin-top: 6px;
-  font-size: 0.72rem;
-  color: var(--muted);
-  line-height: 1.35;
-  overflow-wrap: anywhere;
-}
-.credit-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-width: 0;
-  padding: 2px 0;
-  background: none;
-  border: 0;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.credit-toggle__title { font-weight: 600; font-size: 0.92rem; flex-shrink: 0; }
-.credit-toggle__summary {
-  flex: 1;
-  min-width: 0;
-  text-align: right;
-  font-size: 0.82rem;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.credit-toggle.is-active .credit-toggle__summary {
-  color: rgb(var(--v-theme-primary));
-  font-weight: 600;
-}
-.credit-toggle__chevron { color: var(--muted); transition: transform 0.2s; }
-.credit-toggle.is-open .credit-toggle__chevron { transform: rotate(180deg); }
-.credit-panel { padding-top: 10px; }
-.period-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.period-chips { flex: 1; min-width: 0; padding: 0; }
-.period-input { flex: 0 0 84px; }
-.repay-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.hidden-file { display: none; }
-.preview {
-  border-radius: 12px;
-  overflow: hidden;
-  background: #0001;
-  max-height: 240px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.preview img { max-width: 100%; max-height: 240px; object-fit: contain; }
-
-.meta-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-  min-width: 0;
-}
-.meta-title-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  min-width: 0;
-  flex: 1;
-}
-.meta-copy { min-width: 0; flex: 1; }
-.meta-title { font-weight: 700; font-size: 0.98rem; line-height: 1.2; overflow-wrap: anywhere; }
-.meta-sub {
-  color: var(--muted);
-  font-size: 0.8rem;
-  margin-top: 2px;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-.meta-head > .v-switch,
-.meta-head > .v-chip {
-  flex-shrink: 0;
-}
-.fare-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-.fare-hint {
-  font-size: 0.75rem;
-  color: var(--muted);
-  line-height: 1.35;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  min-width: 0;
-  flex: 1 1 140px;
-}
-
-.loc-empty {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 12px;
-  border-radius: 14px;
-  border: 1.5px dashed rgba(27, 127, 90, 0.45);
-  background: var(--primary-soft);
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-  min-width: 0;
-}
-.loc-empty-text {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.loc-empty-text strong { font-size: 0.95rem; overflow-wrap: anywhere; }
-.loc-empty-text span {
-  font-size: 0.78rem;
-  color: var(--muted);
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.loc-filled { display: flex; flex-direction: column; gap: 12px; }
-.loc-preview {
-  padding: 12px 14px;
-  border-radius: 12px;
-  background: var(--primary-soft);
-  border: 1px solid rgba(27, 127, 90, 0.22);
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.loc-kicker {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--muted);
-  margin-bottom: 4px;
-}
-.loc-main {
-  font-weight: 700;
-  font-size: 0.95rem;
-  line-height: 1.4;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.loc-second {
-  margin-top: 4px;
-  color: var(--muted);
-  font-size: 0.86rem;
-  line-height: 1.35;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.loc-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-@media (min-width: 960px) {
-  .loc-filled {
-    flex-direction: row;
-    align-items: stretch;
-  }
-  .loc-preview { flex: 1; }
-  .loc-actions {
-    flex-direction: column;
-    justify-content: center;
-    min-width: 120px;
-  }
-}
-</style>
-
-<style>
-.map-dialog-shell {
-  height: min(85vh, 820px);
-  overflow: hidden;
-  border-radius: 18px;
-  background: var(--bg, #eef5f0);
-}
-.map-dialog-shell.is-full {
-  height: 100%;
-  min-height: var(--app-height, 100dvh);
-  border-radius: 0;
-}
-.map-dialog-shell .picker {
-  height: 100%;
 }
 </style>

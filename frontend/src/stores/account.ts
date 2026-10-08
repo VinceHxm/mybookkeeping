@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import http from '../api/http'
+import { createDictCache } from './dictCache'
 import type { Transaction } from './transaction'
 
 export interface CreditInstallmentPlan {
@@ -48,6 +49,8 @@ export interface CreditStatement {
   interestDue: number
   dueAmount: number
   repaidAmount: number
+  /** 本期已还中的退款部分 */
+  refundAmount?: number
   repaidInterest: number
   remainingAfterPay: number
   /** 整体待还 = 已用额度 */
@@ -66,6 +69,26 @@ export interface CreditStatement {
   availableCredit?: number | null
   displayOnly: boolean
   note: string
+  /** 尚有未出账期数的分期（流水 + 存量计划） */
+  installments?: CreditInstallmentItem[]
+}
+
+export interface CreditInstallmentItem {
+  source: 'transaction' | 'plan'
+  sourceId: number
+  name: string
+  happenedOn?: string
+  principalFen: number
+  periods: number
+  billedPeriods: number
+  remainingFen: number
+  nextDueOn: string
+  nextShareFen: number
+  lastDueOn: string
+  /** 流水分期：手续费合计（计入首期） */
+  interestFen: number
+  /** 存量计划：每期利息 */
+  interestPerPeriodFen: number
 }
 
 export interface CreditRepayReminder {
@@ -98,7 +121,26 @@ export interface AccountLedgerMonth {
   paid: number
   billedUnpaid: number
   unbilled: number
+  /** 市值校准净额（理财账户），不含在流入/流出里 */
+  revalued: number
   items: AccountLedgerItem[]
+}
+
+export interface InvestSummary {
+  /** 净投入 = 期初余额 + 转入 − 转出 */
+  netInvested: number
+  /** 累计收益 = 当前市值 − 净投入 */
+  gain: number
+  /** 其中市值校准合计 */
+  revalued: number
+}
+
+export const ACCOUNT_TYPE_LABELS: Record<string, string> = {
+  cash: '现金',
+  bank: '银行卡',
+  credit: '信用',
+  invest: '理财',
+  other: '其他',
 }
 
 export interface AccountLedger {
@@ -116,6 +158,7 @@ export interface AccountLedger {
     lastStatementDate?: string
     nextStatementDate?: string
   }
+  invest?: InvestSummary
   months: AccountLedgerMonth[]
   note?: string
 }
@@ -140,8 +183,11 @@ export const useAccountStore = defineStore('account', () => {
   async function load(archived = false) {
     const { data } = await http.get('/accounts', { params: archived ? { archived: 1 } : {} })
     list.value = data
+    if (archived) cache.invalidate()
+    else cache.markLoaded()
     return data as Account[]
   }
+  const cache = createDictCache(() => load(), () => list.value)
 
   async function create(
     payload: Partial<Account> & {
@@ -179,6 +225,12 @@ export const useAccountStore = defineStore('account', () => {
     return data as CreditStatement
   }
 
+  /** 全部已设账单日（未归档）信用卡的账单，一次请求 */
+  async function creditStatements() {
+    const { data } = await http.get('/accounts/credit-statements')
+    return (data || []) as CreditStatement[]
+  }
+
   async function creditRepayReminders() {
     const { data } = await http.get('/accounts/credit-repay-reminders')
     return (data || []) as CreditRepayReminder[]
@@ -189,11 +241,17 @@ export const useAccountStore = defineStore('account', () => {
     return data as AccountLedger
   }
 
+  /** 理财账户按当前市值校准；与余额一致时返回 null（只刷新对账时间） */
+  async function revalue(id: number, payload: { marketValue: number; happenedAt?: string; remark?: string }) {
+    const { data } = await http.post(`/accounts/${id}/revalue`, payload)
+    return (data?.transaction ?? null) as Transaction | null
+  }
+
   /** 临时拉取明文敏感字段（需登录密码）；调用方用完应丢弃，勿写入 list */
   async function fetchSensitive(id: number, password: string) {
     const { data } = await http.post(`/accounts/${id}/sensitive`, { password })
     return data as { cardNo: string; holderName: string }
   }
 
-  return { list, load, create, update, remove, creditStatement, creditRepayReminders, ledger, fetchSensitive }
+  return { list, load, ensure: cache.ensure, create, update, remove, creditStatement, creditStatements, creditRepayReminders, ledger, revalue, fetchSensitive }
 })

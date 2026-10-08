@@ -90,6 +90,7 @@ export const APP_ICONS: IconItem[] = [
   // 收入理财
   { value: 'mdi-cash', label: '现金', group: '收入理财' },
   { value: 'mdi-cash-multiple', label: '工资', group: '收入理财' },
+  { value: 'mdi-cash-refund', label: '退款', group: '收入理财' },
   { value: 'mdi-wallet', label: '钱包', group: '收入理财' },
   { value: 'mdi-credit-card', label: '信用卡', group: '收入理财' },
   { value: 'mdi-bank', label: '银行', group: '收入理财' },
@@ -121,6 +122,7 @@ export function accountTypeIcon(type: string): string {
     case 'cash': return 'mdi-cash'
     case 'bank': return 'mdi-bank'
     case 'credit': return 'mdi-credit-card'
+    case 'invest': return 'mdi-chart-line'
     default: return 'mdi-wallet'
   }
 }
@@ -129,6 +131,7 @@ export function txTypeIcon(type: string): string {
   switch (type) {
     case 'income': return 'mdi-arrow-down-bold-circle'
     case 'transfer': return 'mdi-swap-horizontal'
+    case 'revalue': return 'mdi-chart-line'
     default: return 'mdi-arrow-up-bold-circle'
   }
 }

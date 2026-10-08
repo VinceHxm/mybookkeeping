@@ -1,11 +1,22 @@
 <template>
-  <div class="page">
-    <h1 class="page-title">统计</h1>
-    <div class="filters">
-      <NativeDateField v-model="from" label="开始" density="compact" variant="outlined" hide-details class="f" />
-      <NativeDateField v-model="to" label="结束" density="compact" variant="outlined" hide-details class="f" />
+  <div class="page stats-page">
+    <div class="stats-head">
+      <h1 class="page-title">统计</h1>
+      <span class="range-text">{{ rangeText }}</span>
     </div>
-    <div class="filters mb-3">
+
+    <div class="filter-bar">
+      <div class="presets hide-scrollbar">
+        <v-chip
+          v-for="p in presets"
+          :key="p.value"
+          size="small"
+          class="preset"
+          :color="preset === p.value ? 'primary' : undefined"
+          :variant="preset === p.value ? 'flat' : 'tonal'"
+          @click="choose(p.value)"
+        >{{ p.label }}</v-chip>
+      </div>
       <v-select
         v-model="accountId"
         :items="[{ id: 0, name: '全部账户' }, ...accounts.list]"
@@ -14,36 +25,30 @@
         density="compact"
         variant="outlined"
         hide-details
-        class="f"
+        prepend-inner-icon="mdi-wallet-outline"
+        class="acct"
       />
-      <v-btn color="primary" @click="load">查询</v-btn>
     </div>
-    <div class="quick mb-3">
-      <v-chip size="small" class="ma-1" variant="tonal" color="primary" @click="setMonth(0)">本月</v-chip>
-      <v-chip size="small" class="ma-1" variant="tonal" @click="setMonth(-1)">上月</v-chip>
-      <v-chip size="small" class="ma-1" variant="tonal" @click="setYear">今年</v-chip>
+    <div v-if="preset === 'custom'" class="custom-range">
+      <NativeDateField v-model="from" label="开始" density="compact" variant="outlined" hide-details class="f" />
+      <NativeDateField v-model="to" label="结束" density="compact" variant="outlined" hide-details class="f" />
     </div>
 
-    <div class="cards">
-      <div class="card surface-card">
-        <div class="label">区间支出</div>
-        <div class="amount-expense val">¥{{ fenToYuan(summary?.expense || summary?.monthExpense || 0) }}</div>
-      </div>
-      <div class="card surface-card">
-        <div class="label">区间收入</div>
-        <div class="amount-income val">¥{{ fenToYuan(summary?.income || summary?.monthIncome || 0) }}</div>
-      </div>
-    </div>
+    <StatsOverviewCards :filter="filter" />
 
-    <h2 class="section-label">分类占比</h2>
-    <div v-if="!pieOption" class="empty-tip">暂无支出</div>
-    <div v-else class="chart-wrap surface-card">
-      <v-chart class="chart" :option="pieOption" autoresize />
-    </div>
-
-    <h2 class="section-label">趋势</h2>
-    <div class="chart-wrap surface-card">
-      <v-chart class="chart" :option="lineOption" autoresize />
+    <v-tabs v-model="tab" color="primary" class="stats-tabs" :grow="!isDesktop" density="comfortable">
+      <v-tab
+        v-for="t in tabs"
+        :key="t.value"
+        :value="t.value"
+        :prepend-icon="width >= 600 ? t.icon : undefined"
+        class="stats-tab"
+      >{{ t.label }}</v-tab>
+    </v-tabs>
+    <div class="tab-body">
+      <KeepAlive>
+        <component :is="tabComponent" :key="tab" :filter="filter" />
+      </KeepAlive>
     </div>
   </div>
 </template>
@@ -51,140 +56,153 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import dayjs from 'dayjs'
-import { use } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
-import { PieChart, LineChart } from 'echarts/charts'
-import { TooltipComponent, LegendComponent, GridComponent } from 'echarts/components'
-import VChart from 'vue-echarts'
-import { useTheme } from 'vuetify'
-import http from '../api/http'
-import { fenToYuan } from '../utils/money'
+import { useRoute } from 'vue-router'
 import { useAccountStore } from '../stores/account'
+import { useBreakpoint } from '../composables/useBreakpoint'
+import type { StatsFilter } from '../utils/stats'
 import NativeDateField from '../components/NativeDateField.vue'
+import StatsOverviewCards from '../components/stats/StatsOverviewCards.vue'
+import StatsBreakdown from '../components/stats/StatsBreakdown.vue'
+import StatsTrend from '../components/stats/StatsTrend.vue'
+import StatsCalendar from '../components/stats/StatsCalendar.vue'
+import StatsAssets from '../components/stats/StatsAssets.vue'
+import StatsMap from '../components/stats/StatsMap.vue'
 
-use([CanvasRenderer, PieChart, LineChart, TooltipComponent, LegendComponent, GridComponent])
+type Preset = 'month' | 'lastMonth' | 'last3' | 'year' | 'lastYear' | 'custom'
+type Tab = 'breakdown' | 'trend' | 'calendar' | 'map' | 'assets'
 
-interface Summary {
-  monthExpense: number
-  monthIncome: number
-  expense?: number
-  income?: number
-  byCategory: { categoryId: number; categoryName: string; amount: number }[]
-  trends: { month: string; expense: number; income: number }[]
+const STATE_KEY = 'mbk_stats_state'
+
+const presets: { value: Preset; label: string }[] = [
+  { value: 'month', label: '本月' },
+  { value: 'lastMonth', label: '上月' },
+  { value: 'last3', label: '近3月' },
+  { value: 'year', label: '今年' },
+  { value: 'lastYear', label: '去年' },
+  { value: 'custom', label: '自定义' },
+]
+const tabs: { value: Tab; label: string; icon: string }[] = [
+  { value: 'breakdown', label: '构成', icon: 'mdi-chart-donut' },
+  { value: 'trend', label: '趋势', icon: 'mdi-chart-bar' },
+  { value: 'calendar', label: '日历', icon: 'mdi-calendar-month-outline' },
+  { value: 'map', label: '地点', icon: 'mdi-map-marker-radius-outline' },
+  { value: 'assets', label: '资产', icon: 'mdi-finance' },
+]
+const tabComponents = {
+  breakdown: StatsBreakdown,
+  trend: StatsTrend,
+  calendar: StatsCalendar,
+  map: StatsMap,
+  assets: StatsAssets,
 }
 
 const accounts = useAccountStore()
-const theme = useTheme()
-const summary = ref<Summary | null>(null)
-const from = ref(dayjs().startOf('month').format('YYYY-MM-DD'))
-const to = ref(dayjs().endOf('month').format('YYYY-MM-DD'))
-const accountId = ref(0)
+const route = useRoute()
+const { isDesktop, width } = useBreakpoint()
 
-const isDark = computed(() => theme.global.current.value.dark)
-const chartText = computed(() => (isDark.value ? '#c5d4cb' : '#5a6f64'))
-const chartAxis = computed(() => (isDark.value ? '#3a4a42' : '#d5e0d9'))
+const saved = readState()
+const preset = ref<Preset>(saved.preset || 'month')
+const from = ref(saved.from || '')
+const to = ref(saved.to || '')
+const accountId = ref<number>(saved.accountId || 0)
+const queryTab = route.query.tab as Tab | undefined
+const tab = ref<Tab>(queryTab && queryTab in tabComponents ? queryTab : saved.tab || 'breakdown')
+if (preset.value !== 'custom' || !from.value || !to.value) applyPreset(preset.value === 'custom' ? 'month' : preset.value)
 
-function setMonth(offset: number) {
-  const m = dayjs().add(offset, 'month')
-  from.value = m.startOf('month').format('YYYY-MM-DD')
-  to.value = m.endOf('month').format('YYYY-MM-DD')
-  load()
-}
-function setYear() {
-  from.value = dayjs().startOf('year').format('YYYY-MM-DD')
-  to.value = dayjs().endOf('year').format('YYYY-MM-DD')
-  load()
-}
+const tabComponent = computed(() => tabComponents[tab.value] || StatsBreakdown)
 
-async function load() {
-  const params: Record<string, unknown> = {
-    from: from.value,
-    to: dayjs(to.value).add(1, 'day').format('YYYY-MM-DD'),
+/** 自定义区间填反了也照常统计 */
+const filter = computed<StatsFilter>(() => {
+  const [a, b] = from.value <= to.value ? [from.value, to.value] : [to.value, from.value]
+  return { from: a, to: b, accountId: accountId.value }
+})
+
+const rangeText = computed(() => {
+  const f = dayjs(filter.value.from)
+  const t = dayjs(filter.value.to)
+  const fmt = f.year() === t.year() && f.year() === dayjs().year() ? 'M月D日' : 'YYYY年M月D日'
+  return `${f.format(fmt)} – ${t.format(fmt)}`
+})
+
+function readState(): Partial<{ preset: Preset; from: string; to: string; accountId: number; tab: Tab }> {
+  try {
+    return JSON.parse(sessionStorage.getItem(STATE_KEY) || '{}')
+  } catch {
+    return {}
   }
-  if (accountId.value) params.accountId = accountId.value
-  const { data } = await http.get('/stats/summary', { params })
-  summary.value = data
 }
 
-onMounted(async () => {
-  await accounts.load()
-  await load()
-})
-
-watch(isDark, () => {
-  // 触发 computed 图表重绘
-})
-
-const pieOption = computed(() => {
-  const cats = summary.value?.byCategory || []
-  if (!cats.length) return null
-  return {
-    tooltip: { trigger: 'item', formatter: (p: any) => `${p.name}: ¥${fenToYuan(p.value)}` },
-    textStyle: { color: chartText.value },
-    series: [{
-      type: 'pie',
-      radius: ['38%', '68%'],
-      itemStyle: { borderRadius: 6, borderColor: isDark.value ? '#1c2620' : '#fff', borderWidth: 2 },
-      label: { color: chartText.value },
-      data: cats.map((c) => ({ name: c.categoryName, value: c.amount })),
-    }],
+function applyPreset(p: Preset) {
+  const now = dayjs()
+  const set = (a: dayjs.Dayjs, b: dayjs.Dayjs) => {
+    from.value = a.format('YYYY-MM-DD')
+    to.value = b.format('YYYY-MM-DD')
   }
+  switch (p) {
+    case 'month': set(now.startOf('month'), now.endOf('month')); break
+    case 'lastMonth': {
+      const m = now.subtract(1, 'month')
+      set(m.startOf('month'), m.endOf('month'))
+      break
+    }
+    case 'last3': set(now.subtract(2, 'month').startOf('month'), now.endOf('month')); break
+    case 'year': set(now.startOf('year'), now.endOf('year')); break
+    case 'lastYear': {
+      const y = now.subtract(1, 'year')
+      set(y.startOf('year'), y.endOf('year'))
+      break
+    }
+  }
+  preset.value = p
+}
+
+function choose(p: Preset) {
+  if (p === 'custom') preset.value = 'custom'
+  else applyPreset(p)
+}
+
+watch([preset, from, to, accountId, tab], () => {
+  sessionStorage.setItem(STATE_KEY, JSON.stringify({
+    preset: preset.value, from: from.value, to: to.value, accountId: accountId.value, tab: tab.value,
+  }))
 })
 
-const lineOption = computed(() => {
-  const trends = summary.value?.trends || []
-  const expense = getComputedStyle(document.documentElement).getPropertyValue('--expense').trim() || '#c45c3e'
-  const income = getComputedStyle(document.documentElement).getPropertyValue('--income').trim() || '#1b7f5a'
-  return {
-    backgroundColor: 'transparent',
-    tooltip: { trigger: 'axis' },
-    legend: { data: ['支出', '收入'], textStyle: { color: chartText.value } },
-    grid: { left: 44, right: 16, top: 40, bottom: 28 },
-    textStyle: { color: chartText.value },
-    xAxis: {
-      type: 'category',
-      data: trends.map((t) => t.month),
-      axisLabel: { color: chartText.value },
-      axisLine: { lineStyle: { color: chartAxis.value } },
-    },
-    yAxis: {
-      type: 'value',
-      axisLabel: { formatter: (v: number) => (v / 100).toFixed(0), color: chartText.value },
-      splitLine: { lineStyle: { color: chartAxis.value, type: 'dashed' } },
-    },
-    series: [
-      { name: '支出', type: 'line', smooth: true, data: trends.map((t) => t.expense), itemStyle: { color: expense }, areaStyle: { color: expense + '22' } },
-      { name: '收入', type: 'line', smooth: true, data: trends.map((t) => t.income), itemStyle: { color: income }, areaStyle: { color: income + '22' } },
-    ],
-  }
-})
+onMounted(() => accounts.ensure())
 </script>
 
 <style scoped>
-.filters { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
-.f { flex: 1; }
-.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.card { padding: 16px; }
-.label { color: var(--muted); font-size: 0.85rem; }
-.val {
-  font-size: 1.35rem;
-  margin-top: 6px;
-  font-family: var(--font-display);
-  font-variant-numeric: tabular-nums;
+.stats-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.range-text { font-size: 0.8rem; color: var(--muted); white-space: nowrap; }
+
+.filter-bar { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.presets {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  margin: 0 calc(-1 * var(--content-pad-x));
+  padding: 2px var(--content-pad-x);
 }
-.f { min-width: 0; }
-.chart-wrap { padding: 8px; }
-.chart { height: 280px; width: 100%; }
-@media (max-width: 600px) {
-  .cards { gap: 8px; }
-  .card { padding: 12px; }
-  .val { font-size: 1.15rem; margin-top: 4px; word-break: break-all; }
-  .chart-wrap { padding: 4px; }
-  .chart { height: 240px; }
-  .section-label { margin: 18px 0 8px; }
-  .quick { margin-left: -4px; }
+.preset { flex-shrink: 0; }
+.acct { min-width: 0; }
+.custom-range { display: flex; gap: 8px; margin-bottom: 10px; }
+.f { flex: 1; min-width: 0; }
+
+.stats-tabs {
+  margin: 18px 0 12px;
+  border-bottom: 1px solid var(--surface-border);
 }
-@media (max-width: 600px) and (max-height: 700px) {
-  .chart { height: 210px; }
+.tab-body { min-height: 320px; }
+.stats-tab { min-width: 0 !important; padding: 0 10px !important; letter-spacing: 0; }
+
+/* 平板以上：快捷区间与账户筛选同一行 */
+@media (min-width: 600px) {
+  .filter-bar { flex-direction: row; align-items: center; }
+  .presets { flex: 1; margin: 0; padding: 2px 0; flex-wrap: wrap; overflow: visible; }
+  .acct { flex: 0 0 220px; }
+  .custom-range { max-width: 440px; margin-left: auto; }
+}
+
+@media (min-width: 960px) {
+  .stats-tabs { margin-top: 24px; }
 }
 </style>

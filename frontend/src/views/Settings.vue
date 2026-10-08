@@ -6,6 +6,8 @@
       <span style="width:40px" />
     </div>
 
+    <div class="settings-grid">
+    <section class="set-block">
     <h2 class="sec">外观</h2>
     <div class="theme-grid mb-4">
       <button
@@ -35,13 +37,17 @@
     </div>
     <v-text-field v-model="form.email" label="邮箱" variant="outlined" class="mb-2" />
     <p class="pref-tip mb-3">默认还款 / 消费账户请到「账户管理」里设置，卡片上会显示标记。</p>
-    <v-btn color="primary" block class="mb-6" :loading="saving" @click="saveSettings">保存偏好</v-btn>
+    <v-btn color="primary" block class="mb-6 set-submit" :loading="saving" @click="saveSettings">保存偏好</v-btn>
+    </section>
 
+    <section class="set-block">
     <h2 class="sec">修改密码</h2>
     <v-text-field v-model="oldPassword" label="原密码" type="password" variant="outlined" />
     <v-text-field v-model="newPassword" label="新密码" type="password" variant="outlined" />
     <v-alert v-if="msg" :type="msgType" density="compact" class="mb-2">{{ msg }}</v-alert>
-    <v-btn color="secondary" block :loading="pwdLoading" @click="changePwd">更新密码</v-btn>
+    <v-btn color="secondary" block class="set-submit" :loading="pwdLoading" @click="changePwd">更新密码</v-btn>
+    </section>
+    </div>
   </div>
 </template>
 
@@ -168,5 +174,25 @@ async function changePwd() {
   font-size: 0.82rem;
   color: var(--muted);
   line-height: 1.45;
+}
+
+/* 宽屏：偏好与改密两张卡并排，表单不再拉满整屏 */
+@media (min-width: 768px) {
+  .settings-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    gap: 20px;
+    align-items: start;
+    max-width: 980px;
+  }
+  .set-block {
+    padding: 18px 20px 20px;
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    border: 1px solid var(--surface-border);
+    box-shadow: var(--shadow-soft);
+  }
+  .set-block .sec { margin-top: 0; }
+  .set-submit { margin-bottom: 0 !important; }
 }
 </style>

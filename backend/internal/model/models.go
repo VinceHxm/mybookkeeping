@@ -49,7 +49,7 @@ type Account struct {
 	ID               uint64     `gorm:"primaryKey" json:"id"`
 	UserID           uint64     `gorm:"index;not null" json:"userId"`
 	Name             string     `gorm:"size:64;not null" json:"name"`
-	Type             string     `gorm:"size:32;not null;default:cash" json:"type"` // cash/bank/credit/other
+	Type             string     `gorm:"size:32;not null;default:cash" json:"type"` // cash/bank/credit/invest/other
 	Balance          int64      `gorm:"not null;default:0" json:"balance"`         // 分
 	Sort             int        `gorm:"not null;default:0" json:"sort"`
 	Archived         bool       `gorm:"not null;default:false" json:"archived"`
@@ -112,8 +112,8 @@ type Tag struct {
 type Transaction struct {
 	ID          uint64    `gorm:"primaryKey" json:"id"`
 	UserID      uint64    `gorm:"index;not null" json:"userId"`
-	Type        string    `gorm:"size:16;not null" json:"type"` // expense/income/transfer
-	Amount      int64     `gorm:"not null" json:"amount"`       // 分，始终为正
+	Type        string    `gorm:"size:16;not null" json:"type"` // expense/income/transfer/revalue
+	Amount      int64     `gorm:"not null" json:"amount"`       // 分；revalue 为有符号差额，其余始终为正
 	AccountID   uint64    `gorm:"index;not null" json:"accountId"`
 	ToAccountID *uint64   `gorm:"index" json:"toAccountId"`
 	CategoryID  *uint64   `gorm:"index" json:"categoryId"`
@@ -128,11 +128,18 @@ type Transaction struct {
 	FareRuleID         *uint64   `gorm:"index" json:"fareRuleId"`
 	InstallmentPeriods int       `gorm:"not null;default:1" json:"installmentPeriods"` // 1=不分期；>1 等额展示分期
 	InterestFen        int64     `gorm:"not null;default:0" json:"interestFen"`         // 利息/手续费（分），仅展示拆分
+	// InstallmentDeferCycles 分期首期相对刷卡所在账单推迟的周期数：0=随刷卡出账，1=下期出账（银行办分期后常见）
+	InstallmentDeferCycles int `gorm:"not null;default:0" json:"installmentDeferCycles"`
 	// AmountPending 金额待确认（周期生成的预估金额，等账单出来后按实际金额确认）
 	AmountPending bool `gorm:"not null;default:false;index" json:"amountPending"`
 	// ForeignCurrency / ForeignAmount 外币支付记录（ISO 币种 + 外币金额×100），仅展示，支付汇率 = Amount / ForeignAmount
 	ForeignCurrency string    `gorm:"size:8;not null;default:''" json:"foreignCurrency"`
 	ForeignAmount   int64     `gorm:"not null;default:0" json:"foreignAmount"`
+	// VoucherStatus 团购券状态（仅支出）："" 非券 | pending 待核销 | used 已核销 | refunded 已退款
+	VoucherStatus   string    `gorm:"size:16;not null;default:'';index" json:"voucherStatus"`
+	VoucherExpireOn string    `gorm:"size:10;not null;default:''" json:"voucherExpireOn"` // 券过期日 YYYY-MM-DD，可空
+	// RefundOfID 退款收入对应的原团购券支出
+	RefundOfID      *uint64   `gorm:"index" json:"refundOfId"`
 	HappenedAt      time.Time `gorm:"index;not null" json:"happenedAt"`
 	CreatedAt          time.Time `json:"createdAt"`
 	UpdatedAt          time.Time `json:"updatedAt"`

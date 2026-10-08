@@ -6,6 +6,7 @@
       <v-btn icon="mdi-plus" variant="text" color="primary" @click="openCreate" />
     </div>
 
+    <div class="card-grid card-grid--compact">
     <EntityCard
       v-for="t in tags.list"
       :key="t.id"
@@ -16,6 +17,7 @@
     >
       <template #meta>标签色用于流水筛选与展示</template>
     </EntityCard>
+    </div>
     <div v-if="!tags.list.length" class="empty-tip">暂无标签</div>
 
     <v-dialog v-model="dialog" max-width="400">

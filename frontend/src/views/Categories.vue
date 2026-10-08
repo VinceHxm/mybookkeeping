@@ -11,7 +11,8 @@
       <v-tab value="income">收入</v-tab>
     </v-tabs>
 
-    <template v-for="c in roots" :key="c.id">
+    <div class="cat-columns">
+    <section v-for="c in roots" :key="c.id" class="cat-group">
       <EntityCard
         :title="c.name"
         :icon="c.icon || 'mdi-shape'"
@@ -34,7 +35,8 @@
       >
         <template #meta>属于「{{ c.name }}」</template>
       </EntityCard>
-    </template>
+    </section>
+    </div>
     <div v-if="!roots.length" class="empty-tip">暂无{{ tab === 'expense' ? '支出' : '收入' }}分类</div>
 
     <v-dialog v-if="!isMobile" v-model="dialog" max-width="440" scrollable>
@@ -157,4 +159,22 @@ async function doDelete() {
 .toolbar { display: flex; align-items: center; justify-content: space-between; }
 .toolbar h1 { font-size: 1.15rem; margin: 0; }
 .child-card { margin-left: 18px; }
+
+/* 宽屏：每个一级分类连同子类自成一组；各组子类数不同、高度不一，
+   用多栏（瀑布流）自上而下填充，避免网格同行等高留下的空洞 */
+@media (min-width: 768px) {
+  .cat-columns {
+    columns: 320px;
+    column-gap: 14px;
+  }
+  .cat-group {
+    break-inside: avoid;
+    padding: 10px 10px 0;
+    margin-bottom: 14px;
+    border-radius: var(--radius-lg);
+    border: 1px dashed var(--surface-border);
+    background: color-mix(in srgb, var(--surface) 40%, transparent);
+  }
+  .child-card { margin-left: 14px; }
+}
 </style>

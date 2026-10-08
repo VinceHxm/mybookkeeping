@@ -28,9 +28,12 @@ type TransactionInput struct {
 	FareRuleID         *uint64
 	InstallmentPeriods int
 	InterestFen        int64
+	InstallmentDeferCycles int
 	AmountPending      bool
 	ForeignCurrency    string
 	ForeignAmount      int64
+	VoucherStatus      string // "" | pending | used；refunded 只能经退款接口产生
+	VoucherExpireOn    string
 	HappenedAt         time.Time
 	AttachmentIDs      []uint64
 	TagIDs             []uint64
@@ -41,6 +44,8 @@ type TransactionQuery struct {
 	CategoryID *uint64
 	TagID      *uint64
 	Pending    bool
+	// Voucher 团购券筛选：pending / used / refunded / all（所有券）
+	Voucher    string
 	Type       string
 	Keyword    string
 	From       *time.Time
@@ -83,6 +88,12 @@ func (s *TransactionService) buildQuery(userID uint64, q TransactionQuery) *gorm
 	if q.Pending {
 		db = db.Where("amount_pending = ?", true)
 	}
+	switch q.Voucher {
+	case VoucherPending, VoucherUsed, VoucherRefunded:
+		db = db.Where("voucher_status = ?", q.Voucher)
+	case "all":
+		db = db.Where("voucher_status <> ''")
+	}
 	if q.Type != "" {
 		db = db.Where("type = ?", q.Type)
 	}
@@ -99,6 +110,20 @@ func (s *TransactionService) buildQuery(userID uint64, q TransactionQuery) *gorm
 	return db
 }
 
+// briefAccount 流水关联账户只取名称等，避免把卡号、户名带进流水响应
+func briefAccount(db *gorm.DB) *gorm.DB {
+	return db.Select("id", "name", "type")
+}
+
+// preloadTxRefs 流水只需账户 / 分类名称，只取必要列
+func preloadTxRefs(db *gorm.DB) *gorm.DB {
+	return db.Preload("Account", briefAccount).Preload("ToAccount", briefAccount).
+		Preload("Category", func(db *gorm.DB) *gorm.DB {
+			return db.Select("id", "name", "kind", "icon", "parent_id")
+		}).
+		Preload("Attachments").Preload("Tags")
+}
+
 func (s *TransactionService) List(userID uint64, q TransactionQuery) (*TransactionListResult, error) {
 	limit := q.Limit
 	if limit <= 0 || limit > 200 {
@@ -110,17 +135,41 @@ func (s *TransactionService) List(userID uint64, q TransactionQuery) (*Transacti
 		return nil, err
 	}
 	var list []model.Transaction
-	err := s.buildQuery(userID, q).
-		Preload("Account").Preload("ToAccount").Preload("Category").Preload("Attachments").Preload("Tags").
+	err := preloadTxRefs(s.buildQuery(userID, q)).
 		Order("happened_at desc, id desc").
 		Limit(limit).Offset(q.Offset).
 		Find(&list).Error
 	return &TransactionListResult{Items: list, Total: total}, err
 }
 
+// RecentPlace 近期流水上的地点（选点页「最近地点」）
+type RecentPlace struct {
+	GeoMode    string   `json:"geoMode"`
+	GeoLng     *float64 `json:"geoLng"`
+	GeoLat     *float64 `json:"geoLat"`
+	GeoName    string   `json:"geoName"`
+	GeoEndLng  *float64 `json:"geoEndLng"`
+	GeoEndLat  *float64 `json:"geoEndLat"`
+	GeoEndName string   `json:"geoEndName"`
+}
+
+// RecentPlaces 只取地理字段，最近 limit 条带地点的流水（不去重，由前端按标签去重）
+func (s *TransactionService) RecentPlaces(userID uint64, limit int) ([]RecentPlace, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 40
+	}
+	out := make([]RecentPlace, 0, limit)
+	err := s.db.Model(&model.Transaction{}).
+		Select("geo_mode", "geo_lng", "geo_lat", "geo_name", "geo_end_lng", "geo_end_lat", "geo_end_name").
+		Where("user_id = ? AND geo_lng IS NOT NULL AND geo_lat IS NOT NULL AND geo_name <> ''", userID).
+		Order("happened_at desc, id desc").Limit(limit).
+		Scan(&out).Error
+	return out, err
+}
+
 func (s *TransactionService) Get(userID, id uint64) (*model.Transaction, error) {
 	var t model.Transaction
-	err := s.db.Preload("Account").Preload("ToAccount").Preload("Category").Preload("Attachments").Preload("Tags").
+	err := preloadTxRefs(s.db).
 		Where("id = ? AND user_id = ?", id, userID).First(&t).Error
 	if err != nil {
 		return nil, err
@@ -148,6 +197,9 @@ func (s *TransactionService) bindTags(tx *gorm.DB, userID, txID uint64, tagIDs [
 }
 
 func (s *TransactionService) Create(userID uint64, in TransactionInput) (*model.Transaction, error) {
+	if in.Type == TxTypeRevalue {
+		return nil, errors.New("市值校准请在理财账户里操作")
+	}
 	if err := validateInput(in); err != nil {
 		return nil, err
 	}
@@ -156,6 +208,7 @@ func (s *TransactionService) Create(userID uint64, in TransactionInput) (*model.
 		return nil, err
 	}
 	in.ForeignCurrency, in.ForeignAmount = cur, famt
+	in.VoucherStatus, in.VoucherExpireOn = normalizeVoucher(in.Type, in.VoucherStatus, in.VoucherExpireOn)
 	var out *model.Transaction
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		if err := assertRefsOwned(tx, userID, txRefs(in)); err != nil {
@@ -179,9 +232,12 @@ func (s *TransactionService) Create(userID uint64, in TransactionInput) (*model.
 			FareRuleID:         in.FareRuleID,
 			InstallmentPeriods: normalizeInstallmentPeriods(in.InstallmentPeriods),
 			InterestFen:        maxInt64(0, in.InterestFen),
+			InstallmentDeferCycles: normalizeDeferCycles(in.InstallmentPeriods, in.InstallmentDeferCycles),
 			AmountPending:      in.AmountPending,
 			ForeignCurrency:    in.ForeignCurrency,
 			ForeignAmount:      in.ForeignAmount,
+			VoucherStatus:      in.VoucherStatus,
+			VoucherExpireOn:    in.VoucherExpireOn,
 			HappenedAt:         in.HappenedAt,
 		}
 		if err := tx.Create(t).Error; err != nil {
@@ -218,6 +274,7 @@ func (s *TransactionService) Update(userID, id uint64, in TransactionInput) (*mo
 		return nil, err
 	}
 	in.ForeignCurrency, in.ForeignAmount = cur, famt
+	in.VoucherStatus, in.VoucherExpireOn = normalizeVoucher(in.Type, in.VoucherStatus, in.VoucherExpireOn)
 	err = s.db.Transaction(func(tx *gorm.DB) error {
 		var old model.Transaction
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
@@ -226,6 +283,14 @@ func (s *TransactionService) Update(userID, id uint64, in TransactionInput) (*mo
 		}
 		if err := assertRefsOwned(tx, userID, txRefs(in)); err != nil {
 			return err
+		}
+		if (old.Type == TxTypeRevalue) != (in.Type == TxTypeRevalue) {
+			return errors.New("市值校准流水不能与其他类型互改")
+		}
+		if in.Type == TxTypeRevalue {
+			if err := assertInvestAccount(tx, userID, in.AccountID); err != nil {
+				return err
+			}
 		}
 		oldIn := TransactionInput{
 			Type:        old.Type,
@@ -252,9 +317,17 @@ func (s *TransactionService) Update(userID, id uint64, in TransactionInput) (*mo
 		old.FareRuleID = in.FareRuleID
 		old.InstallmentPeriods = normalizeInstallmentPeriods(in.InstallmentPeriods)
 		old.InterestFen = maxInt64(0, in.InterestFen)
+		old.InstallmentDeferCycles = normalizeDeferCycles(in.InstallmentPeriods, in.InstallmentDeferCycles)
 		old.AmountPending = in.AmountPending
 		old.ForeignCurrency = in.ForeignCurrency
 		old.ForeignAmount = in.ForeignAmount
+		// 已退款的券状态由退款流水维护，普通编辑不改
+		if old.VoucherStatus == VoucherRefunded && in.Type == "expense" {
+			old.VoucherExpireOn = in.VoucherExpireOn
+		} else {
+			old.VoucherStatus = in.VoucherStatus
+			old.VoucherExpireOn = in.VoucherExpireOn
+		}
 		old.HappenedAt = in.HappenedAt
 		if err := tx.Save(&old).Error; err != nil {
 			return err
@@ -297,11 +370,27 @@ func (s *TransactionService) Delete(userID, id uint64) error {
 		}
 		tx.Where("transaction_id = ?", id).Delete(&model.TransactionTag{})
 		tx.Model(&model.Attachment{}).Where("transaction_id = ?", id).Update("transaction_id", nil)
+		// 删退款流水：原券恢复待核销；删原券：退款流水解除关联
+		if old.RefundOfID != nil {
+			if err := tx.Model(&model.Transaction{}).
+				Where("id = ? AND user_id = ? AND voucher_status = ?", *old.RefundOfID, userID, VoucherRefunded).
+				Update("voucher_status", VoucherPending).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Model(&model.Transaction{}).
+			Where("refund_of_id = ? AND user_id = ?", id, userID).
+			Update("refund_of_id", nil).Error; err != nil {
+			return err
+		}
 		return tx.Delete(&old).Error
 	})
 }
 
 func validateInput(in TransactionInput) error {
+	if in.Type == TxTypeRevalue {
+		return validateRevalueInput(in)
+	}
 	if in.Amount < 0 {
 		return errors.New("金额无效")
 	}
@@ -316,6 +405,9 @@ func validateInput(in TransactionInput) error {
 	}
 	if in.InterestFen < 0 {
 		return errors.New("利息无效")
+	}
+	if in.InstallmentDeferCycles < 0 || in.InstallmentDeferCycles > maxDeferCycles {
+		return errors.New("分期首期出账设置无效")
 	}
 	switch in.Type {
 	case "expense", "income":
@@ -371,6 +463,19 @@ func normalizeInstallmentPeriods(n int) int {
 	return n
 }
 
+const maxDeferCycles = 3
+
+// normalizeDeferCycles 仅分期（期数 > 1）可推迟首期
+func normalizeDeferCycles(periods, n int) int {
+	if periods <= 1 || n < 0 {
+		return 0
+	}
+	if n > maxDeferCycles {
+		return maxDeferCycles
+	}
+	return n
+}
+
 func maxInt64(a, b int64) int64 {
 	if a > b {
 		return a
@@ -396,7 +501,7 @@ func applyBalance(tx *gorm.DB, userID uint64, in TransactionInput, apply bool) e
 	switch in.Type {
 	case "expense":
 		return adjust(tx, userID, in.AccountID, -in.Amount*sign)
-	case "income":
+	case "income", TxTypeRevalue:
 		return adjust(tx, userID, in.AccountID, in.Amount*sign)
 	case "transfer":
 		if err := adjust(tx, userID, in.AccountID, -in.Amount*sign); err != nil {

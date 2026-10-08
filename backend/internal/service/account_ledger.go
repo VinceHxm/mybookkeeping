@@ -34,7 +34,15 @@ type AccountLedgerMonth struct {
 	Paid         int64               `json:"paid"`
 	BilledUnpaid int64               `json:"billedUnpaid"`
 	Unbilled     int64               `json:"unbilled"`
+	Revalued     int64               `json:"revalued"` // 市值校准净额（理财账户），不含在流入/流出里
 	Items        []AccountLedgerItem `json:"items"`
+}
+
+// InvestSummary 理财账户收益概览；收益率为简单收益率（累计收益 ÷ 净投入），不考虑资金时间
+type InvestSummary struct {
+	NetInvested int64 `json:"netInvested"` // 净投入 = 期初余额 + 转入 − 转出
+	Gain        int64 `json:"gain"`        // 累计收益 = 当前市值 − 净投入（含市值校准、分红收入、手续费支出）
+	Revalued    int64 `json:"revalued"`    // 其中市值校准合计
 }
 
 type AccountLedgerSummary struct {
@@ -54,6 +62,7 @@ type AccountLedger struct {
 	Balance        int64                `json:"balance"`
 	CreditTracking bool                 `json:"creditTracking"` // 信用卡且已设账单日
 	Summary        AccountLedgerSummary `json:"summary"`
+	Invest         *InvestSummary       `json:"invest,omitempty"`
 	Months         []AccountLedgerMonth `json:"months"`
 	Note           string               `json:"note,omitempty"`
 }
@@ -80,14 +89,14 @@ func (s *AccountService) Ledger(userID, accountID uint64, at time.Time) (*Accoun
 
 	var txs []model.Transaction
 	if err := s.db.Where("user_id = ? AND (account_id = ? OR to_account_id = ?)", userID, accountID, accountID).
-		Preload("Account").Preload("ToAccount").Preload("Category").Preload("Tags").
+		Preload("Account", briefAccount).Preload("ToAccount", briefAccount).Preload("Category").Preload("Tags").
 		Order("happened_at desc, id desc").
 		Find(&txs).Error; err != nil {
 		return nil, err
 	}
 
 	items := make([]AccountLedgerItem, len(txs))
-	var effect int64
+	var effect, transferIn, transferOut, revalued int64
 	for i, t := range txs {
 		t.HappenedAt = t.HappenedAt.In(loc)
 		dir := "out"
@@ -98,11 +107,25 @@ func (s *AccountService) Ledger(userID, accountID uint64, at time.Time) (*Accoun
 			if t.ToAccountID != nil && *t.ToAccountID == accountID {
 				dir = "in"
 			}
+		case TxTypeRevalue:
+			if t.Amount > 0 {
+				dir = "in"
+			}
 		}
-		if dir == "in" {
+		switch {
+		case t.Type == TxTypeRevalue:
 			effect += t.Amount
-		} else {
+			revalued += t.Amount
+		case dir == "in":
+			effect += t.Amount
+			if t.Type == "transfer" {
+				transferIn += t.Amount
+			}
+		default:
 			effect -= t.Amount
+			if t.Type == "transfer" {
+				transferOut += t.Amount
+			}
 		}
 		items[i] = AccountLedgerItem{Transaction: t, Direction: dir}
 	}
@@ -121,6 +144,14 @@ func (s *AccountService) Ledger(userID, accountID uint64, at time.Time) (*Accoun
 			out.Note = "状态按「先出账先还」分摊还款与退款估算：还款优先抵扣最早出账的消费。"
 		} else {
 			out.Note = "未设置账单日，无法区分已出账 / 未出账。"
+		}
+	}
+	if acc.Type == AccountTypeInvest {
+		netInvested := acc.Balance - effect + transferIn - transferOut
+		out.Invest = &InvestSummary{
+			NetInvested: netInvested,
+			Gain:        acc.Balance - netInvested,
+			Revalued:    revalued,
 		}
 	}
 
@@ -157,6 +188,9 @@ func applyCreditStatus(items []AccountLedgerItem, acc *model.Account, openingBal
 			periods = it.InstallmentPeriods
 		}
 		firstDue := firstDueStatementForPurchase(it.HappenedAt, billingDay)
+		if periods > 1 {
+			firstDue = firstDueForExpense(it.Transaction, billingDay)
+		}
 		it.StatementDate = fmtDate(firstDue)
 		for p, amt := range splitAmountEvenly(it.Amount, periods) {
 			dueOn := addBillingMonths(firstDue, p, billingDay)
@@ -233,7 +267,9 @@ func groupLedgerByMonth(items []AccountLedgerItem, credit bool) []AccountLedgerM
 			months = append(months, AccountLedgerMonth{Month: key, Items: []AccountLedgerItem{}})
 		}
 		m := &months[i]
-		if it.Direction == "in" {
+		if it.Type == TxTypeRevalue {
+			m.Revalued += it.Amount
+		} else if it.Direction == "in" {
 			m.InAmount += it.Amount
 		} else {
 			m.OutAmount += it.Amount

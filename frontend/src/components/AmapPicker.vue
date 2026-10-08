@@ -273,6 +273,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import http from '../api/http'
+import { loadAmap } from '../utils/amap'
 
 export type GeoPickResult = {
   mode: 'point' | 'route'
@@ -351,13 +352,6 @@ let endMarker: any = null
 let routeLine: any = null
 let AMapRef: any = null
 let autoComplete: any = null
-
-declare global {
-  interface Window {
-    _AMapSecurityConfig?: { securityJsCode: string }
-    AMap?: any
-  }
-}
 
 const canConfirm = computed(() => {
   if (mode.value === 'point') return !!picked.value
@@ -474,21 +468,6 @@ const confirmLabel = computed(() => {
   }
   return mode.value === 'point' ? '使用此位置' : '确认行程'
 })
-
-function loadScript(src: string) {
-  return new Promise<void>((resolve, reject) => {
-    if (document.querySelector(`script[src="${src}"]`)) {
-      resolve()
-      return
-    }
-    const s = document.createElement('script')
-    s.src = src
-    s.async = true
-    s.onload = () => resolve()
-    s.onerror = () => reject(new Error('高德脚本加载失败'))
-    document.head.appendChild(s)
-  })
-}
 
 function parseLngLat(loc: any): { lng: number; lat: number } | null {
   if (!loc) return null
@@ -903,8 +882,8 @@ function saveRecent(p: GeoPickResult) {
 
 async function loadRecentFromTransactions() {
   try {
-    const { data } = await http.get('/transactions', { params: { limit: 40 } })
-    const items = data?.items || data || []
+    const { data } = await http.get('/transactions/recent-places', { params: { limit: 40 } })
+    const items = data || []
     const found: GeoPickResult[] = []
     const seen = new Set<string>()
     for (const t of items) {
@@ -974,10 +953,7 @@ onMounted(async () => {
   loadRecentFromStorage()
   loadRecentFromTransactions()
   try {
-    const { data } = await http.get('/amap/config')
-    window._AMapSecurityConfig = { securityJsCode: data.securityJsCode }
-    await loadScript(`https://webapi.amap.com/maps?v=2.0&key=${data.key}`)
-    AMapRef = window.AMap
+    AMapRef = await loadAmap()
     map = new AMapRef.Map(mapEl.value, {
       zoom: 15,
       center: [116.397428, 39.90923],

@@ -109,6 +109,15 @@ func TestTenantIsolation_Transactions(t *testing.T) {
 	if err := svc.Delete(f.a, f.bTx); err == nil {
 		t.Error("A 不应能删除 B 的流水")
 	}
+	if _, err := svc.SetVoucherStatus(f.a, f.bTx, VoucherUsed); err == nil {
+		t.Error("A 不应能核销 B 的流水")
+	}
+	if _, err := svc.RefundVoucher(f.a, f.bTx, VoucherRefundInput{AccountID: f.aAcc}); err == nil {
+		t.Error("A 不应能为 B 的流水退款")
+	}
+	if _, err := svc.Revalue(f.a, f.bAcc, RevalueInput{MarketValue: 99999}); err == nil {
+		t.Error("A 不应能校准 B 的账户市值")
+	}
 	if f.count(t, &model.Transaction{}, "id = ?", f.bTx) != 1 {
 		t.Fatal("B 的流水被破坏")
 	}

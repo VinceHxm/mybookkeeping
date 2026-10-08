@@ -8,11 +8,37 @@
 
     <div v-if="loading" class="empty-tip">加载中…</div>
     <div v-else-if="error" class="empty-tip err">{{ error }}</div>
-    <template v-else-if="ledger">
+    <div v-else-if="ledger" class="ledger-layout">
+      <aside class="ledger-side">
       <div class="bal-card">
-        <span>{{ isCredit ? '已用额度' : '当前余额' }}</span>
+        <span>{{ isCredit ? '已用额度' : isInvest ? '当前市值' : '当前余额' }}</span>
         <strong>¥{{ fenToYuan(isCredit ? Math.max(0, -ledger.balance) : ledger.balance) }}</strong>
       </div>
+
+      <template v-if="ledger.invest">
+        <div class="status-tiles">
+          <div class="tile static">
+            <span>净投入</span>
+            <strong>¥{{ fenToYuan(ledger.invest.netInvested) }}</strong>
+          </div>
+          <div class="tile static">
+            <span>累计收益</span>
+            <strong :class="ledger.invest.gain >= 0 ? 'amount-income' : 'amount-expense'">
+              {{ formatMoney(ledger.invest.gain, 'revalue') }}
+            </strong>
+          </div>
+          <div class="tile static">
+            <span>收益率</span>
+            <strong :class="ledger.invest.gain >= 0 ? 'amount-income' : 'amount-expense'">{{ returnRate }}</strong>
+          </div>
+        </div>
+        <p class="ledger-tip">
+          净投入 = 建账余额 + 转入 − 转出；累计收益 = 当前市值 − 净投入（含市值校准、分红、手续费）。收益率为简单收益率，不考虑持有时长。
+        </p>
+        <v-btn block variant="tonal" color="primary" prepend-icon="mdi-chart-line" class="mb-1" @click="openRevalue(null)">
+          校准市值
+        </v-btn>
+      </template>
 
       <template v-if="ledger.creditTracking">
         <div class="status-tiles">
@@ -38,7 +64,9 @@
         </p>
       </template>
       <p v-else-if="ledger.note" class="ledger-tip">{{ ledger.note }}</p>
+      </aside>
 
+      <div class="ledger-main">
       <div v-if="!months.length" class="empty-tip">暂无流水</div>
       <section v-for="m in months" :key="m.month" class="month">
         <button type="button" class="month-head" @click="toggleMonth(m.month)">
@@ -50,6 +78,9 @@
           <div class="month-sum">
             <span class="amount-expense">{{ isCredit ? '消费' : '流出' }} ¥{{ fenToYuan(m.outAmount) }}</span>
             <span class="amount-income">{{ isCredit ? '还款/退款' : '流入' }} ¥{{ fenToYuan(m.inAmount) }}</span>
+            <span v-if="m.revalued" :class="m.revalued > 0 ? 'amount-income' : 'amount-expense'">
+              市值变动 {{ formatMoney(m.revalued, 'revalue') }}
+            </span>
           </div>
         </button>
         <div v-if="ledger.creditTracking && isOpen(m.month) && !statusFilter" class="month-status">
@@ -62,14 +93,16 @@
           <v-list-item
             v-for="item in m.items"
             :key="item.id"
-            :to="`/transactions/${item.id}`"
+            :to="item.type === 'revalue' ? undefined : `/transactions/${item.id}`"
             rounded="lg"
             class="tx-row surface-row"
+            @click="item.type === 'revalue' && openRevalue(item)"
           >
             <v-list-item-title class="tx-title">
               <span class="tx-name">{{ txTitle(item) }}</span>
               <span v-if="item.creditStatus" class="st" :class="item.creditStatus">{{ statusLabel[item.creditStatus] }}</span>
               <span v-else-if="isCredit && item.direction === 'in'" class="st repay">{{ item.type === 'income' ? '退款' : '还款' }}</span>
+              <span v-else-if="item.type === 'revalue'" class="st unbilled">市值校准</span>
             </v-list-item-title>
             <v-list-item-subtitle>
               {{ dayjs(item.happenedAt).format('MM-DD HH:mm') }}
@@ -92,13 +125,21 @@
             </div>
             <template #append>
               <span :class="item.direction === 'in' ? 'amount-income' : 'amount-expense'">
-                {{ item.direction === 'in' ? '+' : '-' }}¥{{ fenToYuan(item.amount) }}
+                {{ item.direction === 'in' ? '+' : '-' }}¥{{ fenToYuan(Math.abs(item.amount)) }}
               </span>
             </template>
           </v-list-item>
         </v-list>
       </section>
-    </template>
+      </div>
+    </div>
+
+    <RevalueDialog
+      v-model="revalueOpen"
+      :account="ledger ? { id: ledger.accountId, name: ledger.accountName, balance: ledger.balance } : null"
+      :edit-tx="revalueTx"
+      @saved="reload"
+    />
   </div>
 </template>
 
@@ -113,7 +154,9 @@ import {
   type AccountLedgerMonth,
   type CreditTxStatus,
 } from '../stores/account'
-import { fenToYuan, txSubCategory, txTitle } from '../utils/money'
+import type { Transaction } from '../stores/transaction'
+import RevalueDialog from '../components/RevalueDialog.vue'
+import { fenToYuan, formatMoney, txSubCategory, txTitle } from '../utils/money'
 
 const route = useRoute()
 const accounts = useAccountStore()
@@ -131,6 +174,21 @@ const statusLabel: Record<CreditTxStatus, string> = {
 }
 
 const isCredit = computed(() => ledger.value?.accountType === 'credit')
+const isInvest = computed(() => ledger.value?.accountType === 'invest')
+const revalueOpen = ref(false)
+const revalueTx = ref<Transaction | null>(null)
+
+const returnRate = computed(() => {
+  const inv = ledger.value?.invest
+  if (!inv || inv.netInvested <= 0) return '—'
+  const pct = (inv.gain / inv.netInvested) * 100
+  return `${pct >= 0 ? '+' : ''}${pct.toFixed(2)}%`
+})
+
+function openRevalue(tx: Transaction | null) {
+  revalueTx.value = tx
+  revalueOpen.value = true
+}
 
 const statusTiles = computed(() => {
   const s = ledger.value?.summary
@@ -174,17 +232,19 @@ function isSplit(item: AccountLedgerItem) {
   return [item.paidAmount, item.billedUnpaidAmount, item.unbilledAmount].filter((v) => v > 0).length > 1
 }
 
-onMounted(async () => {
+async function reload() {
   try {
     ledger.value = await accounts.ledger(Number(route.params.id))
     const first = ledger.value.months[0]?.month
-    if (first) openMonths.value = new Set([first])
+    if (first && !openMonths.value.size) openMonths.value = new Set([first])
   } catch (e: any) {
     error.value = e?.message || '加载失败'
   } finally {
     loading.value = false
   }
-})
+}
+
+onMounted(reload)
 </script>
 
 <style scoped>
@@ -227,6 +287,7 @@ onMounted(async () => {
   font-size: clamp(0.8rem, 3.4vw, 0.95rem);
   white-space: nowrap;
 }
+.tile.static { cursor: default; }
 .tile.billed_unpaid strong { color: #c45c3e; }
 .tile.paid strong { color: var(--primary); }
 .tile.active { border-color: currentColor; box-shadow: 0 0 0 1px var(--primary); }
@@ -272,4 +333,33 @@ onMounted(async () => {
 .tx-name { overflow: hidden; text-overflow: ellipsis; }
 .credit-detail { margin-top: 2px; font-size: 0.72rem; color: var(--muted); }
 .credit-detail .warn { color: #c45c3e; }
+
+/* 平板：月份汇总横排，少占一行 */
+@media (min-width: 600px) {
+  .month-sum { flex-direction: row; gap: 14px; font-size: 0.78rem; }
+}
+
+/* 宽屏：左侧余额与状态汇总吸顶，右侧按月流水 */
+@media (min-width: 960px) {
+  .ledger-layout {
+    display: grid;
+    grid-template-columns: 300px minmax(0, 1fr);
+    gap: 24px;
+    align-items: start;
+  }
+  .ledger-side { position: sticky; top: 16px; }
+  .bal-card { flex-direction: column; gap: 4px; padding: 18px; }
+  .bal-card strong { font-size: 1.6rem; }
+  .ledger-side .status-tiles { grid-template-columns: 1fr; }
+  .ledger-side .tile { flex-direction: row; justify-content: space-between; align-items: baseline; padding: 12px 14px; }
+  .ledger-side .tile span { font-size: 0.8rem; }
+  .ledger-side .tile strong { font-size: 1rem; }
+  .ledger-main .month:first-child { margin-top: 0; }
+  .month {
+    padding: 6px 10px 8px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--surface-border);
+    background: color-mix(in srgb, var(--surface) 55%, transparent);
+  }
+}
 </style>

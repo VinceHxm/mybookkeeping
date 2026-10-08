@@ -9,9 +9,33 @@ export interface Attachment {
   size: number
 }
 
+/** 团购券状态：'' 非券 | pending 待核销 | used 已核销 | refunded 已退款 */
+export type VoucherStatus = '' | 'pending' | 'used' | 'refunded'
+
+export const voucherStatusLabel: Record<Exclude<VoucherStatus, ''>, string> = {
+  pending: '待核销',
+  used: '已核销',
+  refunded: '已退款',
+}
+
+export const voucherStatusColor: Record<Exclude<VoucherStatus, ''>, string> = {
+  pending: 'warning',
+  used: 'success',
+  refunded: 'info',
+}
+
+export interface VoucherRefundPayload {
+  amount?: number
+  accountId?: number
+  categoryId?: number | null
+  happenedAt?: string
+  remark?: string
+}
+
 export interface Transaction {
   id: number
-  type: 'expense' | 'income' | 'transfer'
+  /** revalue：理财账户市值校准，amount 为有符号差额 */
+  type: 'expense' | 'income' | 'transfer' | 'revalue'
   amount: number
   accountId: number
   toAccountId?: number | null
@@ -27,9 +51,14 @@ export interface Transaction {
   fareRuleId?: number | null
   installmentPeriods?: number
   interestFen?: number
+  /** 分期首期推迟的账单周期数：0=随刷卡出账，1=下期出账 */
+  installmentDeferCycles?: number
   amountPending?: boolean
   foreignCurrency?: string
   foreignAmount?: number
+  voucherStatus?: VoucherStatus
+  voucherExpireOn?: string
+  refundOfId?: number | null
   happenedAt: string
   account?: { id: number; name: string }
   toAccount?: { id: number; name: string }
@@ -55,9 +84,13 @@ export interface TxPayload {
   fareRuleId?: number | null
   installmentPeriods?: number
   interestFen?: number
+  /** 分期首期推迟的账单周期数：0=随刷卡出账，1=下期出账 */
+  installmentDeferCycles?: number
   amountPending?: boolean
   foreignCurrency?: string
   foreignAmount?: number
+  voucherStatus?: VoucherStatus
+  voucherExpireOn?: string
   happenedAt?: string
   attachmentIds?: number[]
   tagIds?: number[]
@@ -81,8 +114,8 @@ export const useTransactionStore = defineStore('transaction', () => {
     return list.value
   }
 
-  async function loadRecent() {
-    const { data } = await http.get('/transactions', { params: { limit: 5 } })
+  async function loadRecent(limit = 5) {
+    const { data } = await http.get('/transactions', { params: { limit } })
     recent.value = Array.isArray(data) ? data : (data.items || [])
     return recent.value
   }
@@ -106,5 +139,24 @@ export const useTransactionStore = defineStore('transaction', () => {
     await http.delete(`/transactions/${id}`)
   }
 
-  return { list, total, recent, load, loadRecent, get, create, update, remove }
+  function patchLocal(t: Transaction) {
+    const i = list.value.findIndex((x) => x.id === t.id)
+    if (i >= 0) list.value[i] = t
+  }
+
+  async function setVoucherStatus(id: number, status: 'pending' | 'used') {
+    const { data } = await http.post(`/transactions/${id}/voucher-status`, { status })
+    patchLocal(data as Transaction)
+    return data as Transaction
+  }
+
+  /** 团购券退款：后端生成退款收入并把券标为已退款，返回退款流水 */
+  async function refundVoucher(id: number, payload: VoucherRefundPayload = {}) {
+    const { data } = await http.post(`/transactions/${id}/refund`, payload)
+    const i = list.value.findIndex((x) => x.id === id)
+    if (i >= 0) list.value[i] = { ...list.value[i], voucherStatus: 'refunded' }
+    return data as Transaction
+  }
+
+  return { list, total, recent, load, loadRecent, get, create, update, remove, setVoucherStatus, refundVoucher }
 })

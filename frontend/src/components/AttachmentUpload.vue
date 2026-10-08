@@ -1,15 +1,8 @@
 <template>
   <section class="meta-block mb-3">
-    <div class="meta-head">
-      <div class="meta-title-row">
-        <v-icon size="20" color="primary">mdi-paperclip</v-icon>
-        <div>
-          <div class="meta-title">{{ title }}</div>
-          <div class="meta-sub">{{ subtitle }}</div>
-        </div>
-      </div>
+    <MetaHead icon="mdi-paperclip" :title="title" :subtitle="subtitle" class="mb-3">
       <span v-if="previews.length" class="meta-count">{{ previews.length }} 张</span>
-    </div>
+    </MetaHead>
 
     <div v-if="!previews.length" class="empty-actions">
       <label class="action-tile">
@@ -100,6 +93,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import http from '../api/http'
+import MetaHead from './MetaHead.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -209,32 +203,6 @@ async function onFile(e: Event) {
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-soft);
   padding: 14px;
-}
-
-.meta-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.meta-title-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.meta-title {
-  font-weight: 700;
-  font-size: 0.98rem;
-  line-height: 1.2;
-}
-
-.meta-sub {
-  color: var(--muted);
-  font-size: 0.8rem;
-  margin-top: 2px;
 }
 
 .meta-count {

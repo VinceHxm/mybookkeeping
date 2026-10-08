@@ -449,22 +449,18 @@ func (s *FareRuleService) SpentBreakdown(userID, ruleID uint64, at time.Time) (
 		return
 	}
 	start, end = CycleWindow(rule, at)
+	var agg struct {
+		Total int64
+		Rides int64
+	}
 	err = s.db.Model(&model.Transaction{}).
 		Where("user_id = ? AND type = ? AND fare_rule_id = ? AND happened_at >= ? AND happened_at < ?",
 			userID, "expense", ruleID, start, end).
-		Select("COALESCE(SUM(amount), 0)").Scan(&txSum).Error
+		Select("COALESCE(SUM(amount), 0) AS total, COUNT(*) AS rides").Scan(&agg).Error
 	if err != nil {
 		return
 	}
-	var cnt int64
-	err = s.db.Model(&model.Transaction{}).
-		Where("user_id = ? AND type = ? AND fare_rule_id = ? AND happened_at >= ? AND happened_at < ?",
-			userID, "expense", ruleID, start, end).
-		Count(&cnt).Error
-	if err != nil {
-		return
-	}
-	txRides = int(cnt)
+	txSum, txRides = agg.Total, int(agg.Rides)
 	seedFen, seedRides = activeCycleSeed(rule, start)
 	total = txSum + seedFen
 	rideTotal = txRides + seedRides

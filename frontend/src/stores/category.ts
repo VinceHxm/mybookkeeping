@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import http from '../api/http'
+import { createDictCache } from './dictCache'
 
 export interface Category {
   id: number
@@ -47,8 +48,11 @@ export const useCategoryStore = defineStore('category', () => {
   async function load(kind?: string) {
     const { data } = await http.get('/categories', { params: { flat: 1, ...(kind ? { kind } : {}) } })
     list.value = data
+    if (kind) cache.invalidate()
+    else cache.markLoaded()
     return data as Category[]
   }
+  const cache = createDictCache(() => load(), () => list.value)
 
   async function create(payload: Partial<Category>) {
     const { data } = await http.post('/categories', payload)
@@ -67,5 +71,5 @@ export const useCategoryStore = defineStore('category', () => {
     await load()
   }
 
-  return { list, expense, income, expenseOptions, incomeOptions, load, create, update, remove }
+  return { list, expense, income, expenseOptions, incomeOptions, load, ensure: cache.ensure, create, update, remove }
 })

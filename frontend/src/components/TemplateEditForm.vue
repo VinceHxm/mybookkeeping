@@ -366,9 +366,9 @@ watch(
 
 onMounted(async () => {
   await Promise.all([
-    accounts.load(),
-    categories.load(),
-    tags.load(),
+    accounts.ensure(),
+    categories.ensure(),
+    tags.ensure(),
     http.get('/fare-rules').then(({ data }) => {
       fareRules.value = data || []
     }),

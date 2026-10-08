@@ -11,6 +11,23 @@
       默认消费 / 默认还款各只能选一个账户（可同一账户）。在编辑账户里开关设置；已设默认的卡片会高亮并带角标。
     </p>
 
+    <div v-if="accounts.list.length" class="acct-summary">
+      <div class="acct-sum-cell">
+        <span>净资产</span>
+        <strong :class="totals.net >= 0 ? 'amount-income' : 'amount-expense'">{{ totals.net < 0 ? '-' : '' }}¥{{ fenToYuan(Math.abs(totals.net)) }}</strong>
+      </div>
+      <div class="acct-sum-cell">
+        <span>总资产</span>
+        <strong>¥{{ fenToYuan(totals.assets) }}</strong>
+      </div>
+      <div class="acct-sum-cell">
+        <span>总负债</span>
+        <strong class="amount-expense">¥{{ fenToYuan(totals.liabilities) }}</strong>
+      </div>
+      <router-link :to="{ path: '/stats', query: { tab: 'assets' } }" class="acct-sum-link">资产走势 <v-icon size="16">mdi-chevron-right</v-icon></router-link>
+    </div>
+
+    <div class="card-grid card-grid--wide">
     <EntityCard
       v-for="a in accounts.list"
       :key="a.id"
@@ -77,7 +94,7 @@
             </div>
             <div class="stmt-grid">
               <div class="stmt-cell">
-                <span>本期已还</span>
+                <span>本期已还<template v-if="(statements[a.id].refundAmount || 0) > 0">（含退款）</template></span>
                 <strong>¥{{ fenToYuan(statements[a.id].repaidAmount) }}</strong>
               </div>
               <div class="stmt-cell">
@@ -103,16 +120,53 @@
               <template v-else>
                 本期待还 = 本期账单尚未还清部分；还后待还 = 未出账；整体待还 = 已用额度
               </template>
-              <template v-if="statements[a.id].futureInstallment">
-                · 尚未出账分期 ¥{{ fenToYuan(statements[a.id].futureInstallment) }}
-              </template>
               <template v-if="(statements[a.id].nonInstallmentUnbilled || 0) > 0 && (statements[a.id].futureInstallment || 0) > 0">
                 · 未出账非分期 ¥{{ fenToYuan(statements[a.id].nonInstallmentUnbilled || 0) }}
               </template>
             </div>
+            <template v-if="statements[a.id].installments?.length">
+              <button
+                type="button"
+                class="inst-toggle no-card-nav"
+                :aria-expanded="!!instOpen[a.id]"
+                @click.stop="instOpen[a.id] = !instOpen[a.id]"
+                @pointerdown.stop
+              >
+                <v-icon size="16">mdi-credit-card-clock-outline</v-icon>
+                <span>分期中 {{ statements[a.id].installments!.length }} 笔</span>
+                <span class="inst-toggle__sum">尚未出账 ¥{{ fenToYuan(statements[a.id].futureInstallment) }}</span>
+                <v-icon size="16" class="inst-toggle__chevron" :class="{ 'is-open': instOpen[a.id] }">mdi-chevron-down</v-icon>
+              </button>
+              <ul v-if="instOpen[a.id]" class="inst-list">
+                <li v-for="it in statements[a.id].installments" :key="`${it.source}-${it.sourceId}`">
+                  <component
+                    :is="it.source === 'transaction' ? 'router-link' : 'div'"
+                    v-bind="it.source === 'transaction' ? { to: `/transactions/${it.sourceId}` } : {}"
+                    class="inst-row no-card-nav"
+                    @click.stop
+                    @pointerdown.stop
+                  >
+                    <div class="inst-main">
+                      <span class="inst-name">{{ it.name }}</span>
+                      <span class="inst-meta">{{ installmentMeta(it) }}</span>
+                    </div>
+                    <div class="inst-side">
+                      <strong>¥{{ fenToYuan(it.remainingFen) }}</strong>
+                      <span>{{ it.billedPeriods }}/{{ it.periods }} 期已出账</span>
+                    </div>
+                  </component>
+                </li>
+              </ul>
+            </template>
           </div>
           <div v-else-if="a.billingDay && stmtError[a.id]" class="stmt-err">
             {{ stmtError[a.id] }}
+          </div>
+        </template>
+        <template v-else-if="a.type === 'invest'">
+          <div class="bal-line">市值 ¥{{ fenToYuan(a.balance) }}</div>
+          <div class="meta-sub">
+            {{ a.lastReconciledAt ? `上次校准 ${dayjs(a.lastReconciledAt).format('YYYY-MM-DD')}` : '还没校准过市值' }}
           </div>
         </template>
         <template v-else>
@@ -140,6 +194,16 @@
             <span>{{ repayAction(a)!.label }}</span>
             <strong v-if="repayAction(a)!.amount" class="act-amt">¥{{ fenToYuan(repayAction(a)!.amount) }}</strong>
           </router-link>
+          <button
+            v-if="a.type === 'invest' && !a.archived"
+            type="button"
+            class="act act-repay is-quiet no-card-nav"
+            @click.stop="openRevalue(a)"
+            @pointerdown.stop
+          >
+            <v-icon size="17">mdi-chart-line</v-icon>
+            <span>校准市值</span>
+          </button>
         </div>
 
         <div v-if="a.storageNote || (a.attachments && a.attachments.length)" class="storage-block">
@@ -162,6 +226,7 @@
         </div>
       </template>
     </EntityCard>
+    </div>
     <div v-if="!accounts.list.length" class="empty-tip">暂无账户，点右上角添加</div>
 
     <!-- 宽屏：弹窗编辑 -->
@@ -208,21 +273,27 @@
       :loading="deleting"
       @confirm="doDelete"
     />
+
+    <RevalueDialog v-model="revalueOpen" :account="revalueAccount" @saved="reload" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import dayjs from 'dayjs'
 import EntityCard from '../components/EntityCard.vue'
 import DeleteConfirmDialog from '../components/DeleteConfirmDialog.vue'
 import AccountEditForm from '../components/AccountEditForm.vue'
+import RevalueDialog from '../components/RevalueDialog.vue'
 import {
+  ACCOUNT_TYPE_LABELS,
   useAccountStore,
   creditUsedFen,
   creditBilledFenOf,
   creditUnbilledFen,
   type Account,
+  type CreditInstallmentItem,
   type CreditStatement,
 } from '../stores/account'
 import { useAuthStore } from '../stores/auth'
@@ -241,6 +312,17 @@ const dialog = ref(false)
 const editing = ref<Account | null>(null)
 const dialogFormRef = ref<InstanceType<typeof AccountEditForm> | null>(null)
 const showArchived = ref(true)
+
+const totals = computed(() => {
+  let assets = 0
+  let liabilities = 0
+  for (const a of accounts.list) {
+    if (a.archived) continue
+    if (a.balance >= 0) assets += a.balance
+    else liabilities -= a.balance
+  }
+  return { assets, liabilities, net: assets - liabilities }
+})
 const confirmOpen = ref(false)
 const pendingDelete = ref<Account | null>(null)
 const deleting = ref(false)
@@ -248,9 +330,23 @@ const deleting = ref(false)
 const revealCache = reactive<Record<number, { cardNo: string; holderName: string }>>({})
 const revealLoading = reactive<Record<number, boolean>>({})
 const storagePreview = ref<{ url: string } | null>(null)
-const typeMap: Record<string, string> = { cash: '现金', bank: '银行卡', credit: '信用', other: '其他' }
+const typeMap = ACCOUNT_TYPE_LABELS
+const revalueOpen = ref(false)
+const revalueAccount = ref<Account | null>(null)
 const statements = ref<Record<number, CreditStatement>>({})
 const stmtError = ref<Record<number, string>>({})
+const instOpen = reactive<Record<number, boolean>>({})
+
+function installmentMeta(it: CreditInstallmentItem) {
+  const parts = [
+    it.source === 'plan' ? '存量分期' : `${dayjs(it.happenedOn).format('M/D')} 消费 ¥${fenToYuan(it.principalFen)}`,
+    `下期 ${dayjs(it.nextDueOn).format('M/D')} 入账 ¥${fenToYuan(it.nextShareFen)}`,
+  ]
+  if (it.interestPerPeriodFen > 0) parts.push(`每期利息 ¥${fenToYuan(it.interestPerPeriodFen)}`)
+  else if (it.interestFen > 0) parts.push(`手续费 ¥${fenToYuan(it.interestFen)}`)
+  parts.push(`末期 ${dayjs(it.lastDueOn).format('YYYY/M')}`)
+  return parts.join(' · ')
+}
 
 function isDefaultRepay(id: number) {
   return !!auth.profile?.defaultAccountId && auth.profile.defaultAccountId === id
@@ -313,19 +409,19 @@ async function reload() {
 }
 
 async function loadStatements() {
+  const cards = accounts.list.filter((a) => a.type === 'credit' && a.billingDay && !a.archived)
+  if (!cards.length) {
+    statements.value = {}
+    stmtError.value = {}
+    return
+  }
   const next: Record<number, CreditStatement> = {}
   const errs: Record<number, string> = {}
-  await Promise.all(
-    accounts.list
-      .filter((a) => a.type === 'credit' && a.billingDay && !a.archived)
-      .map(async (a) => {
-        try {
-          next[a.id] = await accounts.creditStatement(a.id)
-        } catch (e: any) {
-          errs[a.id] = e?.message || '账单加载失败'
-        }
-      }),
-  )
+  try {
+    for (const s of await accounts.creditStatements()) next[s.accountId] = s
+  } catch (e: any) {
+    for (const a of cards) errs[a.id] = e?.message || '账单加载失败'
+  }
   statements.value = next
   stmtError.value = errs
 }
@@ -381,6 +477,11 @@ function afterPayDisplayFen(stmt: CreditStatement) {
   return stmt.remainingAfterPay || 0
 }
 
+function openRevalue(a: Account) {
+  revalueAccount.value = a
+  revalueOpen.value = true
+}
+
 function openCreate() {
   if (isMobile.value) {
     router.push('/accounts/new')
@@ -430,6 +531,37 @@ async function doDelete() {
 
 <style scoped>
 .toolbar { display: flex; align-items: center; justify-content: space-between; }
+
+.acct-summary { display: none; }
+@media (min-width: 768px) {
+  .acct-summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 4px 0 16px;
+    padding: 14px 18px;
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    border: 1px solid var(--surface-border);
+    box-shadow: var(--shadow-soft);
+  }
+  .acct-sum-cell { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .acct-sum-cell + .acct-sum-cell { padding-left: 16px; border-left: 1px solid var(--surface-border); }
+  .acct-sum-cell span { font-size: 0.78rem; color: var(--muted); }
+  .acct-sum-cell strong {
+    font-family: var(--font-display);
+    font-size: 1.3rem;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+  }
+  .acct-sum-link {
+    flex-shrink: 0;
+    color: var(--primary);
+    font-size: 0.86rem;
+    font-weight: 600;
+    text-decoration: none;
+  }
+}
 .toolbar h1 { font-size: 1.15rem; margin: 0; }
 .bal-line { font-weight: 700; color: rgb(var(--v-theme-on-surface)); }
 .meta-sub { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
@@ -530,6 +662,9 @@ async function doDelete() {
   border-radius: 10px;
   font-size: 0.8rem;
   font-weight: 600;
+  font-family: inherit;
+  border: 0;
+  cursor: pointer;
   text-decoration: none;
   white-space: nowrap;
   -webkit-tap-highlight-color: transparent;
@@ -622,6 +757,88 @@ async function doDelete() {
   font-size: 0.72rem;
   color: var(--muted);
   line-height: 1.4;
+}
+.inst-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 0 0;
+  border: 0;
+  border-top: 1px dashed var(--surface-border);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.inst-toggle__sum {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  font-weight: 500;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.inst-toggle__chevron { color: var(--muted); transition: transform 0.2s; }
+.inst-toggle__chevron.is-open { transform: rotate(180deg); }
+.inst-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.inst-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgb(var(--v-theme-surface));
+  color: inherit;
+  text-decoration: none;
+  min-width: 0;
+}
+.inst-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.inst-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inst-meta {
+  font-size: 0.7rem;
+  color: var(--muted);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.inst-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.inst-side strong {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.88rem;
+}
+.inst-side span { font-size: 0.68rem; color: var(--muted); white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) {
+  .inst-toggle__chevron { transition: none; }
 }
 .stmt-err {
   margin-top: 6px;

@@ -37,28 +37,23 @@
     </div>
 
     <v-list rounded="lg" class="menu mb-3 surface-card" elevation="0">
-      <v-list-item to="/accounts" prepend-icon="mdi-wallet-outline" title="账户管理" append-icon="mdi-chevron-right" />
-      <v-list-item to="/categories" prepend-icon="mdi-shape-outline" title="分类管理" append-icon="mdi-chevron-right" />
-      <v-list-item to="/tags" prepend-icon="mdi-tag-outline" title="标签管理" append-icon="mdi-chevron-right" />
-      <v-list-item to="/templates" prepend-icon="mdi-flash-outline" title="记账模板" append-icon="mdi-chevron-right" />
-      <v-list-item to="/fare-rules" prepend-icon="mdi-ticket-percent-outline" title="计费规则" append-icon="mdi-chevron-right" />
-      <v-list-item to="/schedules" prepend-icon="mdi-calendar-clock-outline" title="周期记账" append-icon="mdi-chevron-right" />
-      <v-list-item to="/settings" prepend-icon="mdi-cog-outline" title="设置 / 改密" append-icon="mdi-chevron-right" />
       <v-list-item
-        v-if="auth.isAdmin()"
-        to="/admin/users"
-        prepend-icon="mdi-shield-account-outline"
-        title="用户管理"
+        v-for="m in menu"
+        :key="m.to"
+        :to="m.to"
+        :prepend-icon="m.icon"
+        :title="m.title"
+        :subtitle="m.desc"
         append-icon="mdi-chevron-right"
       />
     </v-list>
 
-    <v-btn class="mt-2" block color="error" variant="tonal" size="large" @click="onLogout">退出登录</v-btn>
+    <v-btn class="mt-2 logout-btn" block color="error" variant="tonal" size="large" @click="onLogout">退出登录</v-btn>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { getStoredTheme, useAppTheme, type ThemePreference } from '../composables/useAppTheme'
@@ -67,6 +62,19 @@ const auth = useAuthStore()
 const router = useRouter()
 const { setPreference } = useAppTheme()
 const themePref = ref<ThemePreference>(getStoredTheme())
+
+const menu = computed(() => [
+  { to: '/accounts', icon: 'mdi-wallet-outline', title: '账户管理', desc: '余额、信用卡账单、默认账户' },
+  { to: '/categories', icon: 'mdi-shape-outline', title: '分类管理', desc: '收支一级 / 二级分类' },
+  { to: '/tags', icon: 'mdi-tag-outline', title: '标签管理', desc: '跨分类的标记与筛选' },
+  { to: '/templates', icon: 'mdi-flash-outline', title: '记账模板', desc: '首页一键入账' },
+  { to: '/fare-rules', icon: 'mdi-ticket-percent-outline', title: '计费规则', desc: '公交地铁折扣与阶梯' },
+  { to: '/schedules', icon: 'mdi-calendar-clock-outline', title: '周期记账', desc: '房租、订阅等自动入账' },
+  { to: '/settings', icon: 'mdi-cog-outline', title: '设置 / 改密', desc: '外观、偏好、密码' },
+  ...(auth.isAdmin()
+    ? [{ to: '/admin/users', icon: 'mdi-shield-account-outline', title: '用户管理', desc: '角色、停用、重置密码' }]
+    : []),
+])
 
 const themeOptions: { title: string; value: ThemePreference; icon: string }[] = [
   { title: '浅', value: 'light', icon: 'mdi-white-balance-sunny' },
@@ -120,4 +128,44 @@ async function onLogout() {
 .theme-bar-label { color: var(--muted); font-size: 0.85rem; font-weight: 600; }
 .theme-bar-actions { display: flex; flex-wrap: wrap; gap: 4px; }
 .role-admin { color: var(--primary); font-weight: 600; }
+
+/* 手机保持原来的单行菜单，说明文字只在宽屏磁贴里出现 */
+.menu :deep(.v-list-item-subtitle) { display: none; }
+
+@media (min-width: 768px) {
+  .menu {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+    gap: 12px;
+    padding: 0 !important;
+    background: transparent !important;
+    border: 0;
+    box-shadow: none !important;
+    backdrop-filter: none;
+    overflow: visible;
+  }
+  .menu :deep(.v-list-item) {
+    min-height: 76px;
+    padding: 14px 16px !important;
+    border-radius: var(--radius-md) !important;
+    background: var(--surface);
+    border: 1px solid var(--surface-border);
+    box-shadow: var(--shadow-soft);
+  }
+  .menu :deep(.v-list-item__prepend > .v-icon) {
+    color: var(--primary);
+    opacity: 1;
+  }
+  .menu :deep(.v-list-item-title),
+  .menu :deep(.v-list-item-subtitle) {
+    display: block;
+    -webkit-line-clamp: unset;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .menu :deep(.v-list-item-title) { font-weight: 600; }
+  .menu :deep(.v-list-item-subtitle) { margin-top: 2px; }
+  .logout-btn { width: auto !important; min-width: 200px; }
+}
 </style>

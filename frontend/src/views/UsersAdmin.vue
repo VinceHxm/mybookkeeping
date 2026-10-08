@@ -8,6 +8,7 @@
 
     <p class="page-tip">仅管理员可见。可调整角色、停用、重置密码或删除注册用户（不可操作自己；须保留至少一名可用管理员）。</p>
 
+    <div class="card-grid">
     <EntityCard
       v-for="u in users.list"
       :key="u.id"
@@ -31,6 +32,7 @@
         <div v-if="u.createdAt" class="meta-sub">注册 {{ formatTime(u.createdAt) }}</div>
       </template>
     </EntityCard>
+    </div>
     <div v-if="!users.list.length && !loading" class="empty-tip">暂无用户</div>
 
     <v-dialog v-model="dialog" max-width="440">
