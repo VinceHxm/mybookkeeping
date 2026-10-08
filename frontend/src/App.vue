@@ -44,6 +44,7 @@
     </nav>
 
     <router-view />
+    <PasswordConfirmDialog />
 
     <!-- 移动端：底部导航 -->
     <v-bottom-navigation
@@ -67,6 +68,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useTheme } from 'vuetify'
 import { useAuthStore } from './stores/auth'
+import PasswordConfirmDialog from './components/PasswordConfirmDialog.vue'
 import {
   getStoredTheme,
   useAppTheme,

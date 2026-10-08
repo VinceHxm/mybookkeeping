@@ -81,9 +81,26 @@
       </div>
     </section>
 
+    <div v-if="wasPending" class="pending-box mb-3">
+      <div class="pending-title">
+        <v-icon size="18">mdi-timer-sand</v-icon>
+        金额待确认
+      </div>
+      <p class="pending-tip">
+        这笔由周期记账生成，当前金额是预估。等信用卡入账后，把下方金额改成账单上的实际人民币金额再保存，即完成确认。
+      </p>
+      <v-checkbox
+        v-model="keepPending"
+        label="账单还没出，保存后仍保持待确认"
+        color="primary"
+        density="compact"
+        hide-details
+      />
+    </div>
+
     <v-text-field
       v-model="amountYuan"
-      label="金额（元）"
+      :label="wasPending && keepPending ? '预估金额（元）' : '金额（元）'"
       type="number"
       inputmode="decimal"
       variant="outlined"
@@ -93,22 +110,20 @@
       @update:model-value="onAmountManualEdit"
     />
 
+    <section v-if="form.type !== 'transfer'" class="form-section mb-3">
+      <div class="form-section__body">
+        <ForeignPaymentFields
+          v-model:enabled="fxEnabled"
+          v-model:currency="fxCurrency"
+          v-model:amount-yuan="fxAmountYuan"
+          :cny-fen="yuanToFen(amountYuan || '0')"
+          :estimated="wasPending && keepPending"
+        />
+      </div>
+    </section>
+
     <section v-if="showCreditExtras" class="form-section mb-3">
       <div class="form-section__body">
-      <div class="meta-head">
-        <div class="meta-title-row">
-          <v-icon size="20" color="primary">mdi-credit-card-clock-outline</v-icon>
-          <div class="meta-copy">
-            <div class="meta-title">{{ isCreditExpense ? '刷卡分期 / 利息' : '还款分期 / 利息' }}</div>
-            <div class="meta-sub">
-              {{ isCreditExpense
-                ? '仅影响账单展示拆分；账户余额按上方金额变动'
-                : '建议金额=本期本金份额+利息；可改，保存以手填为准' }}
-            </div>
-          </div>
-        </div>
-      </div>
-
       <div v-if="repayStatement" class="repay-stmt mb-2">
         <div class="repay-stmt-row">
           <span>本期已还</span><strong>¥{{ fenToYuan(repayStatement.repaidAmount) }}</strong>
@@ -142,34 +157,70 @@
         </div>
       </div>
 
-      <div class="field mb-2">
-        <v-text-field
-          v-model.number="form.installmentPeriods"
-          :label="isCreditExpense ? '分期期数' : '还款分几期'"
-          type="number"
-          min="1"
-          max="60"
-          variant="outlined"
-          density="compact"
-          hide-details
-          hint="1 = 一次还清 / 不分期"
-          persistent-hint
-          @update:model-value="onRepayPlanChanged"
-        />
-      </div>
-      <v-text-field
-        v-model="interestYuan"
-        label="利息 / 手续费（元）"
-        type="number"
-        inputmode="decimal"
-        variant="outlined"
-        density="compact"
-        hide-details
-        prefix="¥"
-        class="mb-1"
-        @update:model-value="onRepayPlanChanged"
-      />
-      <div v-if="creditExtraHint" class="fare-hint">{{ creditExtraHint }}</div>
+      <button
+        type="button"
+        class="credit-toggle"
+        :class="{ 'is-active': hasCreditPlan, 'is-open': creditExtrasOpen }"
+        :aria-expanded="creditExtrasOpen"
+        @click="creditExtrasOpen = !creditExtrasOpen"
+      >
+        <v-icon size="20" color="primary">mdi-credit-card-clock-outline</v-icon>
+        <span class="credit-toggle__title">{{ isCreditExpense ? '分期 / 手续费' : '还款分期 / 利息' }}</span>
+        <span class="credit-toggle__summary">{{ creditPlanSummary }}</span>
+        <v-icon size="18" class="credit-toggle__chevron">mdi-chevron-down</v-icon>
+      </button>
+
+      <v-expand-transition>
+        <div v-show="creditExtrasOpen" class="credit-panel">
+          <div class="meta-sub mb-2">
+            {{ isCreditExpense
+              ? '仅影响账单展示拆分；账户余额按上方金额变动'
+              : '建议金额=本期本金份额+利息；可改，保存以手填为准' }}
+          </div>
+          <div class="period-row mb-2">
+            <v-chip-group
+              :model-value="form.installmentPeriods"
+              selected-class="text-primary"
+              class="period-chips"
+              @update:model-value="onPeriodChipPicked"
+            >
+              <v-chip
+                v-for="p in periodPresets"
+                :key="p"
+                :value="p"
+                size="small"
+                variant="outlined"
+                filter
+              >{{ p === 1 ? (isCreditExpense ? '不分期' : '一次还清') : `${p} 期` }}</v-chip>
+            </v-chip-group>
+            <v-text-field
+              v-model.number="form.installmentPeriods"
+              label="期数"
+              type="number"
+              min="1"
+              max="60"
+              variant="outlined"
+              density="compact"
+              hide-details
+              class="period-input"
+              @update:model-value="onRepayPlanChanged"
+            />
+          </div>
+          <v-text-field
+            v-model="interestYuan"
+            label="利息 / 手续费（元）"
+            type="number"
+            inputmode="decimal"
+            variant="outlined"
+            density="compact"
+            hide-details
+            prefix="¥"
+            class="mb-1"
+            @update:model-value="onRepayPlanChanged"
+          />
+          <div v-if="creditExtraHint" class="fare-hint">{{ creditExtraHint }}</div>
+        </div>
+      </v-expand-transition>
       <div v-if="isCreditRepay || isRepayMode" class="repay-actions mt-2">
         <v-btn
           size="small"
@@ -466,6 +517,7 @@ import { cityAllowsAuto, getCachedCity } from '../utils/fare'
 import AmapPicker, { type GeoPickResult } from '../components/AmapPicker.vue'
 import AttachmentUpload from '../components/AttachmentUpload.vue'
 import NativeDateField from '../components/NativeDateField.vue'
+import ForeignPaymentFields from '../components/ForeignPaymentFields.vue'
 
 const props = defineProps<{ id?: string }>()
 const route = useRoute()
@@ -534,6 +586,12 @@ const form = reactive({
   installmentPeriods: 1,
 })
 const interestYuan = ref('0')
+const fxEnabled = ref(false)
+const fxCurrency = ref('USD')
+const fxAmountYuan = ref('')
+/** 编辑的流水原本是否待确认；保存时默认清除，勾选 keepPending 则保留 */
+const wasPending = ref(false)
+const keepPending = ref(false)
 const repayStatement = ref<CreditStatement | null>(null)
 const repayStmtLoading = ref(false)
 /** 还款金额是否仍由账单/期数自动回填（手改金额后关闭） */
@@ -573,6 +631,34 @@ function firstShareFen(total: number, periods: number) {
   const t = Math.max(0, Math.floor(total))
   const base = Math.floor(t / n)
   return base + (t % n)
+}
+
+const periodPresets = [1, 3, 6, 12, 24]
+const creditExtrasOpen = ref(false)
+const hasCreditPlan = computed(() =>
+  (Number(form.installmentPeriods) || 1) > 1 || yuanToFen(interestYuan.value || '0') > 0,
+)
+const creditPlanSummary = computed(() => {
+  const periods = Math.max(1, Number(form.installmentPeriods) || 1)
+  const interest = yuanToFen(interestYuan.value || '0')
+  const parts: string[] = []
+  if (periods > 1) {
+    parts.push(`${periods} 期`)
+    if (isCreditExpense.value && amountYuan.value) {
+      parts.push(`每期约 ¥${fenToYuan(Math.floor(yuanToFen(amountYuan.value) / periods))}`)
+    }
+  } else {
+    parts.push(isCreditExpense.value ? '不分期' : '一次还清')
+  }
+  if (interest > 0) parts.push(`${isCreditExpense.value ? '手续费' : '利息'} ¥${fenToYuan(interest)}`)
+  return parts.join(' · ')
+})
+watch(hasCreditPlan, (v) => { if (v) creditExtrasOpen.value = true })
+
+function onPeriodChipPicked(v: unknown) {
+  if (v == null) return
+  form.installmentPeriods = Number(v)
+  onRepayPlanChanged()
 }
 
 const creditExtraHint = computed(() => {
@@ -820,6 +906,11 @@ function applyEditTransaction(t: Awaited<ReturnType<typeof tx.get>>) {
   interestYuan.value = fenToYuan(t.interestFen || 0)
   fareEnabled.value = !!t.fareRuleId
   amountYuan.value = fenToYuan(t.amount)
+  fxEnabled.value = !!(t.foreignCurrency && t.foreignAmount)
+  fxCurrency.value = t.foreignCurrency || 'USD'
+  fxAmountYuan.value = t.foreignAmount ? fenToYuan(t.foreignAmount) : ''
+  wasPending.value = !!t.amountPending
+  keepPending.value = false
   happenedLocal.value = dayjs(t.happenedAt).format('YYYY-MM-DDTHH:mm')
   existingAttachments.value = (t.attachments || []).map((a) => ({ id: a.id, url: a.url }))
   attachmentIds.value = existingAttachments.value.map((a) => a.id)
@@ -968,7 +1059,7 @@ async function applyTemplate(t: any) {
   form.toAccountId = t.toAccountId || undefined
   form.categoryId = t.categoryId || undefined
   form.tagIds = t.tagIds || []
-  form.remark = t.remark || ''
+  form.remark = t.remark?.trim() || t.name || ''
   if (t.geoLng != null && t.geoLat != null) {
     form.geoMode = (t.geoMode as 'point' | 'route') || (t.geoEndLng != null ? 'route' : 'point')
     form.geoLng = t.geoLng
@@ -1177,9 +1268,17 @@ async function onSave() {
     return
   }
   if (!form.accountId) { error.value = '请选择账户'; return }
+  const useFx = fxEnabled.value && form.type !== 'transfer'
+  const fxCode = fxCurrency.value.trim().toUpperCase()
+  const fxFen = useFx ? yuanToFen(fxAmountYuan.value || '0') : 0
+  if (useFx && !/^[A-Z]{3,8}$/.test(fxCode)) { error.value = '请选择或填写外币币种（如 USD）'; return }
+  if (useFx && fxFen <= 0) { error.value = '请填写外币金额'; return }
   saving.value = true
   try {
     const payload = {
+      amountPending: wasPending.value && keepPending.value,
+      foreignCurrency: useFx ? fxCode : '',
+      foreignAmount: fxFen,
       type: form.type,
       amount,
       accountId: form.accountId,
@@ -1256,6 +1355,28 @@ async function onDelete() {
   }
 }
 .hint { color: var(--muted); font-size: 0.85rem; margin-bottom: 8px; }
+.pending-box {
+  padding: 10px 12px 4px;
+  border-radius: 12px;
+  background: color-mix(in srgb, #d99a2b 14%, var(--surface-solid, #fff));
+  border: 1px solid color-mix(in srgb, #d99a2b 40%, transparent);
+}
+.pending-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: #8a5a10;
+}
+.pending-tip {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+[data-theme='dark'] .pending-title { color: #f0c36a; }
 .flow-sub {
   display: flex;
   justify-content: stretch;
@@ -1303,6 +1424,46 @@ async function onDelete() {
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
+.credit-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 2px 0;
+  background: none;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.credit-toggle__title { font-weight: 600; font-size: 0.92rem; flex-shrink: 0; }
+.credit-toggle__summary {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  font-size: 0.82rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.credit-toggle.is-active .credit-toggle__summary {
+  color: rgb(var(--v-theme-primary));
+  font-weight: 600;
+}
+.credit-toggle__chevron { color: var(--muted); transition: transform 0.2s; }
+.credit-toggle.is-open .credit-toggle__chevron { transform: rotate(180deg); }
+.credit-panel { padding-top: 10px; }
+.period-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.period-chips { flex: 1; min-width: 0; padding: 0; }
+.period-input { flex: 0 0 84px; }
 .repay-actions {
   display: flex;
   flex-wrap: wrap;

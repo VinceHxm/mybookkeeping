@@ -17,7 +17,14 @@
     </section>
 
     <section class="home-mid anim-in" style="--d: 80ms">
-      <div v-if="repayReminders.length" class="repay-tags">
+      <div v-if="repayReminders.length || pendingCount" class="repay-tags">
+        <router-link v-if="pendingCount" class="repay-tag pending-tag" :to="pendingRoute">
+          <v-icon size="14" start>mdi-timer-sand</v-icon>
+          <span class="repay-tag-text">
+            {{ pendingCount === 1 && pendingFirst ? `${txTitle(pendingFirst)} 金额待确认` : `${pendingCount} 笔金额待确认` }}
+            <small>按账单改实际金额</small>
+          </span>
+        </router-link>
         <router-link
           v-for="r in repayReminders"
           :key="r.accountId"
@@ -90,15 +97,23 @@
               <span>{{ typeLabel(item.type).slice(0, 1) }}</span>
             </v-avatar>
           </template>
-          <v-list-item-title>{{ item.category?.name || typeLabel(item.type) }}</v-list-item-title>
+          <v-list-item-title>
+            {{ txTitle(item) }}
+            <v-chip v-if="item.amountPending" size="x-small" color="warning" variant="tonal" class="ml-1">待确认</v-chip>
+          </v-list-item-title>
           <v-list-item-subtitle>
+            <template v-if="txSubCategory(item)">{{ txSubCategory(item) }} · </template>
             {{ item.account?.name }} · {{ dayjs(item.happenedAt).format('MM-DD HH:mm') }}
-            <span v-if="item.remark"> · {{ item.remark }}</span>
           </v-list-item-subtitle>
           <template #append>
-            <span :class="item.type === 'income' ? 'amount-income' : 'amount-expense'">
-              {{ formatMoney(item.amount, item.type) }}
-            </span>
+            <div class="amt-col">
+              <span :class="item.type === 'income' ? 'amount-income' : 'amount-expense'">
+                {{ formatMoney(item.amount, item.type) }}
+              </span>
+              <span v-if="item.foreignCurrency" class="fx-line">
+                {{ formatForeign(item.foreignCurrency, item.foreignAmount) }}
+              </span>
+            </div>
           </template>
         </v-list-item>
       </v-list>
@@ -145,13 +160,13 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import dayjs from 'dayjs'
 import http from '../api/http'
-import { useTransactionStore } from '../stores/transaction'
+import { useTransactionStore, type Transaction } from '../stores/transaction'
 import { useAccountStore, type CreditRepayReminder } from '../stores/account'
-import { fenToYuan, formatMoney, typeLabel } from '../utils/money'
+import { fenToYuan, formatForeign, formatMoney, txSubCategory, txTitle, typeLabel } from '../utils/money'
 import type { Template } from '../components/TemplateEditForm.vue'
 
 const tx = useTransactionStore()
@@ -159,6 +174,13 @@ const accounts = useAccountStore()
 const router = useRouter()
 const summary = ref<{ monthExpense: number; monthIncome: number } | null>(null)
 const repayReminders = ref<CreditRepayReminder[]>([])
+const pendingCount = ref(0)
+const pendingFirst = ref<Transaction | null>(null)
+const pendingRoute = computed(() =>
+  pendingCount.value === 1 && pendingFirst.value
+    ? `/transactions/${pendingFirst.value.id}`
+    : { path: '/transactions', query: { pending: '1' } },
+)
 const templates = ref<Template[]>([])
 const quickBusy = ref<number | null>(null)
 const confirmOpen = ref(false)
@@ -251,7 +273,7 @@ async function quickUse(t: Template) {
       toAccountId: t.toAccountId || null,
       categoryId: t.categoryId || null,
       tagIds: t.tagIds || [],
-      remark: t.remark || '',
+      remark: t.remark?.trim() || t.name || '',
       fareRuleId: t.fareRuleId || null,
       geoMode: t.geoMode || undefined,
       geoLng: t.geoLng ?? null,
@@ -276,12 +298,24 @@ async function quickUse(t: Template) {
   }
 }
 
+async function loadPending() {
+  try {
+    const { data } = await http.get('/transactions', { params: { pending: 1, limit: 1 } })
+    pendingCount.value = Number(data?.total) || 0
+    pendingFirst.value = data?.items?.[0] || null
+  } catch {
+    pendingCount.value = 0
+    pendingFirst.value = null
+  }
+}
+
 async function refreshHome() {
   const [{ data: tpls }] = await Promise.all([
     http.get('/templates').catch(() => ({ data: [] })),
     tx.loadRecent(),
     http.get('/stats/summary').then((r) => { summary.value = r.data }),
     accounts.creditRepayReminders().then((list) => { repayReminders.value = list }).catch(() => {}),
+    loadPending(),
   ])
   templates.value = (tpls || []).slice(0, 9)
 }
@@ -411,6 +445,15 @@ onMounted(refreshHome)
   gap: 4px 8px;
   min-width: 0;
 }
+
+.pending-tag {
+  color: #8a5a10;
+  background: color-mix(in srgb, #d99a2b 16%, var(--surface-solid, #fff));
+  border-color: color-mix(in srgb, #d99a2b 38%, transparent);
+}
+
+.amt-col { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.fx-line { font-size: 0.68rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 .repay-tag small {
   font-weight: 600;

@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -27,6 +28,9 @@ type TransactionInput struct {
 	FareRuleID         *uint64
 	InstallmentPeriods int
 	InterestFen        int64
+	AmountPending      bool
+	ForeignCurrency    string
+	ForeignAmount      int64
 	HappenedAt         time.Time
 	AttachmentIDs      []uint64
 	TagIDs             []uint64
@@ -36,6 +40,7 @@ type TransactionQuery struct {
 	AccountID  *uint64
 	CategoryID *uint64
 	TagID      *uint64
+	Pending    bool
 	Type       string
 	Keyword    string
 	From       *time.Time
@@ -74,6 +79,9 @@ func (s *TransactionService) buildQuery(userID uint64, q TransactionQuery) *gorm
 	}
 	if q.TagID != nil {
 		db = db.Joins("JOIN transaction_tags ON transaction_tags.transaction_id = transactions.id AND transaction_tags.tag_id = ?", *q.TagID)
+	}
+	if q.Pending {
+		db = db.Where("amount_pending = ?", true)
 	}
 	if q.Type != "" {
 		db = db.Where("type = ?", q.Type)
@@ -143,8 +151,13 @@ func (s *TransactionService) Create(userID uint64, in TransactionInput) (*model.
 	if err := validateInput(in); err != nil {
 		return nil, err
 	}
+	cur, famt, err := normalizeForeign(in.Type, in.ForeignCurrency, in.ForeignAmount)
+	if err != nil {
+		return nil, err
+	}
+	in.ForeignCurrency, in.ForeignAmount = cur, famt
 	var out *model.Transaction
-	err := s.db.Transaction(func(tx *gorm.DB) error {
+	err = s.db.Transaction(func(tx *gorm.DB) error {
 		if err := assertRefsOwned(tx, userID, txRefs(in)); err != nil {
 			return err
 		}
@@ -166,6 +179,9 @@ func (s *TransactionService) Create(userID uint64, in TransactionInput) (*model.
 			FareRuleID:         in.FareRuleID,
 			InstallmentPeriods: normalizeInstallmentPeriods(in.InstallmentPeriods),
 			InterestFen:        maxInt64(0, in.InterestFen),
+			AmountPending:      in.AmountPending,
+			ForeignCurrency:    in.ForeignCurrency,
+			ForeignAmount:      in.ForeignAmount,
 			HappenedAt:         in.HappenedAt,
 		}
 		if err := tx.Create(t).Error; err != nil {
@@ -197,7 +213,12 @@ func (s *TransactionService) Update(userID, id uint64, in TransactionInput) (*mo
 	if err := validateInput(in); err != nil {
 		return nil, err
 	}
-	err := s.db.Transaction(func(tx *gorm.DB) error {
+	cur, famt, err := normalizeForeign(in.Type, in.ForeignCurrency, in.ForeignAmount)
+	if err != nil {
+		return nil, err
+	}
+	in.ForeignCurrency, in.ForeignAmount = cur, famt
+	err = s.db.Transaction(func(tx *gorm.DB) error {
 		var old model.Transaction
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
 			Where("id = ? AND user_id = ?", id, userID).First(&old).Error; err != nil {
@@ -231,6 +252,9 @@ func (s *TransactionService) Update(userID, id uint64, in TransactionInput) (*mo
 		old.FareRuleID = in.FareRuleID
 		old.InstallmentPeriods = normalizeInstallmentPeriods(in.InstallmentPeriods)
 		old.InterestFen = maxInt64(0, in.InterestFen)
+		old.AmountPending = in.AmountPending
+		old.ForeignCurrency = in.ForeignCurrency
+		old.ForeignAmount = in.ForeignAmount
 		old.HappenedAt = in.HappenedAt
 		if err := tx.Save(&old).Error; err != nil {
 			return err
@@ -312,6 +336,29 @@ func validateInput(in TransactionInput) error {
 		in.HappenedAt = time.Now()
 	}
 	return nil
+}
+
+// normalizeForeign 外币字段：币种为 3–8 位字母（转大写），金额 >0；仅收支可用，转账或未填币种时清空
+func normalizeForeign(txType, currency string, amount int64) (string, int64, error) {
+	cur := strings.ToUpper(strings.TrimSpace(currency))
+	if cur == "" || txType == "transfer" {
+		return "", 0, nil
+	}
+	if len(cur) < 3 || len(cur) > 8 {
+		return "", 0, errors.New("外币币种无效")
+	}
+	for _, r := range cur {
+		if r < 'A' || r > 'Z' {
+			return "", 0, errors.New("外币币种无效")
+		}
+	}
+	if cur == "CNY" {
+		return "", 0, errors.New("外币币种不能是人民币")
+	}
+	if amount <= 0 {
+		return "", 0, errors.New("请填写外币金额")
+	}
+	return cur, amount, nil
 }
 
 func normalizeInstallmentPeriods(n int) int {

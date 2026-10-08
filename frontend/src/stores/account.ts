@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import http from '../api/http'
+import type { Transaction } from './transaction'
 
 export interface CreditInstallmentPlan {
   id?: number
@@ -78,6 +79,47 @@ export interface CreditRepayReminder {
   fromAccountName?: string
 }
 
+export type CreditTxStatus = 'paid' | 'billed_unpaid' | 'unbilled'
+
+export interface AccountLedgerItem extends Transaction {
+  direction: 'in' | 'out'
+  creditStatus?: CreditTxStatus
+  paidAmount: number
+  billedUnpaidAmount: number
+  unbilledAmount: number
+  statementDate?: string
+  billedPeriods?: number
+}
+
+export interface AccountLedgerMonth {
+  month: string
+  inAmount: number
+  outAmount: number
+  paid: number
+  billedUnpaid: number
+  unbilled: number
+  items: AccountLedgerItem[]
+}
+
+export interface AccountLedger {
+  accountId: number
+  accountName: string
+  accountType: string
+  balance: number
+  creditTracking: boolean
+  summary: {
+    paid: number
+    billedUnpaid: number
+    unbilled: number
+    openingDebt: number
+    openingDebtUnpaid: number
+    lastStatementDate?: string
+    nextStatementDate?: string
+  }
+  months: AccountLedgerMonth[]
+  note?: string
+}
+
 export function creditUsedFen(a: Account): number {
   return a.balance < 0 ? -a.balance : 0
 }
@@ -142,11 +184,16 @@ export const useAccountStore = defineStore('account', () => {
     return (data || []) as CreditRepayReminder[]
   }
 
-  /** 临时拉取明文敏感字段；调用方用完应丢弃，勿写入 list */
-  async function fetchSensitive(id: number) {
-    const { data } = await http.get(`/accounts/${id}/sensitive`)
+  async function ledger(id: number) {
+    const { data } = await http.get(`/accounts/${id}/ledger`)
+    return data as AccountLedger
+  }
+
+  /** 临时拉取明文敏感字段（需登录密码）；调用方用完应丢弃，勿写入 list */
+  async function fetchSensitive(id: number, password: string) {
+    const { data } = await http.post(`/accounts/${id}/sensitive`, { password })
     return data as { cardNo: string; holderName: string }
   }
 
-  return { list, load, create, update, remove, creditStatement, creditRepayReminders, fetchSensitive }
+  return { list, load, create, update, remove, creditStatement, creditRepayReminders, ledger, fetchSensitive }
 })

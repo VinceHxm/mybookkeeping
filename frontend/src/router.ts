@@ -16,6 +16,7 @@ const router = createRouter({
     { path: '/mine', name: 'mine', component: () => import('./views/Mine.vue') },
     { path: '/accounts', name: 'accounts', component: () => import('./views/Accounts.vue') },
     { path: '/accounts/new', name: 'account-create', component: () => import('./views/AccountEdit.vue'), meta: { hideNav: true } },
+    { path: '/accounts/:id/ledger', name: 'account-ledger', component: () => import('./views/AccountLedger.vue') },
     { path: '/accounts/:id/edit', name: 'account-edit', component: () => import('./views/AccountEdit.vue'), meta: { hideNav: true } },
     { path: '/categories', name: 'categories', component: () => import('./views/Categories.vue') },
     { path: '/categories/new', name: 'category-create', component: () => import('./views/CategoryEdit.vue'), meta: { hideNav: true } },

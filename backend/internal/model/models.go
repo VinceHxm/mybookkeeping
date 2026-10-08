@@ -128,7 +128,12 @@ type Transaction struct {
 	FareRuleID         *uint64   `gorm:"index" json:"fareRuleId"`
 	InstallmentPeriods int       `gorm:"not null;default:1" json:"installmentPeriods"` // 1=不分期；>1 等额展示分期
 	InterestFen        int64     `gorm:"not null;default:0" json:"interestFen"`         // 利息/手续费（分），仅展示拆分
-	HappenedAt         time.Time `gorm:"index;not null" json:"happenedAt"`
+	// AmountPending 金额待确认（周期生成的预估金额，等账单出来后按实际金额确认）
+	AmountPending bool `gorm:"not null;default:false;index" json:"amountPending"`
+	// ForeignCurrency / ForeignAmount 外币支付记录（ISO 币种 + 外币金额×100），仅展示，支付汇率 = Amount / ForeignAmount
+	ForeignCurrency string    `gorm:"size:8;not null;default:''" json:"foreignCurrency"`
+	ForeignAmount   int64     `gorm:"not null;default:0" json:"foreignAmount"`
+	HappenedAt      time.Time `gorm:"index;not null" json:"happenedAt"`
 	CreatedAt          time.Time `json:"createdAt"`
 	UpdatedAt          time.Time `json:"updatedAt"`
 
@@ -277,7 +282,13 @@ type Schedule struct {
 	Remark      string     `gorm:"size:512" json:"remark"`
 	TagIDsJSON  string     `gorm:"size:512" json:"-"`
 	Frequency   string     `gorm:"size:32;not null" json:"frequency"`
-	IntervalN   int        `gorm:"not null;default:1" json:"intervalN"` // every_n_days 的 N；weekly 可表示每 N 周
+	IntervalN   int        `gorm:"not null;default:1" json:"intervalN"` // 每 N 天/周/月/年；every_n_days 为固定天数
+	// AnchorDay 每月/每年的执行日（1–31），小月按月末执行；0 表示取 NextRunAt 当天
+	AnchorDay   int        `gorm:"not null;default:0" json:"anchorDay"`
+	// AmountPending 生成的流水标记为金额待确认（Amount 作预估）
+	AmountPending   bool   `gorm:"not null;default:false" json:"amountPending"`
+	ForeignCurrency string `gorm:"size:8;not null;default:''" json:"foreignCurrency"`
+	ForeignAmount   int64  `gorm:"not null;default:0" json:"foreignAmount"`
 	Enabled     bool       `gorm:"not null;default:true" json:"enabled"`
 	NextRunAt   time.Time  `gorm:"index;not null" json:"nextRunAt"`
 	EndAt       *time.Time `json:"endAt"`

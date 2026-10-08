@@ -46,7 +46,7 @@
           class="field"
           inputmode="numeric"
           autocomplete="off"
-          :append-inner-icon="accountId && originalCardMasked ? (secretsRevealed ? 'mdi-eye-off-outline' : 'mdi-eye-outline') : undefined"
+          :append-inner-icon="accountId && originalCardMasked ? (secretsRevealed ? 'mdi-eye-off-outline' : 'mdi-eye-lock-outline') : undefined"
           @click:append-inner="toggleFormReveal"
           @focus="onSecretFocus('cardNo')"
           @blur="onSecretBlur('cardNo')"
@@ -57,7 +57,7 @@
           variant="outlined"
           hide-details
           class="field field--last"
-          :append-inner-icon="accountId && originalHolderMasked ? (secretsRevealed ? 'mdi-eye-off-outline' : 'mdi-eye-outline') : undefined"
+          :append-inner-icon="accountId && originalHolderMasked ? (secretsRevealed ? 'mdi-eye-off-outline' : 'mdi-eye-lock-outline') : undefined"
           @click:append-inner="toggleFormReveal"
           @focus="onSecretFocus('holderName')"
           @blur="onSecretBlur('holderName')"
@@ -381,6 +381,7 @@ import {
 import { useAuthStore } from '../stores/auth'
 import { fenToYuan, yuanToFen } from '../utils/money'
 import { looksMaskedSecret, secretFieldForSave } from '../utils/mask'
+import { confirmWithPassword } from '../composables/usePasswordConfirm'
 
 const props = defineProps<{
   accountId?: number | null
@@ -684,14 +685,17 @@ async function toggleFormReveal() {
     return
   }
   if (revealLoading.value) return
+  const id = props.accountId
   revealLoading.value = true
   try {
-    const data = await accounts.fetchSensitive(props.accountId)
+    const data = await confirmWithPassword(
+      { title: '验证身份', message: '查看完整卡号与户名前，请输入登录密码。' },
+      (pwd) => accounts.fetchSensitive(id, pwd),
+    )
+    if (!data) return
     form.cardNo = data.cardNo || ''
     form.holderName = data.holderName || ''
     secretsRevealed.value = true
-  } catch (e: any) {
-    alert(e?.message || '获取敏感信息失败')
   } finally {
     revealLoading.value = false
   }

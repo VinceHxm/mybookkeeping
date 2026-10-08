@@ -7,7 +7,7 @@
 
 ## 1. 产品定位
 
-- **个人向精简记账**：快记优先，功能够用即可，不做企业账、多币种、复杂报表。
+- **个人向精简记账**：快记优先，功能够用即可，不做企业账、多币种账户、复杂报表。外币消费只作记录（见 §3.4），不接汇率接口。
 - **相对原版**：砍掉过重能力，保留账户 / 二级分类 / 标签 / 转账 / 模板 / 周期记账 / 附件 / 高德选点 / AI 辅助。
 - **一句话**：首页一眼看到本月收支，一键进入「记一笔」，其余管理都在二级页。
 
@@ -168,6 +168,16 @@
 
 API：`/fare-rules` CRUD；`POST /fare-rules/:id/preview`（可传 `baseFen` / `rideCount`）；`GET /holidays/:year`；`POST /holidays/:year/refresh`（仅 admin）；`POST /templates/:id/preview-fare`。
 
+### 3.4 外币支付与金额待确认
+
+场景：信用卡订阅境外会员，人民币扣款按**卡组织入账日汇率**结算，记账当时拿不到准确金额。
+
+- **外币支付（可选开关）**：仅收支可用。记 `foreignCurrency`（ISO 代码，如 USD）+ `foreignAmount`（外币×100）。`amount` 始终是**实际人民币**，余额与统计只认它。支付汇率 = `amount / foreignAmount`，**不入库、不查接口**，仅展示（列表「USD 20.00 · 7.2350」）。
+- **金额待确认（周期可选开关）**：周期规则 `amountPending=true` 时，生成的流水按规则金额（预估）入账并带 `amountPending=true`；外币字段一并带入。预估金额照常影响余额与统计，确认后按实际金额重算。
+- **确认方式**：编辑该流水，把金额改成账单金额后保存即清除待确认；勾选「账单还没出，保持待确认」可只改其它字段。
+- **提醒**：首页「记一笔」上方与还款提醒并列一枚待确认标记（1 笔直达编辑，多笔进 `/transactions?pending=1`）；明细/最近流水显示「待确认」芯片。
+- API：`GET /transactions?pending=1` 只看待确认；流水与周期的读写均带 `amountPending` / `foreignCurrency` / `foreignAmount`（流水 PUT 为整体覆盖，前端须回传）。
+
 ---
 
 ## 4. UI 设计规范
@@ -242,6 +252,9 @@ myBookkeeping/
 
 `cmd/server` → `handler` → `service` → `model` + `database`；附件走 `storage/minio`；配置读 `backend/.env`。
 
+- **handler 按资源分文件**（同一 `handler` 包）：`account.go` / `transaction.go` / `schedule.go` / `auth.go` / `admin.go` …；`api.go` 只放 `API` 结构体、构造、健康检查与 `parseTimePtr` 等公共辅助。新增接口放进对应资源文件，不再往 `api.go` 堆。
+- **请求体复用**：创建与更新字段相同时，抽成 `xxxBody` + `toInput()`（参考 `txBody`、`scheduleBody`），避免加字段时漏改一处。json 标签只出现在 handler 层，service 的 `XxxInput` 不带标签。
+
 ### 5.2 前端约定
 
 - 视图：`src/views/*`；可复用组件：`src/components/*`。
@@ -276,6 +289,7 @@ Prompt 须带上用户当前的账户 / 分类 / 标签名单；信用卡还款�
 
 | 日期 | 说明 |
 |------|------|
+| 2026-10-08 | 外币支付记录（外币金额 + 实际人民币，展示支付汇率，不接汇率接口）；周期记账可选「金额待确认」，首页提醒、编辑保存即确认 |
 | 2026-09-24 | 默认账户迁至账户管理：区分默认还款 / 默认消费；卡片徽章可切换；设置页移除 |
 | 2026-09-24 | 首页：放大记一笔；中间加快捷模板一键入账；最近流水贴底；记一笔页模板 Chip 仍保留可编辑 |
 | 2026-09-23 | 澄清信用建账口径：已出账≠花呗已累计；分期首期改为「下次出账起/已含在已出账」；结清后格子改称剩余已用 |

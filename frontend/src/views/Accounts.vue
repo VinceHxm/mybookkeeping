@@ -50,12 +50,12 @@
             v-if="a.cardNo || a.holderName"
             type="button"
             class="reveal-btn no-card-nav"
-            :aria-label="revealCache[a.id] ? '隐藏完整信息' : '显示完整信息'"
+            :aria-label="revealCache[a.id] ? '隐藏完整信息' : '输入密码查看完整信息'"
             :disabled="revealLoading[a.id]"
             @click.stop="toggleReveal(a)"
             @pointerdown.stop
           >
-            <v-icon size="16">{{ revealCache[a.id] ? 'mdi-eye-off-outline' : 'mdi-eye-outline' }}</v-icon>
+            <v-icon size="16">{{ revealCache[a.id] ? 'mdi-eye-off-outline' : 'mdi-eye-lock-outline' }}</v-icon>
           </button>
         </div>
 
@@ -114,17 +114,33 @@
           <div v-else-if="a.billingDay && stmtError[a.id]" class="stmt-err">
             {{ stmtError[a.id] }}
           </div>
-          <router-link
-            v-if="!a.archived"
-            class="repay-link no-card-nav"
-            :to="repayLink(a)"
-            @click.stop
-            @pointerdown.stop
-          >去还款</router-link>
         </template>
         <template v-else>
           <div class="bal-line">余额 ¥{{ fenToYuan(a.balance) }}</div>
         </template>
+        <div class="card-actions">
+          <router-link
+            class="act act-ledger no-card-nav"
+            :to="`/accounts/${a.id}/ledger`"
+            @click.stop
+            @pointerdown.stop
+          >
+            <v-icon size="17">mdi-receipt-text-outline</v-icon>
+            <span>流水明细</span>
+          </router-link>
+          <router-link
+            v-if="repayAction(a)"
+            class="act act-repay no-card-nav"
+            :class="repayAction(a)!.urgent ? 'is-due' : 'is-quiet'"
+            :to="repayLink(a)"
+            @click.stop
+            @pointerdown.stop
+          >
+            <v-icon size="17">{{ repayAction(a)!.urgent ? 'mdi-cash-fast' : 'mdi-credit-card-check-outline' }}</v-icon>
+            <span>{{ repayAction(a)!.label }}</span>
+            <strong v-if="repayAction(a)!.amount" class="act-amt">¥{{ fenToYuan(repayAction(a)!.amount) }}</strong>
+          </router-link>
+        </div>
 
         <div v-if="a.storageNote || (a.attachments && a.attachments.length)" class="storage-block">
           <div v-if="a.storageNote" class="storage-note">
@@ -214,6 +230,7 @@ import { fenToYuan } from '../utils/money'
 import { accountTypeIcon } from '../utils/icons'
 import { displayCardNo, displayHolderName } from '../utils/mask'
 import { useBreakpoint } from '../composables/useBreakpoint'
+import { confirmWithPassword } from '../composables/usePasswordConfirm'
 
 const accounts = useAccountStore()
 const auth = useAuthStore()
@@ -264,13 +281,15 @@ async function loadReveal(id: number) {
   if (revealLoading[id]) return
   revealLoading[id] = true
   try {
-    const data = await accounts.fetchSensitive(id)
+    const data = await confirmWithPassword(
+      { title: '验证身份', message: '查看完整卡号与户名前，请输入登录密码。' },
+      (pwd) => accounts.fetchSensitive(id, pwd),
+    )
+    if (!data) return
     revealCache[id] = {
       cardNo: data.cardNo || '',
       holderName: data.holderName || '',
     }
-  } catch (e: any) {
-    alert(e?.message || '获取敏感信息失败')
   } finally {
     revealLoading[id] = false
   }
@@ -325,6 +344,15 @@ function repayLink(a: Account) {
   }
   // 本期已还清：不预填已出账/应还，避免把下期未出账当成本期还款额
   return { path: '/transactions/new', query: q }
+}
+
+/** 本期有待还时按钮突出并带金额；已结清但仍有欠款时降为「提前还款」；无欠款不显示 */
+function repayAction(a: Account): { label: string; amount: number; urgent: boolean } | null {
+  if (a.type !== 'credit' || a.archived) return null
+  const left = statements.value[a.id]?.periodRemaining ?? 0
+  if (left > 0) return { label: '还本期', amount: left, urgent: true }
+  if (creditUsedFen(a) > 0) return { label: '提前还款', amount: 0, urgent: false }
+  return null
 }
 
 function displayBilledFen(a: Account): number {
@@ -482,13 +510,65 @@ async function doDelete() {
   display: block;
 }
 
-.repay-link {
-  display: inline-block;
-  margin-top: 6px;
+/* 票根式撕线：信息区与操作区分开；负边距抵消 EntityCard 头像(44+12)与箭头(18+12)的占位，横跨整张卡 */
+.card-actions {
+  display: flex;
+  gap: 8px;
+  margin: 12px -30px 0 -56px;
+  padding-top: 10px;
+  border-top: 1px dashed color-mix(in srgb, var(--muted) 45%, transparent);
+}
+.act {
+  flex: 1 1 0;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 10px;
   font-size: 0.8rem;
-  color: var(--primary);
-  text-decoration: none;
   font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.15s ease, transform 0.1s ease;
+}
+.act:active { transform: scale(0.97); }
+.act:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.act-ledger {
+  color: rgb(var(--v-theme-on-surface));
+  border: 1px solid var(--surface-border);
+  background: transparent;
+}
+.act-ledger:hover { background: color-mix(in srgb, var(--primary) 6%, transparent); }
+.act-ledger .v-icon { color: var(--muted); }
+.act-repay { flex-grow: 1.5; }
+.act-repay.is-due {
+  color: #fff;
+  background: var(--primary);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary) 30%, transparent);
+}
+.act-repay.is-due:hover { background: color-mix(in srgb, var(--primary) 88%, #000); }
+.act-repay.is-quiet {
+  color: var(--primary);
+  background: var(--primary-soft, rgba(27, 127, 90, 0.1));
+}
+.act-amt {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+@media (max-width: 360px) {
+  .act { gap: 4px; padding: 0 8px; }
+  .act-repay .v-icon { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .act { transition: none; }
+  .act:active { transform: none; }
 }
 .page-tip {
   margin: 0 0 12px;

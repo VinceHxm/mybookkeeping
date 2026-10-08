@@ -27,7 +27,11 @@
         >{{ s.enabled ? '启用中 · 点按停用' : '已停用 · 点按启用' }}</v-chip>
       </template>
       <template #meta>
-        <div>{{ freqLabel(s.frequency, s.intervalN) }} · ¥{{ fenToYuan(s.amount) }}</div>
+        <div>
+          {{ freqLabel(s.frequency, s.intervalN) }} · {{ s.amountPending ? '预估 ' : '' }}¥{{ fenToYuan(s.amount) }}
+          <template v-if="s.foreignCurrency"> · {{ formatForeign(s.foreignCurrency, s.foreignAmount) }}</template>
+          <template v-if="s.amountPending"> · 金额待确认</template>
+        </div>
         <div>下次执行 {{ formatNext(s.nextRunAt) }}</div>
       </template>
     </EntityCard>
@@ -71,7 +75,7 @@ import http from '../api/http'
 import EntityCard from '../components/EntityCard.vue'
 import DeleteConfirmDialog from '../components/DeleteConfirmDialog.vue'
 import ScheduleEditForm from '../components/ScheduleEditForm.vue'
-import { fenToYuan } from '../utils/money'
+import { fenToYuan, formatForeign } from '../utils/money'
 import { txTypeIcon } from '../utils/icons'
 import { useBreakpoint } from '../composables/useBreakpoint'
 
@@ -86,7 +90,10 @@ const pendingDelete = ref<any>(null)
 const deleting = ref(false)
 
 function freqLabel(f: string, n: number) {
-  const m: Record<string, string> = { daily: '每天', weekly: '每周', monthly: '每月', yearly: '每年', every_n_days: `每 ${n} 天` }
+  if (f === 'every_n_days') return `固定每 ${n} 天`
+  const unit: Record<string, string> = { daily: '天', weekly: '周', monthly: '个月', yearly: '年' }
+  if (n > 1 && unit[f]) return `每 ${n} ${unit[f]}`
+  const m: Record<string, string> = { daily: '每天', weekly: '每周', monthly: '每月', yearly: '每年' }
   return m[f] || f
 }
 function formatNext(s: string) {

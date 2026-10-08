@@ -27,6 +27,7 @@ const (
 
 var (
 	ErrInvalidCredentials = errors.New("用户名或密码错误")
+	ErrWrongPassword      = errors.New("密码错误")
 	ErrUserExists         = errors.New("用户名已存在")
 	ErrWeakPassword       = fmt.Errorf("密码至少 %d 位", MinPasswordLen)
 	ErrBadResetToken      = errors.New("重置令牌无效或已过期")
@@ -302,6 +303,22 @@ func (s *AuthService) ChangePassword(ctx context.Context, userID uint64, oldPwd,
 		return err
 	}
 	_ = s.RevokeOtherSessions(ctx, userID, currentToken)
+	return nil
+}
+
+// VerifyPassword 已登录用户二次确认密码；失败计入登录限流，防止借此暴力试密码。
+func (s *AuthService) VerifyPassword(ctx context.Context, userID uint64, password, ip string) error {
+	var u model.User
+	if err := s.db.Select("id", "username", "password_hash").First(&u, userID).Error; err != nil {
+		return err
+	}
+	if err := s.checkLoginLimit(ctx, ip, u.Username); err != nil {
+		return err
+	}
+	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)) != nil {
+		s.recordLoginFailure(ctx, ip, u.Username)
+		return ErrWrongPassword
+	}
 	return nil
 }
 

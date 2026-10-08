@@ -83,7 +83,13 @@
     </div>
     </div>
 
-    <div v-if="!groups.length" class="empty-tip">暂无流水</div>
+    <div v-if="pendingOnly" class="pending-filter">
+      <v-icon size="16">mdi-timer-sand</v-icon>
+      <span class="f">仅看金额待确认（{{ tx.total }} 笔）：点开按账单实际金额修改保存即确认</span>
+      <v-btn size="small" variant="text" color="primary" @click="pendingOnly = false">看全部</v-btn>
+    </div>
+
+    <div v-if="!groups.length" class="empty-tip">{{ pendingOnly ? '没有待确认的流水' : '暂无流水' }}</div>
     <div v-for="g in groups" :key="g.day" class="group">
       <div class="day">{{ g.day }}</div>
       <v-list bg-color="transparent" class="py-0">
@@ -94,17 +100,25 @@
           rounded="lg"
           class="tx-row surface-row"
         >
-          <v-list-item-title>{{ item.category?.name || typeLabel(item.type) }}</v-list-item-title>
+          <v-list-item-title>
+            {{ txTitle(item) }}
+            <v-chip v-if="item.amountPending" size="x-small" color="warning" variant="tonal" class="ml-1">待确认</v-chip>
+          </v-list-item-title>
           <v-list-item-subtitle>
+            <template v-if="txSubCategory(item)">{{ txSubCategory(item) }} · </template>
             {{ item.account?.name }}
             <template v-if="item.type === 'transfer'"> → {{ item.toAccount?.name }}</template>
-            <span v-if="item.remark"> · {{ item.remark }}</span>
             <span v-if="item.tags?.length"> · {{ item.tags.map((t) => t.name).join(',') }}</span>
           </v-list-item-subtitle>
           <template #append>
-            <span :class="item.type === 'income' ? 'amount-income' : 'amount-expense'">
-              {{ formatMoney(item.amount, item.type) }}
-            </span>
+            <div class="amt-col">
+              <span :class="item.type === 'income' ? 'amount-income' : 'amount-expense'">
+                {{ formatMoney(item.amount, item.type) }}
+              </span>
+              <span v-if="item.foreignCurrency" class="fx-line">
+                {{ formatForeign(item.foreignCurrency, item.foreignAmount) }} · {{ payRate(item.amount, item.foreignAmount) }}
+              </span>
+            </div>
           </template>
         </v-list-item>
       </v-list>
@@ -118,19 +132,23 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import dayjs from 'dayjs'
 import { useAccountStore } from '../stores/account'
 import { useCategoryStore } from '../stores/category'
 import { useTagStore } from '../stores/tag'
 import { useTransactionStore, type Transaction } from '../stores/transaction'
-import { formatMoney, typeLabel } from '../utils/money'
+import { formatForeign, formatMoney, payRate, txSubCategory, txTitle } from '../utils/money'
 import NativeDateField from '../components/NativeDateField.vue'
 
 const accounts = useAccountStore()
 const categories = useCategoryStore()
 const tags = useTagStore()
 const tx = useTransactionStore()
+const route = useRoute()
+const router = useRouter()
 
+const pendingOnly = ref(route.query.pending === '1')
 const accountId = ref(0)
 const categoryId = ref(0)
 const tagId = ref(0)
@@ -176,6 +194,7 @@ function buildParams(offset = 0) {
   if (categoryId.value) params.categoryId = categoryId.value
   if (tagId.value) params.tagId = tagId.value
   if (type.value) params.type = type.value
+  if (pendingOnly.value) params.pending = 1
   if (keyword.value) params.keyword = keyword.value
   if (from.value) params.from = from.value
   if (to.value) {
@@ -208,7 +227,10 @@ onMounted(async () => {
   await reload()
 })
 
-watch([accountId, type, categoryId, tagId, from, to], reload)
+watch([accountId, type, categoryId, tagId, from, to, pendingOnly], reload)
+watch(pendingOnly, (v) => {
+  if (!v && route.query.pending) router.replace({ query: { ...route.query, pending: undefined } })
+})
 </script>
 
 <style scoped>
@@ -221,6 +243,20 @@ watch([accountId, type, categoryId, tagId, from, to], reload)
 .tx-row { margin-bottom: 6px; min-height: 52px !important; }
 .tx-row :deep(.v-list-item-subtitle) { font-size: 0.76rem; }
 .more { text-align: center; padding: 16px 0 32px; }
+.amt-col { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.fx-line { font-size: 0.7rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pending-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 8px;
+  padding: 6px 4px 6px 10px;
+  border-radius: 10px;
+  font-size: 0.78rem;
+  color: #8a5a10;
+  background: color-mix(in srgb, #d99a2b 14%, transparent);
+}
+[data-theme='dark'] .pending-filter { color: #f0c36a; }
 
 /* 宽屏始终展开，窄屏默认折叠 */
 @media (min-width: 600px) {

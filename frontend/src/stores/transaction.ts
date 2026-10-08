@@ -27,6 +27,9 @@ export interface Transaction {
   fareRuleId?: number | null
   installmentPeriods?: number
   interestFen?: number
+  amountPending?: boolean
+  foreignCurrency?: string
+  foreignAmount?: number
   happenedAt: string
   account?: { id: number; name: string }
   toAccount?: { id: number; name: string }
@@ -52,6 +55,9 @@ export interface TxPayload {
   fareRuleId?: number | null
   installmentPeriods?: number
   interestFen?: number
+  amountPending?: boolean
+  foreignCurrency?: string
+  foreignAmount?: number
   happenedAt?: string
   attachmentIds?: number[]
   tagIds?: number[]

@@ -123,7 +123,8 @@ func main() {
 		auth.DELETE("/accounts/:id", api.DeleteAccount)
 		auth.GET("/accounts/credit-repay-reminders", api.CreditRepayReminders)
 		auth.GET("/accounts/:id/credit-statement", api.CreditStatement)
-		auth.GET("/accounts/:id/sensitive", api.AccountSensitive)
+		auth.POST("/accounts/:id/sensitive", api.AccountSensitive)
+		auth.GET("/accounts/:id/ledger", api.AccountLedger)
 
 		auth.GET("/categories", api.ListCategories)
 		auth.POST("/categories", api.CreateCategory)
