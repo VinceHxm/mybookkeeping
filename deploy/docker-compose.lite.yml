@@ -1,0 +1,29 @@
+# 单容器一体化部署：SQLite + 会话存数据库 + 附件存本地，无需 MySQL / Redis / MinIO。
+# 全部数据在 ./data（mybookkeeping.db、attachments/），备份复制该目录即可（建议先停容器）。
+#
+# 使用前：
+#   cp .env.example .env    # 可只保留 APP_SECRET、AMAP_*、DEEPSEEK_* 等需要的项
+#   mkdir -p data && sudo chown 1000:1000 data   # 容器以 uid 1000 运行，需能写入
+#   docker compose -f docker-compose.lite.yml up -d --build
+#
+# 首个管理员：docker exec -it mybookkeeping /app/init-user -username=admin -password=你的密码
+# 访问：http://主机IP:9002
+
+services:
+  mybookkeeping:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: mybookkeeping:latest
+    container_name: mybookkeeping
+    restart: unless-stopped
+    ports:
+      - "9002:8080"
+    environment:
+      CONFIG_FILE: /app/.env
+      SERVER_ADDR: ":8080"
+      DB_DRIVER: sqlite
+      DATA_DIR: /app/data
+    volumes:
+      - ./.env:/app/.env:ro
+      - ./data:/app/data

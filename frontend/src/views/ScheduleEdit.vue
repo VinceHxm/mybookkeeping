@@ -2,11 +2,11 @@
   <div class="page edit-page">
     <div class="toolbar">
       <v-btn icon="mdi-arrow-left" variant="text" @click="goBack" />
-      <h1>{{ scheduleId ? '编辑周期' : '新建周期' }}</h1>
-      <v-btn color="primary" variant="text" :loading="formRef?.saving" @click="onSave">保存</v-btn>
+      <h1>{{ scheduleId ? t('schedules.titleEdit') : t('schedules.titleNew') }}</h1>
+      <v-btn color="primary" variant="text" :loading="formRef?.saving" @click="onSave">{{ t('common.save') }}</v-btn>
     </div>
 
-    <div v-if="loading" class="loading-tip">加载中…</div>
+    <div v-if="loading" class="loading-tip">{{ t('common.loading') }}</div>
     <ScheduleEditForm
       v-else
       ref="formRef"
@@ -18,7 +18,7 @@
 
     <DeleteConfirmDialog
       v-model="confirmOpen"
-      :name="initial?.name || '此周期'"
+      :name="initial?.name || t('schedules.thisSchedule')"
       :loading="deleting"
       @confirm="doDelete"
     />
@@ -28,10 +28,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import http from '../api/http'
 import ScheduleEditForm from '../components/ScheduleEditForm.vue'
 import DeleteConfirmDialog from '../components/DeleteConfirmDialog.vue'
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 

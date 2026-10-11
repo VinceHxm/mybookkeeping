@@ -1,17 +1,17 @@
 <template>
   <v-dialog v-model="open" max-width="420" scrollable>
     <v-card>
-      <v-card-title>{{ editTx ? '编辑市值校准' : '校准市值' }}</v-card-title>
+      <v-card-title>{{ editTx ? t('revalue.editTitle') : t('revalue.title') }}</v-card-title>
       <v-card-text>
         <div v-if="account" class="orig">
           <div class="orig-title">{{ account.name }}</div>
-          <div class="orig-sub">账上余额 ¥{{ fenToYuan(account.balance) }}</div>
+          <div class="orig-sub">{{ t('revalue.bookBalance', { amount: fenToYuan(account.balance) }) }}</div>
         </div>
 
         <template v-if="!editTx">
           <v-text-field
             v-model="marketYuan"
-            label="当前市值（元）"
+            :label="t('revalue.marketValue')"
             type="number"
             inputmode="decimal"
             prefix="¥"
@@ -21,14 +21,14 @@
             autofocus
           />
           <p class="delta" :class="deltaFen >= 0 ? 'amount-income' : 'amount-expense'">
-            <template v-if="deltaFen === 0">与账上一致，只记录校准时间</template>
-            <template v-else>本次{{ deltaFen > 0 ? '浮盈' : '浮亏' }} {{ formatMoney(deltaFen, 'revalue') }}</template>
+            <template v-if="deltaFen === 0">{{ t('revalue.same') }}</template>
+            <template v-else>{{ t(deltaFen > 0 ? 'revalue.gain' : 'revalue.loss', { amount: formatMoney(deltaFen, 'revalue') }) }}</template>
           </p>
         </template>
         <v-text-field
           v-else
           v-model="deltaYuan"
-          label="校准差额（元，浮亏填负数）"
+          :label="t('revalue.delta')"
           type="number"
           inputmode="decimal"
           prefix="¥"
@@ -39,23 +39,23 @@
 
         <NativeDateField
           v-model="happenedLocal"
-          label="校准时间"
+          :label="t('revalue.time')"
           type="datetime-local"
           variant="outlined"
           hide-details
           class="field"
         />
-        <v-text-field v-model="remark" label="备注（可选）" variant="outlined" hide-details class="field" />
+        <v-text-field v-model="remark" :label="t('revalue.remark')" variant="outlined" hide-details class="field" />
         <p class="hint">
-          照着支付宝 / 券商 App 的持仓市值填。差额记为一笔「市值校准」，只改这个账户的余额，不计入收支统计。
+          {{ t('revalue.hint') }}
         </p>
         <v-alert v-if="error" type="error" density="compact" class="mt-2">{{ error }}</v-alert>
       </v-card-text>
       <v-card-actions>
-        <v-btn v-if="editTx" color="error" variant="text" :loading="deleting" @click="remove">删除</v-btn>
+        <v-btn v-if="editTx" color="error" variant="text" :loading="deleting" @click="remove">{{ t('revalue.delete') }}</v-btn>
         <v-spacer />
-        <v-btn variant="text" @click="open = false">取消</v-btn>
-        <v-btn color="primary" :loading="saving" @click="submit">保存</v-btn>
+        <v-btn variant="text" @click="open = false">{{ t('common.cancel') }}</v-btn>
+        <v-btn color="primary" :loading="saving" @click="submit">{{ t('common.save') }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -63,6 +63,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import { useAccountStore } from '../stores/account'
 import { useTransactionStore, type Transaction } from '../stores/transaction'
@@ -76,6 +77,7 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ saved: [] }>()
 
+const { t } = useI18n()
 const open = defineModel<boolean>({ required: true })
 const accounts = useAccountStore()
 const tx = useTransactionStore()
@@ -93,11 +95,11 @@ const deltaFen = computed(() => yuanToFen(marketYuan.value || '0') - (props.acco
 watch(open, (v) => {
   if (!v) return
   error.value = ''
-  const t = props.editTx
-  if (t) {
-    deltaYuan.value = fenToYuan(t.amount)
-    happenedLocal.value = dayjs(t.happenedAt).format('YYYY-MM-DDTHH:mm')
-    remark.value = t.remark || ''
+  const cur = props.editTx
+  if (cur) {
+    deltaYuan.value = fenToYuan(cur.amount)
+    happenedLocal.value = dayjs(cur.happenedAt).format('YYYY-MM-DDTHH:mm')
+    remark.value = cur.remark || ''
   } else {
     marketYuan.value = props.account ? fenToYuan(props.account.balance) : ''
     happenedLocal.value = dayjs().format('YYYY-MM-DDTHH:mm')
@@ -111,19 +113,19 @@ async function submit() {
   saving.value = true
   error.value = ''
   try {
-    const t = props.editTx
-    if (t) {
+    const cur = props.editTx
+    if (cur) {
       const amount = yuanToFen(deltaYuan.value || '0')
-      if (amount === 0) throw new Error('差额不能为 0，不需要这笔校准可直接删除')
-      await tx.update(t.id, {
+      if (amount === 0) throw new Error(t('revalue.deltaZero'))
+      await tx.update(cur.id, {
         type: 'revalue',
         amount,
-        accountId: t.accountId,
+        accountId: cur.accountId,
         remark: remark.value.trim(),
         happenedAt,
       })
     } else {
-      if (marketYuan.value === '' || yuanToFen(marketYuan.value) < 0) throw new Error('请填写当前市值')
+      if (marketYuan.value === '' || yuanToFen(marketYuan.value) < 0) throw new Error(t('revalue.needMarketValue'))
       await accounts.revalue(props.account.id, {
         marketValue: yuanToFen(marketYuan.value),
         happenedAt,
@@ -133,23 +135,23 @@ async function submit() {
     open.value = false
     emit('saved')
   } catch (e: any) {
-    error.value = e?.message || '保存失败'
+    error.value = e?.message || t('revalue.saveFailed')
   } finally {
     saving.value = false
   }
 }
 
 async function remove() {
-  const t = props.editTx
-  if (!t) return
+  const cur = props.editTx
+  if (!cur) return
   deleting.value = true
   error.value = ''
   try {
-    await tx.remove(t.id)
+    await tx.remove(cur.id)
     open.value = false
     emit('saved')
   } catch (e: any) {
-    error.value = e?.message || '删除失败'
+    error.value = e?.message || t('revalue.deleteFailed')
   } finally {
     deleting.value = false
   }

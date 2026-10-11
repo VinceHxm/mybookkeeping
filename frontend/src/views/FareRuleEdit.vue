@@ -2,11 +2,11 @@
   <div class="page edit-page">
     <div class="toolbar">
       <v-btn icon="mdi-arrow-left" variant="text" @click="goBack" />
-      <h1>{{ editing ? '编辑规则' : '新建规则' }}</h1>
-      <v-btn color="primary" variant="text" @click="onSave">保存</v-btn>
+      <h1>{{ editing ? t('fareEdit.titleEdit') : t('fareEdit.titleNew') }}</h1>
+      <v-btn color="primary" variant="text" @click="onSave">{{ t('common.save') }}</v-btn>
     </div>
 
-    <div v-if="pageLoading" class="loading-tip">加载中…</div>
+    <div v-if="pageLoading" class="loading-tip">{{ t('common.loading') }}</div>
     <div v-else class="edit-body hide-scrollbar form-sections">
 
           <v-alert
@@ -21,15 +21,15 @@
             {{ saveError }}
           </v-alert>
 
-          <p class="guide-line">只需打开你用得到的优惠；关掉的模块保存时不会写入。</p>
+          <p class="guide-line">{{ t('fareEdit.guide') }}</p>
 
           <!-- 场景起步 -->
           <section v-if="!editing" class="form-section">
             <header class="form-section__head">
-              <h3 class="form-section__title">快速起步（可选）</h3>
+              <h3 class="form-section__title">{{ t('fareEdit.quickStart') }}</h3>
             </header>
             <div class="form-section__body">
-              <p class="form-section__tip form-section__tip--alone">点一下填入示例，再按实际改数字即可。</p>
+              <p class="form-section__tip form-section__tip--alone">{{ t('fareEdit.quickStartTip') }}</p>
               <div class="scenario-grid">
                 <button
                   v-for="p in presets"
@@ -48,16 +48,16 @@
           <!-- 基础：始终可见 -->
           <section class="form-section form-section--soft">
             <header class="form-section__head">
-              <h3 class="form-section__title">基础</h3>
+              <h3 class="form-section__title">{{ t('fareEdit.basic') }}</h3>
             </header>
             <div class="form-section__body">
-              <IconPicker v-model="form.icon" title="规则图标" fallback="mdi-ticket-percent" />
-              <v-text-field v-model="form.name" label="名称" variant="outlined" hide-details class="field" />
-              <v-switch v-model="form.enabled" label="启用此规则" color="primary" hide-details class="field" />
+              <IconPicker v-model="form.icon" :title="t('fareEdit.iconTitle')" fallback="mdi-ticket-percent" />
+              <v-text-field v-model="form.name" :label="t('fareEdit.name')" variant="outlined" hide-details class="field" />
+              <v-switch v-model="form.enabled" :label="t('fareEdit.enabled')" color="primary" hide-details class="field" />
 
               <v-text-field
                 v-model="form.baseYuan"
-                label="默认原价（元，可空）"
+                :label="t('fareEdit.baseYuan')"
                 type="number"
                 inputmode="decimal"
                 variant="outlined"
@@ -66,7 +66,7 @@
               />
               <v-text-field
                 v-model="form.cardZhe"
-                label="刷卡折扣（折）"
+                :label="t('fareEdit.cardZhe')"
                 type="number"
                 inputmode="decimal"
                 variant="outlined"
@@ -76,7 +76,7 @@
               <v-select
                 v-model="form.cycleType"
                 :items="cycleItems"
-                label="累计周期"
+                :label="t('fareEdit.cycle')"
                 variant="outlined"
                 hide-details
                 :class="form.cycleType === 'from_day' ? 'field' : 'field field--last'"
@@ -84,7 +84,7 @@
               <v-text-field
                 v-if="form.cycleType === 'from_day'"
                 v-model.number="form.cycleStartDay"
-                label="周期起始日（1–28）"
+                :label="t('fareEdit.cycleStartDay')"
                 type="number"
                 min="1"
                 max="28"
@@ -93,7 +93,7 @@
                 class="field field--last"
               />
               <p class="form-section__tip">
-                默认原价可空（记一笔再填）。刷卡折扣：10=不打折，9=九折。累计周期决定金额/次数阶梯清零节奏，一般用自然月。
+                {{ t('fareEdit.basicTip') }}
               </p>
             </div>
           </section>
@@ -101,10 +101,10 @@
           <!-- 模块开关 -->
           <section class="form-section">
             <header class="form-section__head">
-              <h3 class="form-section__title">优惠模块</h3>
+              <h3 class="form-section__title">{{ t('fareEdit.modules') }}</h3>
             </header>
             <div class="form-section__body">
-            <p class="form-section__tip form-section__tip--alone">打开后出现配置区；例：周末免费 →「免费日」，花满一定金额再打折 →「金额阶梯」。</p>
+            <p class="form-section__tip form-section__tip--alone">{{ t('fareEdit.modulesTip') }}</p>
 
             <div
               v-for="m in moduleDefs"
@@ -129,27 +129,27 @@
               <!-- 免费日 -->
               <div v-if="m.key === 'freeDays' && mod.freeDays" class="mod-body">
                 <div class="block-head inner">
-                  <span class="inner-label">免费日配置</span>
-                  <v-btn size="small" variant="tonal" color="primary" prepend-icon="mdi-plus" @click="addFree">添加</v-btn>
+                  <span class="inner-label">{{ t('fareEdit.free.config') }}</span>
+                  <v-btn size="small" variant="tonal" color="primary" prepend-icon="mdi-plus" @click="addFree">{{ t('fareEdit.add') }}</v-btn>
                 </div>
-                <p v-if="!form.freePeriods.length" class="form-section__tip form-section__tip--alone">可点添加；默认示例常为「每周六日」。</p>
+                <p v-if="!form.freePeriods.length" class="form-section__tip form-section__tip--alone">{{ t('fareEdit.free.emptyTip') }}</p>
                 <div v-for="(p, i) in form.freePeriods" :key="'f'+i" class="item-card">
                   <div class="item-card-head">
-                    <span>规则 {{ i + 1 }}</span>
+                    <span>{{ t('fareEdit.free.item', { n: i + 1 }) }}</span>
                     <v-btn icon="mdi-delete-outline" size="small" variant="text" color="error" @click="form.freePeriods.splice(i, 1)" />
                   </div>
-                  <v-select v-model="p.recur" :items="recurItems" label="循环方式" variant="outlined" hide-details class="mb-3" />
+                  <v-select v-model="p.recur" :items="recurItems" :label="t('fareEdit.free.recur')" variant="outlined" hide-details class="mb-3" />
                   <template v-if="p.recur !== 'weekly'">
                     <div class="pair">
-                      <NativeDateField v-model="p.startDate" label="开始日期" variant="outlined" hide-details />
-                      <NativeDateField v-model="p.endDate" label="结束日期" variant="outlined" hide-details />
+                      <NativeDateField v-model="p.startDate" :label="t('fareEdit.free.startDate')" variant="outlined" hide-details />
+                      <NativeDateField v-model="p.endDate" :label="t('fareEdit.free.endDate')" variant="outlined" hide-details />
                     </div>
                   </template>
                   <template v-else>
                     <v-select
                       v-model="p.weekdays"
                       :items="weekdayItems"
-                      label="星期"
+                      :label="t('fareEdit.free.weekdays')"
                       multiple
                       chips
                       closable-chips
@@ -158,8 +158,8 @@
                       class="mb-3"
                     />
                     <div class="pair">
-                      <NativeDateField v-model="p.startDate" label="有效起（可空）" variant="outlined" hide-details />
-                      <NativeDateField v-model="p.endDate" label="有效止（可空）" variant="outlined" hide-details />
+                      <NativeDateField v-model="p.startDate" :label="t('fareEdit.free.validFrom')" variant="outlined" hide-details />
+                      <NativeDateField v-model="p.endDate" :label="t('fareEdit.free.validTo')" variant="outlined" hide-details />
                     </div>
                   </template>
                 </div>
@@ -169,7 +169,7 @@
               <div v-if="m.key === 'holiday' && mod.holiday" class="mod-body">
                 <v-switch
                   v-model="form.freeOnHoliday"
-                  label="法定放假日免费"
+                  :label="t('fareEdit.holiday.freeOnHoliday')"
                   color="primary"
                   hide-details
                   class="mb-2"
@@ -183,7 +183,7 @@
                     prepend-icon="mdi-eye-outline"
                     @click="loadHolidays"
                   >
-                    {{ holidayYearBlocks.length ? '刷新列表' : '查看放假安排' }}
+                    {{ holidayYearBlocks.length ? t('fareEdit.holiday.refreshList') : t('fareEdit.holiday.view') }}
                   </v-btn>
                   <v-btn
                     v-if="auth.isAdmin()"
@@ -194,25 +194,25 @@
                     prepend-icon="mdi-cloud-download-outline"
                     @click="refreshHolidays"
                   >
-                    管理员刷新入库
+                    {{ t('fareEdit.holiday.adminRefresh') }}
                   </v-btn>
                 </div>
                 <p class="form-section__tip">
-                  依赖系统已入库数据；调休上班日不免费。平时只看当年；12 月同时展示明年。
+                  {{ t('fareEdit.holiday.tip') }}
                   <template v-if="holidayMeta"> {{ holidayMeta }}</template>
                 </p>
                 <div v-if="holidayYearBlocks.length" class="holiday-legend">
-                  <span class="leg past"><i />已过</span>
-                  <span class="leg now"><i />进行中</span>
-                  <span class="leg soon"><i />未开始</span>
+                  <span class="leg past"><i />{{ t('fareEdit.holiday.past') }}</span>
+                  <span class="leg now"><i />{{ t('fareEdit.holiday.now') }}</span>
+                  <span class="leg soon"><i />{{ t('fareEdit.holiday.soon') }}</span>
                 </div>
                 <div v-if="holidayYearBlocks.length" class="holiday-years">
                   <div v-for="yb in holidayYearBlocks" :key="yb.year" class="holiday-year-block">
                     <div class="hy-head">
-                      <span class="hy-year">{{ yb.year }} 年</span>
+                      <span class="hy-year">{{ t('fareEdit.holiday.year', { year: yb.year }) }}</span>
                       <span class="hy-tag">{{ yb.tag }}</span>
                     </div>
-                    <div v-if="!yb.groups.length" class="hy-empty">暂无入库数据</div>
+                    <div v-if="!yb.groups.length" class="hy-empty">{{ t('fareEdit.holiday.empty') }}</div>
                     <div v-else class="holiday-groups">
                       <div
                         v-for="g in yb.groups"
@@ -232,24 +232,24 @@
               <!-- 日内时段 -->
               <div v-if="m.key === 'timeWin' && mod.timeWin" class="mod-body">
                 <div class="block-head inner">
-                  <span class="inner-label">时段配置</span>
-                  <v-btn size="small" variant="tonal" color="primary" prepend-icon="mdi-plus" @click="addTimeWin">添加</v-btn>
+                  <span class="inner-label">{{ t('fareEdit.time.config') }}</span>
+                  <v-btn size="small" variant="tonal" color="primary" prepend-icon="mdi-plus" @click="addTimeWin">{{ t('fareEdit.add') }}</v-btn>
                 </div>
-                <p class="form-section__tip form-section__tip--alone">例：工作日 00:00–07:00 七折。结束时刻不含；可跨午夜。</p>
+                <p class="form-section__tip form-section__tip--alone">{{ t('fareEdit.time.tip') }}</p>
                 <div v-for="(w, i) in form.timeWindows" :key="'w'+i" class="item-card">
                   <div class="item-card-head">
-                    <span>窗口 {{ i + 1 }}</span>
+                    <span>{{ t('fareEdit.time.item', { n: i + 1 }) }}</span>
                     <v-btn icon="mdi-delete-outline" size="small" variant="text" color="error" @click="form.timeWindows.splice(i, 1)" />
                   </div>
-                  <v-text-field v-model="w.name" label="名称（可空）" variant="outlined" hide-details class="mb-3" />
+                  <v-text-field v-model="w.name" :label="t('fareEdit.time.name')" variant="outlined" hide-details class="mb-3" />
                   <div class="pair mb-3">
-                    <v-text-field v-model="w.startHm" label="开始 HH:MM" placeholder="06:00" variant="outlined" hide-details />
-                    <v-text-field v-model="w.endHm" label="结束 HH:MM" placeholder="07:00" variant="outlined" hide-details />
+                    <v-text-field v-model="w.startHm" :label="t('fareEdit.time.start')" placeholder="06:00" variant="outlined" hide-details />
+                    <v-text-field v-model="w.endHm" :label="t('fareEdit.time.end')" placeholder="07:00" variant="outlined" hide-details />
                   </div>
                   <v-select
                     v-model="w.weekdays"
                     :items="weekdayItems"
-                    label="适用星期（空=每天）"
+                    :label="t('fareEdit.time.weekdays')"
                     multiple
                     chips
                     closable-chips
@@ -257,10 +257,10 @@
                     hide-details
                     class="mb-3"
                   />
-                  <v-switch v-model="w.free" label="此时段免费" color="primary" hide-details class="mb-3" />
+                  <v-switch v-model="w.free" :label="t('fareEdit.time.free')" color="primary" hide-details class="mb-3" />
                   <div v-if="!w.free" class="pair">
-                    <v-select v-model="w.base" :items="tierBaseItems" label="基准" variant="outlined" hide-details />
-                    <v-text-field v-model="w.zhe" label="折扣（折）" type="number" inputmode="decimal" variant="outlined" hide-details />
+                    <v-select v-model="w.base" :items="tierBaseItems" :label="t('fareEdit.base')" variant="outlined" hide-details />
+                    <v-text-field v-model="w.zhe" :label="t('fareEdit.zhe')" type="number" inputmode="decimal" variant="outlined" hide-details />
                   </div>
                 </div>
               </div>
@@ -268,22 +268,22 @@
               <!-- 金额阶梯 -->
               <div v-if="m.key === 'amountTier' && mod.amountTier" class="mod-body">
                 <div class="block-head inner">
-                  <span class="inner-label">金额档位</span>
-                  <v-btn size="small" variant="tonal" color="primary" prepend-icon="mdi-plus" @click="addTier">添加档位</v-btn>
+                  <span class="inner-label">{{ t('fareEdit.tier.config') }}</span>
+                  <v-btn size="small" variant="tonal" color="primary" prepend-icon="mdi-plus" @click="addTier">{{ t('fareEdit.tier.add') }}</v-btn>
                 </div>
-                <p class="form-section__tip form-section__tip--alone">累计「超过 A、不超过 B」时用该档。全价=原价×折；票卡=原价×刷卡折×折。</p>
-                <div v-for="(t, i) in form.tiers" :key="'t'+i" class="item-card">
+                <p class="form-section__tip form-section__tip--alone">{{ t('fareEdit.tier.tip') }}</p>
+                <div v-for="(tier, i) in form.tiers" :key="'t'+i" class="item-card">
                   <div class="item-card-head">
-                    <span>档位 {{ i + 1 }}</span>
+                    <span>{{ t('fareEdit.tier.item', { n: i + 1 }) }}</span>
                     <v-btn icon="mdi-delete-outline" size="small" variant="text" color="error" @click="form.tiers.splice(i, 1)" />
                   </div>
                   <div class="pair mb-3">
-                    <v-text-field v-model="t.minYuan" label="超过（元）" type="number" inputmode="decimal" variant="outlined" hide-details />
-                    <v-text-field v-model="t.maxYuan" label="至（元，空=无限）" type="number" inputmode="decimal" variant="outlined" hide-details />
+                    <v-text-field v-model="tier.minYuan" :label="t('fareEdit.tier.min')" type="number" inputmode="decimal" variant="outlined" hide-details />
+                    <v-text-field v-model="tier.maxYuan" :label="t('fareEdit.tier.max')" type="number" inputmode="decimal" variant="outlined" hide-details />
                   </div>
                   <div class="pair">
-                    <v-select v-model="t.base" :items="tierBaseItems" label="基准" variant="outlined" hide-details />
-                    <v-text-field v-model="t.zhe" label="折扣（折）" type="number" inputmode="decimal" variant="outlined" hide-details />
+                    <v-select v-model="tier.base" :items="tierBaseItems" :label="t('fareEdit.base')" variant="outlined" hide-details />
+                    <v-text-field v-model="tier.zhe" :label="t('fareEdit.zhe')" type="number" inputmode="decimal" variant="outlined" hide-details />
                   </div>
                 </div>
               </div>
@@ -291,26 +291,26 @@
               <!-- 乘次阶梯 -->
               <div v-if="m.key === 'countTier' && mod.countTier" class="mod-body">
                 <div class="block-head inner">
-                  <span class="inner-label">乘次档位</span>
-                  <v-btn size="small" variant="tonal" color="primary" prepend-icon="mdi-plus" @click="addCountTier">添加</v-btn>
+                  <span class="inner-label">{{ t('fareEdit.count.config') }}</span>
+                  <v-btn size="small" variant="tonal" color="primary" prepend-icon="mdi-plus" @click="addCountTier">{{ t('fareEdit.add') }}</v-btn>
                 </div>
-                <p class="form-section__tip form-section__tip--alone">本趟序号 = 本周期已乘次数 + 1。第 40 次免费：超过 39、至 40、勾选免费。</p>
-                <div v-for="(t, i) in form.countTiers" :key="'c'+i" class="item-card">
+                <p class="form-section__tip form-section__tip--alone">{{ t('fareEdit.count.tip') }}</p>
+                <div v-for="(ct, i) in form.countTiers" :key="'c'+i" class="item-card">
                   <div class="item-card-head">
-                    <span>次数档 {{ i + 1 }}</span>
+                    <span>{{ t('fareEdit.count.item', { n: i + 1 }) }}</span>
                     <v-btn icon="mdi-delete-outline" size="small" variant="text" color="error" @click="form.countTiers.splice(i, 1)" />
                   </div>
                   <div class="pair mb-3">
-                    <v-text-field v-model.number="t.minCount" label="超过次数" type="number" variant="outlined" hide-details />
-                    <v-text-field v-model.number="t.maxCount" label="至（0=无限）" type="number" variant="outlined" hide-details />
+                    <v-text-field v-model.number="ct.minCount" :label="t('fareEdit.count.min')" type="number" variant="outlined" hide-details />
+                    <v-text-field v-model.number="ct.maxCount" :label="t('fareEdit.count.max')" type="number" variant="outlined" hide-details />
                   </div>
-                  <v-switch v-model="t.free" label="本档免费" color="primary" hide-details class="mb-3" />
-                  <template v-if="!t.free">
+                  <v-switch v-model="ct.free" :label="t('fareEdit.count.free')" color="primary" hide-details class="mb-3" />
+                  <template v-if="!ct.free">
                     <div class="pair mb-3">
-                      <v-select v-model="t.base" :items="tierBaseItems" label="基准" variant="outlined" hide-details />
-                      <v-text-field v-model="t.zhe" label="折扣（折）" type="number" inputmode="decimal" variant="outlined" hide-details />
+                      <v-select v-model="ct.base" :items="tierBaseItems" :label="t('fareEdit.base')" variant="outlined" hide-details />
+                      <v-text-field v-model="ct.zhe" :label="t('fareEdit.zhe')" type="number" inputmode="decimal" variant="outlined" hide-details />
                     </div>
-                    <v-text-field v-model="t.offYuan" label="本档立减（元，可空）" type="number" inputmode="decimal" variant="outlined" hide-details />
+                    <v-text-field v-model="ct.offYuan" :label="t('fareEdit.count.off')" type="number" inputmode="decimal" variant="outlined" hide-details />
                   </template>
                 </div>
               </div>
@@ -322,22 +322,22 @@
           <section class="form-section">
             <div class="form-section__body">
               <button type="button" class="more-toggle" @click="mod.more = !mod.more">
-                <span>{{ mod.more ? '收起' : '展开' }}更多选项</span>
-                <span class="more-sub">地市 · 立减 · 叠加策略 · 生效期 · 备注</span>
+                <span>{{ mod.more ? t('fareEdit.more.collapse') : t('fareEdit.more.expand') }}</span>
+                <span class="more-sub">{{ t('fareEdit.more.sub') }}</span>
                 <v-icon size="18">{{ mod.more ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
               </button>
               <div v-if="mod.more" class="more-body">
                 <v-text-field
                   v-model="form.city"
-                  label="限定地市（可空）"
-                  placeholder="不限"
+                  :label="t('fareEdit.more.city')"
+                  :placeholder="t('fareEdit.more.cityPlaceholder')"
                   variant="outlined"
                   hide-details
                   class="field"
                 />
                 <v-text-field
                   v-model="form.amountOffYuan"
-                  label="每次立减（元，可空）"
+                  :label="t('fareEdit.more.amountOff')"
                   type="number"
                   inputmode="decimal"
                   variant="outlined"
@@ -347,18 +347,18 @@
                 <v-select
                   v-model="form.stackMode"
                   :items="stackItems"
-                  label="多优惠同时命中时"
+                  :label="t('fareEdit.more.stack')"
                   variant="outlined"
                   hide-details
                   class="field"
                 />
                 <div class="pair field">
-                  <NativeDateField v-model="form.validFrom" label="生效起（可空）" variant="outlined" hide-details />
-                  <NativeDateField v-model="form.validTo" label="生效止（可空）" variant="outlined" hide-details />
+                  <NativeDateField v-model="form.validFrom" :label="t('fareEdit.more.validFrom')" variant="outlined" hide-details />
+                  <NativeDateField v-model="form.validTo" :label="t('fareEdit.more.validTo')" variant="outlined" hide-details />
                 </div>
-                <v-textarea v-model="form.note" label="备注" rows="2" auto-grow variant="outlined" hide-details class="field field--last" />
+                <v-textarea v-model="form.note" :label="t('fareEdit.more.note')" rows="2" auto-grow variant="outlined" hide-details class="field field--last" />
                 <p class="form-section__tip">
-                  有地市时模板仅在匹配城市自动选用；立减在计价后固定减去。多优惠一般用「优先」，要取更便宜时用「就低」。
+                  {{ t('fareEdit.more.tip') }}
                 </p>
               </div>
             </div>
@@ -367,13 +367,13 @@
           <!-- 预览 / 补录 -->
           <section v-if="editing" class="form-section">
             <header class="form-section__head">
-              <h3 class="form-section__title">试算与补录</h3>
+              <h3 class="form-section__title">{{ t('fareEdit.trial.title') }}</h3>
             </header>
             <div class="form-section__body">
               <div class="form-section__group">
                 <v-text-field
                   v-model="cycleSeedYuan"
-                  label="本周期补录累计金额（元）"
+                  :label="t('fareEdit.trial.seedAmount')"
                   type="number"
                   inputmode="decimal"
                   variant="outlined"
@@ -382,18 +382,18 @@
                 />
                 <v-text-field
                   v-model.number="cycleCountSeed"
-                  label="本周期补录已乘次数"
+                  :label="t('fareEdit.trial.seedCount')"
                   type="number"
                   variant="outlined"
                   hide-details
                   class="field field--last"
                 />
-                <p class="form-section__tip">半途启用时补上周期内已有累计；换周期自动失效。</p>
+                <p class="form-section__tip">{{ t('fareEdit.trial.seedTip') }}</p>
               </div>
               <div class="form-section__group">
                 <v-text-field
                   v-model="trialBaseYuan"
-                  label="试算原价（元）"
+                  :label="t('fareEdit.trial.base')"
                   type="number"
                   inputmode="decimal"
                   variant="outlined"
@@ -409,17 +409,20 @@
                   prepend-icon="mdi-calculator-variant-outline"
                   @click="refreshPreview"
                 >
-                  预览今天建议价
+                  {{ t('fareEdit.trial.preview') }}
                 </v-btn>
                 <div v-if="preview" class="preview-body">
-                  <div class="preview-amount">约 ¥{{ fenToYuan(preview.amountFen) }}</div>
+                  <div class="preview-amount">{{ t('fareEdit.trial.amount', { amount: `¥${fenToYuan(preview.amountFen)}` }) }}</div>
                   <div class="preview-reason">{{ preview.reason }}</div>
                   <div class="preview-meta">
-                    流水 ¥{{ fenToYuan(preview.txSpentFen || 0) }}
-                    · 补录 ¥{{ fenToYuan(preview.seedFen || 0) }}
-                    · 合计 ¥{{ fenToYuan(preview.monthSpentFen) }}
-                    · 本趟第 {{ preview.thisRideNo || 1 }} 次
-                    （{{ preview.cycleStart }} ~ {{ preview.cycleEnd }}）
+                    {{ t('fareEdit.trial.meta', {
+                      tx: `¥${fenToYuan(preview.txSpentFen || 0)}`,
+                      seed: `¥${fenToYuan(preview.seedFen || 0)}`,
+                      total: `¥${fenToYuan(preview.monthSpentFen)}`,
+                      n: preview.thisRideNo || 1,
+                      start: preview.cycleStart,
+                      end: preview.cycleEnd,
+                    }) }}
                   </div>
                 </div>
               </div>
@@ -427,9 +430,9 @@
           </section>
 
           <div v-if="editing" class="danger-zone">
-            <div class="danger-title">危险操作</div>
-            <p class="danger-tip">删除后已绑定的模板会解除关联，不可恢复。</p>
-            <v-btn color="error" variant="outlined" block @click="editing && askDelete(editing)">删除此规则</v-btn>
+            <div class="danger-title">{{ t('fareEdit.danger.title') }}</div>
+            <p class="danger-tip">{{ t('fareEdit.danger.tip') }}</p>
+            <v-btn color="error" variant="outlined" block @click="editing && askDelete(editing)">{{ t('fareEdit.danger.delete') }}</v-btn>
           </div>
         
     </div>
@@ -446,17 +449,20 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import dayjs from 'dayjs'
 import http from '../api/http'
 import IconPicker from '../components/IconPicker.vue'
 import DeleteConfirmDialog from '../components/DeleteConfirmDialog.vue'
 import NativeDateField from '../components/NativeDateField.vue'
 import { fenToYuan, yuanToFen } from '../utils/money'
 import { rateToZhe, zheToRate, type FareRule } from '../utils/fare'
-import { FARE_PRESETS, type FarePreset } from '../utils/farePresets'
+import { getFarePresets, type FarePreset } from '../utils/farePresets'
 import { useAuthStore } from '../stores/auth'
 
 type ModKey = 'freeDays' | 'holiday' | 'timeWin' | 'amountTier' | 'countTier'
 
+const { t, locale } = useI18n()
 const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
@@ -472,7 +478,7 @@ const saveError = ref('')
 const confirmOpen = ref(false)
 const pendingDelete = ref<FareRule | null>(null)
 const deleting = ref(false)
-const presets = FARE_PRESETS
+const presets = computed(() => getFarePresets())
 const holidayLoading = ref(false)
 const holidayRefreshing = ref(false)
 const holidayMeta = ref('')
@@ -500,6 +506,8 @@ type HolidayGroupRow = {
   statusLabel: string
 }
 
+const HOLIDAY_STATUS_KEY = { past: 'fareEdit.holiday.past', now: 'fareEdit.holiday.now', soon: 'fareEdit.holiday.soon' } as const
+
 function groupHolidayDays(
   days: { date: string; name: string; holiday: boolean }[],
   today: string,
@@ -512,8 +520,10 @@ function groupHolidayDays(
 
   type Seg = { name: string; dates: string[] }
   const segs: Seg[] = []
+  const fallback = t('fareEdit.holiday.restFallback')
   for (const d of rest) {
-    const name = (d.name || '放假').replace(/(前|后)?补班/, '').trim() || '放假'
+    // 节假日名是接口数据（中文），只去掉「补班」后缀，不翻译
+    const name = (d.name || fallback).replace(/(前|后)?补班/, '').trim() || fallback
     const last = segs[segs.length - 1]
     if (last && last.name === name) last.dates.push(d.date)
     else segs.push({ name, dates: [d.date] })
@@ -523,14 +533,8 @@ function groupHolidayDays(
     const start = s.dates[0]
     const end = s.dates[s.dates.length - 1]
     let status: 'past' | 'now' | 'soon' = 'soon'
-    let statusLabel = '未开始'
-    if (end < today) {
-      status = 'past'
-      statusLabel = '已过'
-    } else if (start <= today && today <= end) {
-      status = 'now'
-      statusLabel = '进行中'
-    }
+    if (end < today) status = 'past'
+    else if (start <= today && today <= end) status = 'now'
     const r0 = start.slice(5)
     const r1 = end.slice(5)
     return {
@@ -538,7 +542,7 @@ function groupHolidayDays(
       range: s.dates.length === 1 ? r0 : `${r0} ~ ${r1}`,
       count: s.dates.length,
       status,
-      statusLabel,
+      statusLabel: t(HOLIDAY_STATUS_KEY[status]),
     }
   })
 }
@@ -549,9 +553,9 @@ const holidayYearBlocks = computed(() => {
   const cur = now.getFullYear()
   return holidayByYear.value.map((yb) => {
     let tag = ''
-    if (yb.year === cur) tag = '今年'
-    else if (yb.year === cur + 1) tag = '明年'
-    else if (yb.year === cur - 1) tag = '去年'
+    if (yb.year === cur) tag = t('fareEdit.holiday.thisYear')
+    else if (yb.year === cur + 1) tag = t('fareEdit.holiday.nextYear')
+    else if (yb.year === cur - 1) tag = t('fareEdit.holiday.lastYear')
     return {
       year: yb.year,
       tag,
@@ -569,36 +573,38 @@ const mod = reactive({
   more: false,
 })
 
-const moduleDefs: { key: ModKey; title: string; hint: string }[] = [
-  { key: 'freeDays', title: '免费日', hint: '例：每周六日整天免费' },
-  { key: 'holiday', title: '法定节假日', hint: '例：国庆、春节等放假日免费' },
-  { key: 'timeWin', title: '日内时段', hint: '例：工作日早 7 点前打折' },
-  { key: 'amountTier', title: '金额累计阶梯', hint: '例：本月花超 100 元后更低折' },
-  { key: 'countTier', title: '乘次累计', hint: '例：本月第 40 次免费' },
-]
+const MODULE_KEYS: ModKey[] = ['freeDays', 'holiday', 'timeWin', 'amountTier', 'countTier']
+const moduleDefs = computed(() =>
+  MODULE_KEYS.map((key) => ({
+    key,
+    title: t(`fareEdit.mod.${key}.title`),
+    hint: t(`fareEdit.mod.${key}.hint`),
+  })),
+)
 
-const cycleItems = [
-  { title: '自然月', value: 'calendar_month' },
-  { title: '指定日起算足月', value: 'from_day' },
-]
-const stackItems = [
-  { title: '优先（次数→时段→金额→票卡）', value: 'prefer' },
-  { title: '就低（取最低应付）', value: 'lowest' },
-  { title: '叠加（金额档后再乘时段折）', value: 'stack' },
-]
-const recurItems = [
-  { title: '不循环', value: 'none' },
-  { title: '每年重复', value: 'yearly' },
-  { title: '每周', value: 'weekly' },
-]
-const weekdayItems = [
-  { title: '日', value: 0 }, { title: '一', value: 1 }, { title: '二', value: 2 },
-  { title: '三', value: 3 }, { title: '四', value: 4 }, { title: '五', value: 5 }, { title: '六', value: 6 },
-]
-const tierBaseItems = [
-  { title: '全价', value: 'full' },
-  { title: '票卡价', value: 'card' },
-]
+const cycleItems = computed(() => [
+  { title: t('fareEdit.cycleItems.calendar'), value: 'calendar_month' },
+  { title: t('fareEdit.cycleItems.fromDay'), value: 'from_day' },
+])
+const stackItems = computed(() => [
+  { title: t('fareEdit.stackItems.prefer'), value: 'prefer' },
+  { title: t('fareEdit.stackItems.lowest'), value: 'lowest' },
+  { title: t('fareEdit.stackItems.stack'), value: 'stack' },
+])
+const recurItems = computed(() => [
+  { title: t('fareEdit.recurItems.none'), value: 'none' },
+  { title: t('fareEdit.recurItems.yearly'), value: 'yearly' },
+  { title: t('fareEdit.recurItems.weekly'), value: 'weekly' },
+])
+const weekdayItems = computed(() => {
+  // dayjs 的 locale 不是响应式的，读一次 locale 让切换语言时重算
+  void locale.value
+  return [0, 1, 2, 3, 4, 5, 6].map((d) => ({ title: dayjs().day(d).format('dd'), value: d }))
+})
+const tierBaseItems = computed(() => [
+  { title: t('fareEdit.baseItems.full'), value: 'full' },
+  { title: t('fareEdit.baseItems.card'), value: 'card' },
+])
 
 const form = reactive({
   name: '',
@@ -635,11 +641,6 @@ const form = reactive({
     offYuan: string
   }[],
 })
-
-function cycleLabel(r: FareRule) {
-  if (r.cycleType === 'from_day') return `每月${r.cycleStartDay}日起算`
-  return '自然月'
-}
 
 function resetModules() {
   mod.freeDays = false
@@ -697,14 +698,14 @@ function loadIntoForm(r: FareRule | null) {
   resetForm()
   if (!r) return
   fillFromRule(r)
-  form.tiers = (r.tiers || []).map((t: any) => {
-    const minFen = Number(t.minFen ?? t.thresholdFen ?? 0)
-    const maxFen = Number(t.maxFen ?? 0)
+  form.tiers = (r.tiers || []).map((tier: any) => {
+    const minFen = Number(tier.minFen ?? tier.thresholdFen ?? 0)
+    const maxFen = Number(tier.maxFen ?? 0)
     return {
       minYuan: fenToYuan(minFen),
       maxYuan: maxFen > 0 ? fenToYuan(maxFen) : '',
-      base: (t.base === 'full' ? 'full' : 'card') as 'full' | 'card',
-      zhe: rateToZhe(t.rate ?? 1),
+      base: (tier.base === 'full' ? 'full' : 'card') as 'full' | 'card',
+      zhe: rateToZhe(tier.rate ?? 1),
     }
   })
   syncModulesFromForm()
@@ -797,14 +798,14 @@ function fillFromRule(r: Partial<FareRule>) {
     }))
   }
   if (r.tiers) {
-    form.tiers = r.tiers.map((t: any) => {
-      const minFen = Number(t.minFen ?? t.thresholdFen ?? 0)
-      const maxFen = Number(t.maxFen ?? 0)
+    form.tiers = r.tiers.map((tier: any) => {
+      const minFen = Number(tier.minFen ?? tier.thresholdFen ?? 0)
+      const maxFen = Number(tier.maxFen ?? 0)
       return {
         minYuan: fenToYuan(minFen),
         maxYuan: maxFen > 0 ? fenToYuan(maxFen) : '',
-        base: (t.base === 'full' ? 'full' : 'card') as 'full' | 'card',
-        zhe: rateToZhe(t.rate ?? 1),
+        base: (tier.base === 'full' ? 'full' : 'card') as 'full' | 'card',
+        zhe: rateToZhe(tier.rate ?? 1),
       }
     })
   }
@@ -820,13 +821,13 @@ function fillFromRule(r: Partial<FareRule>) {
     }))
   }
   if (r.countTiers) {
-    form.countTiers = r.countTiers.map((t) => ({
-      minCount: t.minCount ?? 0,
-      maxCount: t.maxCount ?? 0,
-      free: !!t.free,
-      base: (t.base === 'full' ? 'full' : 'card') as 'full' | 'card',
-      zhe: rateToZhe(t.rate ?? 1),
-      offYuan: t.amountOffFen ? fenToYuan(t.amountOffFen) : '',
+    form.countTiers = r.countTiers.map((ct) => ({
+      minCount: ct.minCount ?? 0,
+      maxCount: ct.maxCount ?? 0,
+      free: !!ct.free,
+      base: (ct.base === 'full' ? 'full' : 'card') as 'full' | 'card',
+      zhe: rateToZhe(ct.rate ?? 1),
+      offYuan: ct.amountOffFen ? fenToYuan(ct.amountOffFen) : '',
     }))
   }
 }
@@ -852,7 +853,7 @@ function addTier() {
 }
 function addTimeWin() {
   form.timeWindows.push({
-    name: '早间',
+    name: t('farePresets.morning.window'),
     startHm: '00:00',
     endHm: '07:00',
     weekdays: [1, 2, 3, 4, 5],
@@ -889,16 +890,16 @@ async function loadHolidays() {
     holidayByYear.value = rows
     const hasAny = rows.some((r) => r.fromDb && (r.days || []).some((d: any) => d.holiday))
     if (!hasAny) {
-      holidayMeta.value = '本地尚无放假数据。等 12 月自动同步，或由管理员刷新入库。'
+      holidayMeta.value = t('fareEdit.holiday.metaNoData')
     } else if (years.length > 1) {
-      holidayMeta.value = `12 月交接：展示 ${years[0]} 与 ${years[1]} 年`
+      holidayMeta.value = t('fareEdit.holiday.metaTwoYears', { y1: years[0], y2: years[1] })
     } else {
-      holidayMeta.value = `仅展示 ${years[0]} 年`
+      holidayMeta.value = t('fareEdit.holiday.metaOneYear', { year: years[0] })
     }
   } catch {
     holidayByYear.value = []
     holidayMeta.value = ''
-    saveError.value = '读取节假日失败'
+    saveError.value = t('fareEdit.holiday.loadFailed')
   } finally {
     holidayLoading.value = false
   }
@@ -921,9 +922,9 @@ async function refreshHolidays() {
     )
     holidayByYear.value = rows
     const n = holidayYearBlocks.value.reduce((s, y) => s + y.groups.length, 0)
-    holidayMeta.value = `已刷新 ${years.join('、')} 年 · ${n} 个节日段`
+    holidayMeta.value = t('fareEdit.holiday.refreshed', { years: years.join(t('fareEdit.holiday.yearSep')), n })
   } catch (e: any) {
-    saveError.value = e?.response?.data?.error || e?.message || '刷新失败'
+    saveError.value = e?.response?.data?.error || e?.message || t('fareEdit.holiday.refreshFailed')
   } finally {
     holidayRefreshing.value = false
   }
@@ -960,11 +961,11 @@ function buildPayload() {
         }))
       : [],
     tiers: mod.amountTier
-      ? form.tiers.map((t) => ({
-          minFen: t.minYuan !== '' && t.minYuan != null ? yuanToFen(t.minYuan) : 0,
-          maxFen: t.maxYuan !== '' && t.maxYuan != null ? yuanToFen(t.maxYuan) : 0,
-          base: t.base || 'card',
-          rate: zheToRate(t.zhe),
+      ? form.tiers.map((tier) => ({
+          minFen: tier.minYuan !== '' && tier.minYuan != null ? yuanToFen(tier.minYuan) : 0,
+          maxFen: tier.maxYuan !== '' && tier.maxYuan != null ? yuanToFen(tier.maxYuan) : 0,
+          base: tier.base || 'card',
+          rate: zheToRate(tier.zhe),
         }))
       : [],
     timeWindows: mod.timeWin
@@ -979,31 +980,31 @@ function buildPayload() {
         }))
       : [],
     countTiers: mod.countTier
-      ? form.countTiers.map((t) => ({
-          minCount: Number(t.minCount) || 0,
-          maxCount: Number(t.maxCount) || 0,
-          free: t.free,
-          base: t.base || 'card',
-          rate: zheToRate(t.zhe),
-          amountOffFen: t.offYuan ? yuanToFen(t.offYuan) : 0,
+      ? form.countTiers.map((ct) => ({
+          minCount: Number(ct.minCount) || 0,
+          maxCount: Number(ct.maxCount) || 0,
+          free: ct.free,
+          base: ct.base || 'card',
+          rate: zheToRate(ct.zhe),
+          amountOffFen: ct.offYuan ? yuanToFen(ct.offYuan) : 0,
         }))
       : [],
   }
 }
 
 function validateForm(): string {
-  if (!form.name.trim()) return '请填写规则名称'
+  if (!form.name.trim()) return t('fareEdit.validate.name')
   if (mod.amountTier) {
     for (let i = 0; i < form.tiers.length; i++) {
-      const t = form.tiers[i]
-      if (t.minYuan === '' || t.minYuan == null) return `金额档 ${i + 1}：请填写「超过（元）」`
-      if (t.zhe === '' || t.zhe == null) return `金额档 ${i + 1}：请填写折扣`
+      const tier = form.tiers[i]
+      if (tier.minYuan === '' || tier.minYuan == null) return t('fareEdit.validate.tierMin', { n: i + 1 })
+      if (tier.zhe === '' || tier.zhe == null) return t('fareEdit.validate.tierZhe', { n: i + 1 })
     }
   }
   if (mod.timeWin) {
     for (let i = 0; i < form.timeWindows.length; i++) {
       const w = form.timeWindows[i]
-      if (!w.startHm || !w.endHm) return `时段 ${i + 1}：请填写起止时间`
+      if (!w.startHm || !w.endHm) return t('fareEdit.validate.timeRange', { n: i + 1 })
     }
   }
   return ''

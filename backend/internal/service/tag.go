@@ -6,6 +6,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"mybookkeeping/internal/i18n"
 	"mybookkeeping/internal/model"
 )
 
@@ -86,11 +87,14 @@ var defaultTagPresets = []struct {
 	{"可抵税", "#00897b"},
 }
 
-// EnsureDefaults 无标签时写入常用预设；已有标签则按名称补齐缺失项
-func (s *TagService) EnsureDefaults(userID uint64) error {
+// EnsureDefaults 无标签时按 locale 写入常用预设；中文预设的老用户按名称补齐缺失项（规则同分类）
+func (s *TagService) EnsureDefaults(userID uint64, locale string) error {
 	var existing []model.Tag
 	if err := s.db.Where("user_id = ?", userID).Find(&existing).Error; err != nil {
 		return err
+	}
+	if len(existing) > 0 && locale != i18n.ZhCN {
+		return nil
 	}
 	have := map[string]struct{}{}
 	for _, t := range existing {
@@ -103,7 +107,7 @@ func (s *TagService) EnsureDefaults(userID uint64) error {
 			continue
 		}
 		toCreate = append(toCreate, model.Tag{
-			UserID: userID, Name: p.Name, Color: p.Color, Sort: sortBase + i + 1,
+			UserID: userID, Name: i18n.Preset(locale, p.Name), Color: p.Color, Sort: sortBase + i + 1,
 		})
 	}
 	if len(toCreate) == 0 {

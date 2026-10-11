@@ -1,6 +1,8 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import http from '../api/http'
+import { setLocale } from '../i18n'
+import { useCategoryStore } from './category'
 
 const TOKEN_KEY = 'mbk_token'
 
@@ -18,12 +20,18 @@ export interface UserProfile {
   expenseColor?: string
   incomeColor?: string
   theme?: string
+  /** 界面语言；老账号为空时按浏览器 / 本地缓存 */
+  locale?: string
 }
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(localStorage.getItem(TOKEN_KEY))
   const username = ref('')
   const profile = ref<UserProfile | null>(null)
+
+  watch(profile, (p) => {
+    if (p?.locale) setLocale(p.locale)
+  })
 
   function isAdmin() {
     return profile.value?.role === 'admin'
@@ -82,6 +90,7 @@ export const useAuthStore = defineStore('auth', () => {
     const { data } = await http.put('/me/settings', payload)
     profile.value = data
     username.value = data.username
+    if ('locale' in payload) useCategoryStore().reloadIfLoaded().catch(() => {})
     return data as UserProfile
   }
 

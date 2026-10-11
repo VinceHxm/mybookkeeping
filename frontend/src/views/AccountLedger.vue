@@ -2,41 +2,41 @@
   <div class="page">
     <div class="toolbar">
       <v-btn icon="mdi-arrow-left" variant="text" to="/accounts" />
-      <h1>{{ ledger?.accountName || '账户明细' }}</h1>
+      <h1>{{ ledger?.accountName || t('ledger.title') }}</h1>
       <span class="toolbar-gap" />
     </div>
 
-    <div v-if="loading" class="empty-tip">加载中…</div>
+    <div v-if="loading" class="empty-tip">{{ t('common.loading') }}</div>
     <div v-else-if="error" class="empty-tip err">{{ error }}</div>
     <div v-else-if="ledger" class="ledger-layout">
       <aside class="ledger-side">
       <div class="bal-card">
-        <span>{{ isCredit ? '已用额度' : isInvest ? '当前市值' : '当前余额' }}</span>
+        <span>{{ isCredit ? t('ledger.usedCredit') : isInvest ? t('ledger.marketValue') : t('ledger.balance') }}</span>
         <strong>¥{{ fenToYuan(isCredit ? Math.max(0, -ledger.balance) : ledger.balance) }}</strong>
       </div>
 
       <template v-if="ledger.invest">
         <div class="status-tiles">
           <div class="tile static">
-            <span>净投入</span>
+            <span>{{ t('ledger.netInvested') }}</span>
             <strong>¥{{ fenToYuan(ledger.invest.netInvested) }}</strong>
           </div>
           <div class="tile static">
-            <span>累计收益</span>
+            <span>{{ t('ledger.gain') }}</span>
             <strong :class="ledger.invest.gain >= 0 ? 'amount-income' : 'amount-expense'">
               {{ formatMoney(ledger.invest.gain, 'revalue') }}
             </strong>
           </div>
           <div class="tile static">
-            <span>收益率</span>
+            <span>{{ t('ledger.returnRate') }}</span>
             <strong :class="ledger.invest.gain >= 0 ? 'amount-income' : 'amount-expense'">{{ returnRate }}</strong>
           </div>
         </div>
         <p class="ledger-tip">
-          净投入 = 建账余额 + 转入 − 转出；累计收益 = 当前市值 − 净投入（含市值校准、分红、手续费）。收益率为简单收益率，不考虑持有时长。
+          {{ t('ledger.investTip') }}
         </p>
         <v-btn block variant="tonal" color="primary" prepend-icon="mdi-chart-line" class="mb-1" @click="openRevalue(null)">
-          校准市值
+          {{ t('ledger.revalue') }}
         </v-btn>
       </template>
 
@@ -55,38 +55,38 @@
           </button>
         </div>
         <p class="ledger-tip">
-          已出账至 {{ ledger.summary.lastStatementDate }}，下次出账 {{ ledger.summary.nextStatementDate }}。
+          {{ t('ledger.billedUntil', { last: ledger.summary.lastStatementDate, next: ledger.summary.nextStatementDate }) }}
           <template v-if="ledger.summary.openingDebt > 0">
-            建账/校准带入欠款 ¥{{ fenToYuan(ledger.summary.openingDebt) }}（无对应流水）<template v-if="ledger.summary.openingDebtUnpaid > 0">，其中未还 ¥{{ fenToYuan(ledger.summary.openingDebtUnpaid) }}</template>。
+            {{ t('ledger.openingDebt', { amount: fenToYuan(ledger.summary.openingDebt) }) }}<template v-if="ledger.summary.openingDebtUnpaid > 0">{{ t('ledger.openingDebtUnpaid', { amount: fenToYuan(ledger.summary.openingDebtUnpaid) }) }}</template>{{ t('ledger.sentenceEnd') }}
           </template>
-          {{ ledger.note }}
-          <template v-if="statusFilter">点击上方同一格可取消筛选。</template>
+          {{ ledgerNote }}
+          <template v-if="statusFilter">{{ t('ledger.clearFilter') }}</template>
         </p>
       </template>
-      <p v-else-if="ledger.note" class="ledger-tip">{{ ledger.note }}</p>
+      <p v-else-if="ledgerNote" class="ledger-tip">{{ ledgerNote }}</p>
       </aside>
 
       <div class="ledger-main">
-      <div v-if="!months.length" class="empty-tip">暂无流水</div>
+      <div v-if="!months.length" class="empty-tip">{{ t('ledger.empty') }}</div>
       <section v-for="m in months" :key="m.month" class="month">
         <button type="button" class="month-head" @click="toggleMonth(m.month)">
           <div class="month-title">
             <v-icon size="18">{{ isOpen(m.month) ? 'mdi-chevron-down' : 'mdi-chevron-right' }}</v-icon>
             <span>{{ monthLabel(m.month) }}</span>
-            <span class="month-count">{{ m.items.length }} 笔</span>
+            <span class="month-count">{{ t('ledger.count', { n: m.items.length }) }}</span>
           </div>
           <div class="month-sum">
-            <span class="amount-expense">{{ isCredit ? '消费' : '流出' }} ¥{{ fenToYuan(m.outAmount) }}</span>
-            <span class="amount-income">{{ isCredit ? '还款/退款' : '流入' }} ¥{{ fenToYuan(m.inAmount) }}</span>
+            <span class="amount-expense">{{ isCredit ? t('ledger.spent') : t('ledger.outflow') }} ¥{{ fenToYuan(m.outAmount) }}</span>
+            <span class="amount-income">{{ isCredit ? t('ledger.repayRefund') : t('ledger.inflow') }} ¥{{ fenToYuan(m.inAmount) }}</span>
             <span v-if="m.revalued" :class="m.revalued > 0 ? 'amount-income' : 'amount-expense'">
-              市值变动 {{ formatMoney(m.revalued, 'revalue') }}
+              {{ t('ledger.revalued') }} {{ formatMoney(m.revalued, 'revalue') }}
             </span>
           </div>
         </button>
         <div v-if="ledger.creditTracking && isOpen(m.month) && !statusFilter" class="month-status">
-          <span v-if="m.billedUnpaid" class="st billed_unpaid">未还 ¥{{ fenToYuan(m.billedUnpaid) }}</span>
-          <span v-if="m.paid" class="st paid">已还 ¥{{ fenToYuan(m.paid) }}</span>
-          <span v-if="m.unbilled" class="st unbilled">未出账 ¥{{ fenToYuan(m.unbilled) }}</span>
+          <span v-if="m.billedUnpaid" class="st billed_unpaid">{{ t('ledger.unpaid', { amount: fenToYuan(m.billedUnpaid) }) }}</span>
+          <span v-if="m.paid" class="st paid">{{ t('ledger.paid', { amount: fenToYuan(m.paid) }) }}</span>
+          <span v-if="m.unbilled" class="st unbilled">{{ t('ledger.unbilled', { amount: fenToYuan(m.unbilled) }) }}</span>
         </div>
 
         <v-list v-if="isOpen(m.month)" bg-color="transparent" class="py-0">
@@ -100,27 +100,29 @@
           >
             <v-list-item-title class="tx-title">
               <span class="tx-name">{{ txTitle(item) }}</span>
-              <span v-if="item.creditStatus" class="st" :class="item.creditStatus">{{ statusLabel[item.creditStatus] }}</span>
-              <span v-else-if="isCredit && item.direction === 'in'" class="st repay">{{ item.type === 'income' ? '退款' : '还款' }}</span>
-              <span v-else-if="item.type === 'revalue'" class="st unbilled">市值校准</span>
+              <span v-if="item.creditStatus" class="st" :class="item.creditStatus">{{ t(`ledger.status.${item.creditStatus}`) }}</span>
+              <span v-else-if="isCredit && item.direction === 'in'" class="st repay">{{ item.type === 'income' ? t('ledger.refund') : t('ledger.repay') }}</span>
+              <span v-else-if="item.type === 'revalue'" class="st unbilled">{{ t('txType.revalue') }}</span>
             </v-list-item-title>
             <v-list-item-subtitle>
               {{ dayjs(item.happenedAt).format('MM-DD HH:mm') }}
               <template v-if="txSubCategory(item)"> · {{ txSubCategory(item) }}</template>
               <template v-if="item.type === 'transfer'">
-                · {{ item.direction === 'out' ? `转至 ${item.toAccount?.name || ''}` : `来自 ${item.account?.name || ''}` }}
+                · {{ item.direction === 'out'
+                  ? t('ledger.transferTo', { name: item.toAccount?.name || '' })
+                  : t('ledger.transferFrom', { name: item.account?.name || '' }) }}
               </template>
             </v-list-item-subtitle>
             <div v-if="item.creditStatus" class="credit-detail">
               <template v-if="(item.installmentPeriods || 1) > 1">
-                分期 {{ item.billedPeriods || 0 }}/{{ item.installmentPeriods }} 期已出账 ·
+                {{ t('ledger.installmentProgress', { billed: item.billedPeriods || 0, total: item.installmentPeriods }) }}
               </template>
-              <template v-else-if="item.creditStatus === 'unbilled'">将于 {{ item.statementDate }} 出账</template>
-              <template v-else>{{ item.statementDate }} 出账</template>
+              <template v-else-if="item.creditStatus === 'unbilled'">{{ t('ledger.willBill', { date: item.statementDate }) }}</template>
+              <template v-else>{{ t('ledger.billedOn', { date: item.statementDate }) }}</template>
               <template v-if="isSplit(item)">
-                <span v-if="item.paidAmount"> · 已还 ¥{{ fenToYuan(item.paidAmount) }}</span>
-                <span v-if="item.billedUnpaidAmount" class="warn"> · 未还 ¥{{ fenToYuan(item.billedUnpaidAmount) }}</span>
-                <span v-if="item.unbilledAmount"> · 未出账 ¥{{ fenToYuan(item.unbilledAmount) }}</span>
+                <span v-if="item.paidAmount"> · {{ t('ledger.paid', { amount: fenToYuan(item.paidAmount) }) }}</span>
+                <span v-if="item.billedUnpaidAmount" class="warn"> · {{ t('ledger.unpaid', { amount: fenToYuan(item.billedUnpaidAmount) }) }}</span>
+                <span v-if="item.unbilledAmount"> · {{ t('ledger.unbilled', { amount: fenToYuan(item.unbilledAmount) }) }}</span>
               </template>
             </div>
             <template #append>
@@ -146,6 +148,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import {
   useAccountStore,
@@ -158,6 +161,7 @@ import type { Transaction } from '../stores/transaction'
 import RevalueDialog from '../components/RevalueDialog.vue'
 import { fenToYuan, formatMoney, txSubCategory, txTitle } from '../utils/money'
 
+const { t } = useI18n()
 const route = useRoute()
 const accounts = useAccountStore()
 
@@ -167,14 +171,16 @@ const error = ref('')
 const statusFilter = ref<CreditTxStatus | ''>('')
 const openMonths = ref<Set<string>>(new Set())
 
-const statusLabel: Record<CreditTxStatus, string> = {
-  billed_unpaid: '已出账未还',
-  paid: '已还',
-  unbilled: '未出账',
-}
-
 const isCredit = computed(() => ledger.value?.accountType === 'credit')
 const isInvest = computed(() => ledger.value?.accountType === 'invest')
+
+/** 后端 note 为固定中文说明，信用卡按同样条件在前端出本地化文案 */
+const ledgerNote = computed(() => {
+  const l = ledger.value
+  if (!l) return ''
+  if (isCredit.value) return l.creditTracking ? t('ledger.noteFifo') : t('ledger.noteNoBillingDay')
+  return l.note || ''
+})
 const revalueOpen = ref(false)
 const revalueTx = ref<Transaction | null>(null)
 
@@ -193,9 +199,9 @@ function openRevalue(tx: Transaction | null) {
 const statusTiles = computed(() => {
   const s = ledger.value?.summary
   return [
-    { key: 'billed_unpaid' as const, label: '已出账未还', amount: s?.billedUnpaid || 0 },
-    { key: 'paid' as const, label: '已还', amount: s?.paid || 0 },
-    { key: 'unbilled' as const, label: '未出账', amount: s?.unbilled || 0 },
+    { key: 'billed_unpaid' as const, label: t('ledger.status.billed_unpaid'), amount: s?.billedUnpaid || 0 },
+    { key: 'paid' as const, label: t('ledger.status.paid'), amount: s?.paid || 0 },
+    { key: 'unbilled' as const, label: t('ledger.status.unbilled'), amount: s?.unbilled || 0 },
   ]
 })
 
@@ -225,7 +231,7 @@ function toggleFilter(key: CreditTxStatus) {
 
 function monthLabel(month: string) {
   const d = dayjs(`${month}-01`)
-  return d.year() === dayjs().year() ? `${d.month() + 1} 月` : d.format('YYYY 年 M 月')
+  return d.format(d.year() === dayjs().year() ? t('ledger.monthFmt') : t('ledger.yearMonthFmt'))
 }
 
 function isSplit(item: AccountLedgerItem) {
@@ -238,7 +244,7 @@ async function reload() {
     const first = ledger.value.months[0]?.month
     if (first && !openMonths.value.size) openMonths.value = new Set([first])
   } catch (e: any) {
-    error.value = e?.message || '加载失败'
+    error.value = e?.message || t('ledger.loadFailed')
   } finally {
     loading.value = false
   }

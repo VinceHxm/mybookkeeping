@@ -2,10 +2,10 @@
   <div class="page">
     <div class="toolbar">
       <v-btn icon="mdi-arrow-left" variant="text" to="/mine" />
-      <h1>周期记账</h1>
+      <h1>{{ t('schedules.title') }}</h1>
       <v-btn icon="mdi-plus" variant="text" color="primary" @click="openCreate" />
     </div>
-    <p class="hint">后台每分钟检查到期项并自动生成流水</p>
+    <p class="hint">{{ t('schedules.hint') }}</p>
 
     <div class="card-grid">
     <EntityCard
@@ -25,23 +25,23 @@
           variant="tonal"
           @click.stop="toggle(s, !s.enabled)"
           @pointerdown.stop
-        >{{ s.enabled ? '启用中 · 点按停用' : '已停用 · 点按启用' }}</v-chip>
+        >{{ s.enabled ? t('schedules.enabledChip') : t('schedules.disabledChip') }}</v-chip>
       </template>
       <template #meta>
         <div>
-          {{ freqLabel(s.frequency, s.intervalN) }} · {{ s.amountPending ? '预估 ' : '' }}¥{{ fenToYuan(s.amount) }}
+          {{ freqLabel(s.frequency, s.intervalN) }} · {{ s.amountPending ? t('schedules.estimated', { amount: `¥${fenToYuan(s.amount)}` }) : `¥${fenToYuan(s.amount)}` }}
           <template v-if="s.foreignCurrency"> · {{ formatForeign(s.foreignCurrency, s.foreignAmount) }}</template>
-          <template v-if="s.amountPending"> · 金额待确认</template>
+          <template v-if="s.amountPending"> · {{ t('schedules.amountPending') }}</template>
         </div>
-        <div>下次执行 {{ formatNext(s.nextRunAt) }}</div>
+        <div>{{ t('schedules.nextRun', { time: formatNext(s.nextRunAt) }) }}</div>
       </template>
     </EntityCard>
     </div>
-    <div v-if="!list.length" class="empty-tip">暂无周期记账</div>
+    <div v-if="!list.length" class="empty-tip">{{ t('schedules.empty') }}</div>
 
     <v-dialog v-if="!isMobile" v-model="dialog" max-width="500" scrollable>
       <v-card>
-        <v-card-title>{{ editing ? '编辑周期' : '新建周期' }}</v-card-title>
+        <v-card-title>{{ editing ? t('schedules.titleEdit') : t('schedules.titleNew') }}</v-card-title>
         <v-card-text>
           <ScheduleEditForm
             v-if="dialog"
@@ -54,8 +54,8 @@
         </v-card-text>
         <v-card-actions>
           <v-spacer />
-          <v-btn variant="text" @click="dialog = false">取消</v-btn>
-          <v-btn color="primary" :loading="dialogFormRef?.saving" @click="onDialogSave">保存</v-btn>
+          <v-btn variant="text" @click="dialog = false">{{ t('common.cancel') }}</v-btn>
+          <v-btn color="primary" :loading="dialogFormRef?.saving" @click="onDialogSave">{{ t('common.save') }}</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -72,6 +72,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import http from '../api/http'
 import EntityCard from '../components/EntityCard.vue'
@@ -81,6 +82,7 @@ import { fenToYuan, formatForeign } from '../utils/money'
 import { txTypeIcon } from '../utils/icons'
 import { useBreakpoint } from '../composables/useBreakpoint'
 
+const { t } = useI18n()
 const router = useRouter()
 const { isMobile } = useBreakpoint()
 const list = ref<any[]>([])
@@ -91,12 +93,13 @@ const confirmOpen = ref(false)
 const pendingDelete = ref<any>(null)
 const deleting = ref(false)
 
+const FREQS = ['daily', 'weekly', 'monthly', 'yearly']
+
 function freqLabel(f: string, n: number) {
-  if (f === 'every_n_days') return `固定每 ${n} 天`
-  const unit: Record<string, string> = { daily: '天', weekly: '周', monthly: '个月', yearly: '年' }
-  if (n > 1 && unit[f]) return `每 ${n} ${unit[f]}`
-  const m: Record<string, string> = { daily: '每天', weekly: '每周', monthly: '每月', yearly: '每年' }
-  return m[f] || f
+  if (f === 'every_n_days') return t('schedules.freq.everyNDays', { n })
+  if (!FREQS.includes(f)) return f
+  if (n > 1) return t(`schedules.freq.everyN.${f}`, { n })
+  return t(`schedules.freq.every.${f}`)
 }
 function formatNext(s: string) {
   return dayjs(s).format('YYYY-MM-DD HH:mm')

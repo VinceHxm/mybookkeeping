@@ -93,6 +93,73 @@ func TestVoucherUseAndRefundFlow(t *testing.T) {
 	}
 }
 
+func TestRefundCategoryFollowsUserLocale(t *testing.T) {
+	f := newTenantFixture(t)
+	svc := NewTransactionService(f.db)
+	if err := f.db.Model(&model.User{}).Where("id = ?", f.a).Update("locale", "en").Error; err != nil {
+		t.Fatal(err)
+	}
+	newVoucher := func() uint64 {
+		v, err := svc.Create(f.a, TransactionInput{
+			Type: "expense", Amount: 2000, AccountID: f.aAcc, CategoryID: &f.aCat, Remark: "Hotpot",
+			VoucherStatus: VoucherPending, HappenedAt: time.Now(),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v.ID
+	}
+
+	r, err := svc.RefundVoucher(f.a, newVoucher(), VoucherRefundInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Category == nil || r.Category.Name != "Refund" {
+		t.Fatalf("refund category=%+v", r.Category)
+	}
+	if r.Remark != "Voucher refund: Hotpot" {
+		t.Fatalf("refund remark=%q", r.Remark)
+	}
+	var c model.Category
+	f.db.First(&c, *r.CategoryID)
+	if c.PresetKey != refundCategoryName || c.NameZh != "退款" || c.NameEn != "Refund" || c.NameJa != "返金" || c.NameKo != "환불" {
+		t.Fatalf("preset fields=%+v", c)
+	}
+
+	// 改名后仍按 PresetKey 复用，不再新建
+	f.db.Model(&c).Update("name", "Refunds")
+	if _, err := svc.RefundVoucher(f.a, newVoucher(), VoucherRefundInput{}); err != nil {
+		t.Fatal(err)
+	}
+	if n := f.count(t, &model.Category{}, "user_id = ? AND kind = ?", f.a, "income"); n != 1 {
+		t.Fatalf("income categories=%d", n)
+	}
+}
+
+func TestRefundCategoryReusesLegacyName(t *testing.T) {
+	f := newTenantFixture(t)
+	svc := NewTransactionService(f.db)
+	legacy := model.Category{UserID: f.a, Name: refundCategoryName, Kind: "income", Icon: "mdi-cash-refund"}
+	if err := f.db.Create(&legacy).Error; err != nil {
+		t.Fatal(err)
+	}
+	f.db.Model(&model.User{}).Where("id = ?", f.a).Update("locale", "ja")
+	v, err := svc.Create(f.a, TransactionInput{
+		Type: "expense", Amount: 1000, AccountID: f.aAcc, CategoryID: &f.aCat,
+		VoucherStatus: VoucherPending, HappenedAt: time.Now(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := svc.RefundVoucher(f.a, v.ID, VoucherRefundInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.CategoryID == nil || *r.CategoryID != legacy.ID {
+		t.Fatalf("expected legacy category %d, got %+v", legacy.ID, r.CategoryID)
+	}
+}
+
 func TestNormalizeVoucher(t *testing.T) {
 	if s, e := normalizeVoucher("income", VoucherPending, "2026-01-01"); s != "" || e != "" {
 		t.Error("收入不能标记为券")

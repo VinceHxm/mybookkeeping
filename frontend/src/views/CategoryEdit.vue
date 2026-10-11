@@ -2,11 +2,11 @@
   <div class="page edit-page">
     <div class="toolbar">
       <v-btn icon="mdi-arrow-left" variant="text" @click="goBack" />
-      <h1>{{ categoryId ? '编辑分类' : '新建分类' }}</h1>
-      <v-btn color="primary" variant="text" :loading="formRef?.saving" @click="onSave">保存</v-btn>
+      <h1>{{ categoryId ? t('categories.edit') : t('categories.create') }}</h1>
+      <v-btn color="primary" variant="text" :loading="formRef?.saving" @click="onSave">{{ t('common.save') }}</v-btn>
     </div>
 
-    <div v-if="loading" class="loading-tip">加载中…</div>
+    <div v-if="loading" class="loading-tip">{{ t('common.loading') }}</div>
     <CategoryEditForm
       v-else
       ref="formRef"
@@ -20,7 +20,7 @@
 
     <DeleteConfirmDialog
       v-model="confirmOpen"
-      :name="initial?.name || '此分类'"
+      :name="initial?.name || t('categories.thisCategory')"
       :loading="deleting"
       @confirm="doDelete"
     />
@@ -30,10 +30,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import CategoryEditForm from '../components/CategoryEditForm.vue'
 import DeleteConfirmDialog from '../components/DeleteConfirmDialog.vue'
 import { useCategoryStore, type Category } from '../stores/category'
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const categories = useCategoryStore()
@@ -100,7 +102,7 @@ async function doDelete() {
     confirmOpen.value = false
     router.replace('/categories')
   } catch (e: any) {
-    alert(e.message || '删除失败')
+    alert(e.message || t('ui.deleteFailed'))
   } finally {
     deleting.value = false
   }

@@ -2,12 +2,12 @@
   <div class="sm">
     <div class="sm-controls">
       <v-btn-toggle v-model="kind" mandatory density="compact" color="primary" variant="outlined" divided rounded="lg">
-        <v-btn value="expense" size="small">支出</v-btn>
-        <v-btn value="income" size="small">收入</v-btn>
+        <v-btn value="expense" size="small">{{ t('txType.expense') }}</v-btn>
+        <v-btn value="income" size="small">{{ t('txType.income') }}</v-btn>
       </v-btn-toggle>
       <span class="sm-note">
-        已标地点 {{ data.locatedCount }} 笔 {{ yuan(data.locatedAmount) }}
-        <template v-if="data.missingCount"> · 未标地点 {{ data.missingCount }} 笔</template>
+        {{ t('stats.map.located', { n: data.locatedCount, amount: yuan(data.locatedAmount) }) }}
+        <template v-if="data.missingCount"> · {{ t('stats.map.missing', { n: data.missingCount }) }}</template>
       </span>
     </div>
 
@@ -16,7 +16,7 @@
         <div ref="mapEl" class="map" />
         <div v-if="mapError" class="map-overlay map-overlay--err">{{ mapError }}</div>
         <div v-else-if="!loading && !data.places.length" class="map-overlay">
-          该区间没有带地点的{{ kindLabel }}，记一笔时在「地点」里选位置即可出现在这里
+          {{ t(`stats.map.empty.${kind}`) }}
         </div>
         <v-btn
           v-if="data.places.length"
@@ -25,14 +25,14 @@
           variant="flat"
           prepend-icon="mdi-fit-to-screen-outline"
           @click="fitAll"
-        >全部</v-btn>
+        >{{ t('common.all') }}</v-btn>
       </div>
 
       <section class="sm-list surface-card">
         <header class="list-head">
-          <span>{{ data.places.length }} 个地点<template v-if="data.truncated">（仅显示金额最高的 500 个）</template></span>
+          <span>{{ t('stats.map.placeCount', { n: data.places.length }) }}<template v-if="data.truncated">{{ t('stats.map.truncated', { n: data.places.length }) }}</template></span>
         </header>
-        <div v-if="!data.places.length" class="list-empty">{{ loading ? '加载中…' : '暂无' }}</div>
+        <div v-if="!data.places.length" class="list-empty">{{ loading ? t('common.loading') : t('stats.map.none') }}</div>
         <div ref="listEl" class="list-body">
           <button
             v-for="(p, i) in data.places"
@@ -46,11 +46,11 @@
             <span class="rank" :class="{ 'rank--hot': i < 3 }">{{ i + 1 }}</span>
             <div class="place-main">
               <div class="place-line">
-                <span class="place-name">{{ p.name || '未命名地点' }}</span>
+                <span class="place-name">{{ p.name || t('stats.map.unnamed') }}</span>
                 <span class="place-amt" :class="kind === 'income' ? 'amount-income' : 'amount-expense'">{{ yuan(p.amount) }}</span>
               </div>
               <div class="place-sub">
-                {{ p.count }} 笔 · 最近 {{ dayjs(p.lastAt).format('M月D日') }}
+                {{ t('stats.map.placeSub', { count: t('stats.count', { n: p.count }), date: dayjs(p.lastAt).format(t('stats.fmt.monthDay')) }) }}
                 <span class="place-pct">{{ data.locatedAmount ? percent(p.amount / data.locatedAmount) : '' }}</span>
               </div>
             </div>
@@ -63,6 +63,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onActivated, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import http from '../../api/http'
 import { loadAmap } from '../../utils/amap'
@@ -87,6 +88,7 @@ interface PlaceStats {
 }
 
 const props = defineProps<{ filter: StatsFilter }>()
+const { t } = useI18n()
 const chart = useChartTheme()
 
 const kind = ref<'expense' | 'income'>('expense')
@@ -97,7 +99,7 @@ const selected = ref('')
 const mapEl = ref<HTMLElement | null>(null)
 const listEl = ref<HTMLElement | null>(null)
 
-const kindLabel = computed(() => (kind.value === 'income' ? '收入' : '支出'))
+const kindLabel = computed(() => t(`txType.${kind.value}`))
 const color = computed(() => (kind.value === 'income' ? chart.value.income : chart.value.expense))
 
 let AMap: any = null
@@ -126,7 +128,7 @@ async function initMap() {
     info = new AMap.InfoWindow({ offset: new AMap.Pixel(0, -18), closeWhenClickMap: true })
     renderMarkers()
   } catch (e: any) {
-    mapError.value = e?.message || '地图加载失败'
+    mapError.value = e?.message || t('amap.loadFailed')
   }
 }
 
@@ -167,9 +169,9 @@ function selectPlace(p: Place, move: boolean) {
   if (move && map) map.setZoomAndCenter(Math.max(map.getZoom(), 15), [p.lng, p.lat])
   if (info && map) {
     info.setContent(
-      `<div class="mbk-info"><strong>${escapeHtml(p.name || '未命名地点')}</strong>` +
-      `<span>${kindLabel.value} ${yuan(p.amount)} · ${p.count} 笔</span>` +
-      `<span>最近 ${dayjs(p.lastAt).format('YYYY年M月D日')}</span></div>`,
+      `<div class="mbk-info"><strong>${escapeHtml(p.name || t('stats.map.unnamed'))}</strong>` +
+      `<span>${escapeHtml(t('stats.map.infoAmount', { kind: kindLabel.value, amount: yuan(p.amount), count: t('stats.count', { n: p.count }) }))}</span>` +
+      `<span>${escapeHtml(t('stats.map.lastAt', { date: dayjs(p.lastAt).format(t('stats.fmt.fullDate')) }))}</span></div>`,
     )
     info.open(map, [p.lng, p.lat])
   }

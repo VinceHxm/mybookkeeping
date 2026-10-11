@@ -1,12 +1,12 @@
 <template>
   <div class="page tl-page">
-    <h1 class="page-title">明细</h1>
+    <h1 class="page-title">{{ t('txList.title') }}</h1>
     <div class="tl-layout">
     <aside class="tl-side">
     <div class="search-row">
       <v-text-field
         v-model="keyword"
-        label="备注关键词"
+        :label="t('txList.keyword')"
         density="compact"
         variant="outlined"
         hide-details
@@ -24,7 +24,7 @@
         @click="filtersOpen = !filtersOpen"
       >
         <v-icon start size="18">mdi-filter-variant</v-icon>
-        筛选<template v-if="activeFilterCount">·{{ activeFilterCount }}</template>
+        {{ t('txList.filter') }}<template v-if="activeFilterCount">·{{ activeFilterCount }}</template>
         <v-icon end size="18">{{ filtersOpen ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
       </v-btn>
     </div>
@@ -32,7 +32,7 @@
     <div class="filters">
       <v-select
         v-model="accountId"
-        :items="[{ id: 0, name: '全部账户' }, ...accounts.list]"
+        :items="[{ id: 0, name: t('txList.allAccounts') }, ...accounts.list]"
         item-title="name"
         item-value="id"
         density="compact"
@@ -42,13 +42,7 @@
       />
       <v-select
         v-model="type"
-        :items="[
-          { title: '全部类型', value: '' },
-          { title: '支出', value: 'expense' },
-          { title: '收入', value: 'income' },
-          { title: '转账', value: 'transfer' },
-          { title: '市值校准', value: 'revalue' },
-        ]"
+        :items="typeItems"
         density="compact"
         variant="outlined"
         hide-details
@@ -58,7 +52,7 @@
     <div class="filters">
       <v-select
         v-model="categoryId"
-        :items="[{ id: 0, name: '全部分类' }, ...catItems]"
+        :items="[{ id: 0, name: t('txList.allCategories') }, ...catItems]"
         item-title="name"
         item-value="id"
         density="compact"
@@ -68,7 +62,7 @@
       />
       <v-select
         v-model="tagId"
-        :items="[{ id: 0, name: '全部标签' }, ...tags.list]"
+        :items="[{ id: 0, name: t('txList.allTags') }, ...tags.list]"
         item-title="name"
         item-value="id"
         density="compact"
@@ -78,8 +72,8 @@
       />
     </div>
     <div class="filters">
-      <NativeDateField v-model="from" label="从" density="compact" variant="outlined" hide-details class="f" />
-      <NativeDateField v-model="to" label="到" density="compact" variant="outlined" hide-details class="f" />
+      <NativeDateField v-model="from" :label="t('txList.from')" density="compact" variant="outlined" hide-details class="f" />
+      <NativeDateField v-model="to" :label="t('txList.to')" density="compact" variant="outlined" hide-details class="f" />
     </div>
     <div class="filters">
       <v-select
@@ -92,7 +86,7 @@
       />
     </div>
     <div v-if="activeFilterCount" class="filter-reset">
-      <v-btn size="small" variant="text" color="primary" @click="resetFilters">清空筛选</v-btn>
+      <v-btn size="small" variant="text" color="primary" @click="resetFilters">{{ t('txList.clearFilters') }}</v-btn>
     </div>
     </div>
     </aside>
@@ -101,15 +95,15 @@
 
     <div v-if="pendingOnly" class="pending-filter">
       <v-icon size="16">mdi-timer-sand</v-icon>
-      <span class="f">仅看金额待确认（{{ tx.total }} 笔）：点开按账单实际金额修改保存即确认</span>
-      <v-btn size="small" variant="text" color="primary" @click="pendingOnly = false">看全部</v-btn>
+      <span class="f">{{ t('txList.pendingOnly', { n: tx.total }) }}</span>
+      <v-btn size="small" variant="text" color="primary" @click="pendingOnly = false">{{ t('txList.viewAll') }}</v-btn>
     </div>
 
     <div v-if="voucher" class="pending-filter voucher-filter">
       <v-icon size="16">mdi-ticket-percent-outline</v-icon>
-      <span class="f">{{ voucherFilterLabel }}（{{ tx.total }} 笔）</span>
-      <v-btn size="small" variant="text" color="primary" @click="openRefund(null)">退款</v-btn>
-      <v-btn size="small" variant="text" color="primary" @click="voucher = ''">看全部</v-btn>
+      <span class="f">{{ t('txList.filterCount', { label: voucherFilterLabel, n: tx.total }) }}</span>
+      <v-btn size="small" variant="text" color="primary" @click="openRefund(null)">{{ t('txEdit.refund') }}</v-btn>
+      <v-btn size="small" variant="text" color="primary" @click="voucher = ''">{{ t('txList.viewAll') }}</v-btn>
     </div>
 
     <div v-if="!groups.length" class="empty-tip">{{ emptyText }}</div>
@@ -117,8 +111,8 @@
       <div class="day">
         <span>{{ g.day }}<span class="day-week">{{ weekday(g.day) }}</span></span>
         <span class="day-sum">
-          <span v-if="g.income" class="amount-income">收 {{ fenToYuan(g.income) }}</span>
-          <span v-if="g.expense" class="amount-expense">支 {{ fenToYuan(g.expense) }}</span>
+          <span v-if="g.income" class="amount-income">{{ t('txList.incomeShort', { amount: fenToYuan(g.income) }) }}</span>
+          <span v-if="g.expense" class="amount-expense">{{ t('txList.expenseShort', { amount: fenToYuan(g.expense) }) }}</span>
         </span>
       </div>
       <v-list bg-color="transparent" class="py-0">
@@ -131,21 +125,21 @@
         >
           <v-list-item-title>
             {{ txTitle(item) }}
-            <v-chip v-if="item.amountPending" size="x-small" color="warning" variant="tonal" class="ml-1">待确认</v-chip>
+            <v-chip v-if="item.amountPending" size="x-small" color="warning" variant="tonal" class="ml-1">{{ t('txList.pendingChip') }}</v-chip>
             <v-chip
               v-if="item.voucherStatus"
               size="x-small"
               :color="voucherStatusColor[item.voucherStatus]"
               variant="tonal"
               class="ml-1"
-            >{{ voucherStatusLabel[item.voucherStatus] }}</v-chip>
-            <v-chip v-if="item.refundOfId" size="x-small" color="info" variant="tonal" class="ml-1">券退款</v-chip>
+            >{{ voucherStatusLabel(item.voucherStatus) }}</v-chip>
+            <v-chip v-if="item.refundOfId" size="x-small" color="info" variant="tonal" class="ml-1">{{ t('txList.refundChip') }}</v-chip>
           </v-list-item-title>
           <v-list-item-subtitle>
             <template v-if="txSubCategory(item)">{{ txSubCategory(item) }} · </template>
             {{ item.account?.name }}
             <template v-if="item.type === 'transfer'"> → {{ item.toAccount?.name }}</template>
-            <span v-if="item.tags?.length"> · {{ item.tags.map((t) => t.name).join(',') }}</span>
+            <span v-if="item.tags?.length"> · {{ item.tags.map((tag) => tag.name).join(',') }}</span>
             <span
               v-if="item.voucherStatus === 'pending' && item.voucherExpireOn"
               :class="{ 'expire-soon': expireDays(item.voucherExpireOn) <= 3 }"
@@ -158,8 +152,8 @@
               color="success"
               :loading="voucherBusy === item.id"
               @click.stop.prevent="markUsed(item)"
-            >一键核销</v-btn>
-            <v-btn size="x-small" variant="tonal" color="info" @click.stop.prevent="openRefund(item)">退款</v-btn>
+            >{{ t('txEdit.markUsed') }}</v-btn>
+            <v-btn size="x-small" variant="tonal" color="info" @click.stop.prevent="openRefund(item)">{{ t('txEdit.refund') }}</v-btn>
           </div>
           <template #append>
             <div class="amt-col">
@@ -176,7 +170,7 @@
     </div>
 
     <div v-if="tx.total > tx.list.length" class="more">
-      <v-btn variant="tonal" :loading="loadingMore" @click="loadMore">加载更多（{{ tx.list.length }}/{{ tx.total }}）</v-btn>
+      <v-btn variant="tonal" :loading="loadingMore" @click="loadMore">{{ t('txList.loadMore', { loaded: tx.list.length, total: tx.total }) }}</v-btn>
     </div>
     </div>
     </div>
@@ -188,6 +182,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import { useAccountStore } from '../stores/account'
 import { useCategoryStore } from '../stores/category'
@@ -202,6 +197,7 @@ import { amountClass, fenToYuan, formatForeign, formatMoney, payRate, txSubCateg
 import NativeDateField from '../components/NativeDateField.vue'
 import VoucherRefundDialog from '../components/VoucherRefundDialog.vue'
 
+const { t } = useI18n()
 const accounts = useAccountStore()
 const categories = useCategoryStore()
 const tags = useTagStore()
@@ -231,20 +227,26 @@ const voucherBusy = ref<number | null>(null)
 const refundOpen = ref(false)
 const refundTarget = ref<Transaction | null>(null)
 
-const voucherFilterItems = [
-  { title: '团购券：不限', value: '' },
-  { title: '所有团购券', value: 'all' },
-  { title: '待核销', value: 'pending' },
-  { title: '已核销', value: 'used' },
-  { title: '已退款', value: 'refunded' },
-]
-const voucherFilterLabel = computed(() =>
-  voucher.value === 'all' ? '所有团购券' : `团购券 · ${voucherFilterItems.find((x) => x.value === voucher.value)?.title || ''}`,
-)
+const typeItems = computed(() => [
+  { title: t('txList.allTypes'), value: '' },
+  ...(['expense', 'income', 'transfer', 'revalue'] as const).map((v) => ({ title: t(`txType.${v}`), value: v })),
+])
+
+const VOUCHER_STATUSES = ['pending', 'used', 'refunded'] as const
+const voucherFilterItems = computed(() => [
+  { title: t('txList.voucherAny'), value: '' },
+  { title: t('txList.voucherAll'), value: 'all' },
+  ...VOUCHER_STATUSES.map((s) => ({ title: voucherStatusLabel(s), value: s })),
+])
+const voucherFilterLabel = computed(() => {
+  if (voucher.value === 'all') return t('txList.voucherAll')
+  const s = VOUCHER_STATUSES.find((x) => x === voucher.value)
+  return t('txList.voucherStatus', { status: s ? voucherStatusLabel(s) : '' })
+})
 const emptyText = computed(() => {
-  if (pendingOnly.value) return '没有待确认的流水'
-  if (voucher.value) return '没有符合条件的团购券'
-  return '暂无流水'
+  if (pendingOnly.value) return t('txList.emptyPending')
+  if (voucher.value) return t('txList.emptyVoucher')
+  return t('txList.empty')
 })
 
 const activeFilterCount = computed(() =>
@@ -267,9 +269,9 @@ function expireDays(d: string) {
 
 function expireText(d: string) {
   const days = expireDays(d)
-  if (days < 0) return `已过期 ${-days} 天`
-  if (days === 0) return '今天过期'
-  return `${dayjs(d).format('M/D')} 过期`
+  if (days < 0) return t('voucher.expiredDays', { n: -days })
+  if (days === 0) return t('voucher.expireToday')
+  return t('voucher.expireOn', { date: dayjs(d).format('M/D') })
 }
 
 async function markUsed(item: Transaction) {
@@ -278,7 +280,7 @@ async function markUsed(item: Transaction) {
     await tx.setVoucherStatus(item.id, 'used')
     if (voucher.value === 'pending') await reload()
   } catch (e: any) {
-    alert(e?.message || '核销失败')
+    alert(e?.message || t('txList.markUsedFailed'))
   } finally {
     voucherBusy.value = null
   }
@@ -298,7 +300,7 @@ const catItems = computed(() => {
   // 有子类的一级分类不在可选项里，但按它筛选（含子类）是合法的
   if (categoryId.value && !items.some((c) => c.id === categoryId.value)) {
     const c = categories.list.find((x) => x.id === categoryId.value)
-    if (c) items.unshift({ id: c.id, name: `${c.name}（含子类）`, icon: c.icon })
+    if (c) items.unshift({ id: c.id, name: t('txList.withChildren', { name: c.name }), icon: c.icon })
   }
   return items
 })
@@ -313,13 +315,13 @@ const groups = computed(() => {
   return [...map.entries()].map(([day, items]) => ({
     day,
     items,
-    expense: items.filter((t) => t.type === 'expense').reduce((s, t) => s + t.amount, 0),
-    income: items.filter((t) => t.type === 'income').reduce((s, t) => s + t.amount, 0),
+    expense: items.filter((x) => x.type === 'expense').reduce((s, x) => s + x.amount, 0),
+    income: items.filter((x) => x.type === 'income').reduce((s, x) => s + x.amount, 0),
   }))
 })
 
 function weekday(day: string) {
-  return ['周日', '周一', '周二', '周三', '周四', '周五', '周六'][dayjs(day).day()]
+  return dayjs(day).format('ddd')
 }
 
 function buildParams(offset = 0) {

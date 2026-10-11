@@ -1,20 +1,20 @@
 <template>
   <v-dialog :model-value="modelValue" max-width="400" @update:model-value="onDialog">
     <v-card class="confirm-card">
-      <v-card-title class="title">{{ step === 1 ? '确认删除' : '再次确认' }}</v-card-title>
+      <v-card-title class="title">{{ step === 1 ? t('ui.deleteDialog.title') : t('ui.deleteDialog.titleAgain') }}</v-card-title>
       <v-card-text>
-        <p v-if="step === 1" class="msg">
-          确定删除「<strong>{{ name }}</strong>」吗？
-        </p>
-        <p v-else class="msg warn">
-          删除后不可恢复。请再次确认要删除「<strong>{{ name }}</strong>」。
-        </p>
+        <i18n-t v-if="step === 1" keypath="ui.deleteDialog.ask" tag="p" class="msg">
+          <template #name><strong>{{ name }}</strong></template>
+        </i18n-t>
+        <i18n-t v-else keypath="ui.deleteDialog.askAgain" tag="p" class="msg warn">
+          <template #name><strong>{{ name }}</strong></template>
+        </i18n-t>
       </v-card-text>
       <v-card-actions class="actions">
-        <v-btn variant="text" @click="cancel">取消</v-btn>
+        <v-btn variant="text" @click="cancel">{{ t('common.cancel') }}</v-btn>
         <v-spacer />
-        <v-btn v-if="step === 1" color="error" variant="tonal" @click="step = 2">继续删除</v-btn>
-        <v-btn v-else color="error" variant="flat" :loading="loading" @click="confirm">确认删除</v-btn>
+        <v-btn v-if="step === 1" color="error" variant="tonal" @click="step = 2">{{ t('ui.deleteDialog.continue') }}</v-btn>
+        <v-btn v-else color="error" variant="flat" :loading="loading" @click="confirm">{{ t('ui.deleteDialog.confirm') }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -22,6 +22,9 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = defineProps<{
   modelValue: boolean

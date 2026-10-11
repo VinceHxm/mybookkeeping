@@ -13,6 +13,16 @@ import (
 type Config struct {
 	ServerAddr string
 
+	// DBDriver mysql | sqlite；sqlite 时数据库文件为 SQLitePath，无需外部数据库
+	DBDriver   string
+	SQLitePath string
+	// SessionStore redis | db；db 时会话、登录限流、重置令牌存数据库，无需 Redis
+	SessionStore string
+	// StorageDriver minio | local | none；local 时附件存 DATA_DIR/attachments
+	StorageDriver string
+	// DataDir 本地数据根目录（SQLite 文件、本地附件）
+	DataDir string
+
 	MySQLDSN string
 
 	RedisAddr     string
@@ -94,12 +104,27 @@ func Load() *Config {
 
 		LoadedFrom: loaded,
 	}
+	applyDriverDefaults(cfg)
 	if loaded != "" {
 		log.Printf("config loaded from %s", loaded)
 	} else {
 		log.Printf("config: no .env found, using defaults / process env (copy backend/.env.example → backend/.env)")
 	}
 	return cfg
+}
+
+// applyDriverDefaults 选 SQLite 时，会话存储与附件默认也走本地，单容器即可运行；显式配置优先。
+func applyDriverDefaults(cfg *Config) {
+	cfg.DBDriver = strings.ToLower(get("DB_DRIVER", "mysql"))
+	cfg.DataDir = get("DATA_DIR", "data")
+	cfg.SQLitePath = get("SQLITE_PATH", filepath.Join(cfg.DataDir, "mybookkeeping.db"))
+
+	sessionDef, storageDef := "redis", "minio"
+	if cfg.DBDriver == "sqlite" {
+		sessionDef, storageDef = "db", "local"
+	}
+	cfg.SessionStore = strings.ToLower(get("SESSION_STORE", sessionDef))
+	cfg.StorageDriver = strings.ToLower(get("STORAGE_DRIVER", storageDef))
 }
 
 func loadDotEnvFiles() string {

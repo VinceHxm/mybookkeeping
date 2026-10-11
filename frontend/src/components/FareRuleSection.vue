@@ -3,8 +3,8 @@
     <div class="form-section__body">
       <MetaHead
         icon="mdi-ticket-percent-outline"
-        title="计费规则"
-        subtitle="主要用于累计折扣标记；金额以手填为准"
+        :title="t('txEdit.fareRule.title')"
+        :subtitle="t('txEdit.fareRule.subtitle')"
         :class="{ 'mb-3': enabled }"
       >
         <v-switch
@@ -22,7 +22,7 @@
           :items="items"
           item-title="title"
           item-value="value"
-          label="选择规则"
+          :label="t('txEdit.fareRule.pick')"
           variant="outlined"
           density="compact"
           hide-details
@@ -31,7 +31,7 @@
         />
         <div class="fare-actions">
           <v-btn size="small" variant="tonal" color="primary" :loading="loading" :disabled="!ruleId" @click="emit('apply')">
-            填入建议价
+            {{ t('txEdit.fareRule.apply') }}
           </v-btn>
           <span v-if="hint" class="fare-hint">{{ hint }}</span>
         </div>
@@ -41,7 +41,10 @@
 </template>
 
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import MetaHead from './MetaHead.vue'
+
+const { t } = useI18n()
 
 defineProps<{
   items: { title: string; value: number }[]

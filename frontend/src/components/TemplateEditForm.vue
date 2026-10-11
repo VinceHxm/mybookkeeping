@@ -2,15 +2,15 @@
   <div class="form-sections">
     <section class="form-section">
       <header class="form-section__head">
-        <h3 class="form-section__title">基本信息</h3>
+        <h3 class="form-section__title">{{ t('templates.form.basic') }}</h3>
       </header>
       <div class="form-section__body">
-        <IconPicker v-model="form.icon" title="模板图标" fallback="mdi-flash" />
-        <v-text-field v-model="form.name" label="名称" variant="outlined" hide-details class="field" />
-        <v-select v-model="form.type" :items="typeItems" label="类型" variant="outlined" hide-details class="field" />
+        <IconPicker v-model="form.icon" :title="t('templates.form.iconTitle')" fallback="mdi-flash" />
+        <v-text-field v-model="form.name" :label="t('templates.form.name')" variant="outlined" hide-details class="field" />
+        <v-select v-model="form.type" :items="typeItems" :label="t('templates.form.type')" variant="outlined" hide-details class="field" />
         <v-text-field
           v-model="amountYuan"
-          label="金额（元）"
+          :label="t('templates.form.amount')"
           type="number"
           inputmode="decimal"
           variant="outlined"
@@ -22,20 +22,20 @@
           :items="accounts.list"
           item-title="name"
           item-value="id"
-          label="账户"
+          :label="t('templates.form.account')"
           clearable
           variant="outlined"
           hide-details
           class="field"
         />
-        <v-text-field v-model="form.remark" label="备注" variant="outlined" hide-details class="field field--last" />
-        <p class="form-section__tip">金额可空；绑定计费规则时，此金额会作为原价参与折扣计算。</p>
+        <v-text-field v-model="form.remark" :label="t('templates.form.remark')" variant="outlined" hide-details class="field field--last" />
+        <p class="form-section__tip">{{ t('templates.form.amountTip') }}</p>
       </div>
     </section>
 
     <section v-if="form.type !== 'transfer'" class="form-section">
       <header class="form-section__head">
-        <h3 class="form-section__title">分类与标签</h3>
+        <h3 class="form-section__title">{{ t('templates.form.categoryAndTags') }}</h3>
       </header>
       <div class="form-section__body">
         <div class="form-field-row field">
@@ -44,13 +44,13 @@
             :items="form.type === 'expense' ? categories.expenseOptions : categories.incomeOptions"
             item-title="name"
             item-value="id"
-            label="分类"
+            :label="t('templates.form.category')"
             clearable
             variant="outlined"
             hide-details
             class="flex1"
           />
-          <v-btn icon="mdi-plus" variant="tonal" color="primary" aria-label="新建分类" @click="openQuickCategory" />
+          <v-btn icon="mdi-plus" variant="tonal" color="primary" :aria-label="t('templates.form.newCategory')" @click="openQuickCategory" />
         </div>
         <div class="form-field-row field field--last">
           <v-select
@@ -58,7 +58,7 @@
             :items="tags.list"
             item-title="name"
             item-value="id"
-            label="标签"
+            :label="t('templates.form.tags')"
             multiple
             chips
             closable-chips
@@ -66,14 +66,14 @@
             hide-details
             class="flex1"
           />
-          <v-btn icon="mdi-plus" variant="tonal" color="primary" aria-label="新建标签" @click="openQuickTag" />
+          <v-btn icon="mdi-plus" variant="tonal" color="primary" :aria-label="t('templates.form.newTag')" @click="openQuickTag" />
         </div>
       </div>
     </section>
 
     <section v-else class="form-section">
       <header class="form-section__head">
-        <h3 class="form-section__title">标签</h3>
+        <h3 class="form-section__title">{{ t('templates.form.tags') }}</h3>
       </header>
       <div class="form-section__body">
         <div class="form-field-row field field--last">
@@ -82,7 +82,7 @@
             :items="tags.list"
             item-title="name"
             item-value="id"
-            label="标签"
+            :label="t('templates.form.tags')"
             multiple
             chips
             closable-chips
@@ -90,14 +90,14 @@
             hide-details
             class="flex1"
           />
-          <v-btn icon="mdi-plus" variant="tonal" color="primary" aria-label="新建标签" @click="openQuickTag" />
+          <v-btn icon="mdi-plus" variant="tonal" color="primary" :aria-label="t('templates.form.newTag')" @click="openQuickTag" />
         </div>
       </div>
     </section>
 
     <section class="form-section">
       <header class="form-section__head">
-        <h3 class="form-section__title">计费规则</h3>
+        <h3 class="form-section__title">{{ t('templates.form.fareRule') }}</h3>
       </header>
       <div class="form-section__body">
         <v-select
@@ -105,77 +105,77 @@
           :items="fareRuleItems"
           item-title="title"
           item-value="value"
-          label="绑定规则"
+          :label="t('templates.form.bindRule')"
           clearable
           variant="outlined"
           hide-details
           class="field field--last"
         />
         <p class="form-section__tip">
-          套用模板时启用规则，按模板金额算建议价。
-          <router-link class="inline-link" to="/fare-rules">管理计费规则</router-link>
+          {{ t('templates.form.ruleTip') }}
+          <router-link class="inline-link" to="/fare-rules">{{ t('templates.form.manageRules') }}</router-link>
         </p>
       </div>
     </section>
 
     <section class="form-section">
       <header class="form-section__head">
-        <h3 class="form-section__title">预设地点</h3>
+        <h3 class="form-section__title">{{ t('templates.form.place') }}</h3>
       </header>
       <div class="form-section__body">
         <button v-if="!formGeoLabel" type="button" class="loc-tile" @click="showMap = true">
           <v-icon size="24" color="primary">mdi-map-marker-plus-outline</v-icon>
           <div class="loc-copy">
-            <strong>添加地点</strong>
-            <span>常用通勤 / 门店，套用时自动带入</span>
+            <strong>{{ t('templates.form.addPlace') }}</strong>
+            <span>{{ t('templates.form.addPlaceHint') }}</span>
           </div>
           <v-icon size="18" class="loc-chevron">mdi-chevron-right</v-icon>
         </button>
         <div v-else class="loc-filled">
           <div class="loc-preview" @click="showMap = true">
             <v-chip size="small" color="primary" variant="tonal" class="mb-2">
-              {{ form.geoMode === 'route' ? '行程' : '位置' }}
+              {{ form.geoMode === 'route' ? t('templates.form.route') : t('templates.form.point') }}
             </v-chip>
             <div class="loc-value">{{ formGeoLabel }}</div>
           </div>
           <div class="loc-actions">
-            <v-btn variant="tonal" color="primary" size="small" @click="showMap = true">修改</v-btn>
-            <v-btn variant="text" color="error" size="small" @click="clearGeo">清除</v-btn>
+            <v-btn variant="tonal" color="primary" size="small" @click="showMap = true">{{ t('templates.form.edit') }}</v-btn>
+            <v-btn variant="text" color="error" size="small" @click="clearGeo">{{ t('templates.form.clear') }}</v-btn>
           </div>
         </div>
       </div>
     </section>
 
     <div v-if="templateId" class="danger-zone">
-      <div class="danger-title">危险操作</div>
-      <p class="danger-tip">删除模板后不可恢复，不会影响已生成的流水。</p>
-      <v-btn color="error" variant="outlined" block @click="emit('delete')">删除此模板</v-btn>
+      <div class="danger-title">{{ t('templates.form.dangerTitle') }}</div>
+      <p class="danger-tip">{{ t('templates.form.dangerTip') }}</p>
+      <v-btn color="error" variant="outlined" block @click="emit('delete')">{{ t('templates.form.delete') }}</v-btn>
     </div>
 
     <v-dialog v-model="showQuickCat" max-width="360">
       <v-card>
-        <v-card-title>新建分类</v-card-title>
+        <v-card-title>{{ t('templates.form.newCategory') }}</v-card-title>
         <v-card-text>
-          <v-text-field v-model="quickName" label="名称" variant="outlined" hide-details autofocus @keyup.enter="saveQuickCategory" />
+          <v-text-field v-model="quickName" :label="t('templates.form.quickName')" variant="outlined" hide-details autofocus @keyup.enter="saveQuickCategory" />
         </v-card-text>
         <v-card-actions>
           <v-spacer />
-          <v-btn variant="text" @click="showQuickCat = false">取消</v-btn>
-          <v-btn color="primary" :loading="quickSaving" @click="saveQuickCategory">创建并选用</v-btn>
+          <v-btn variant="text" @click="showQuickCat = false">{{ t('common.cancel') }}</v-btn>
+          <v-btn color="primary" :loading="quickSaving" @click="saveQuickCategory">{{ t('templates.form.createAndUse') }}</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
 
     <v-dialog v-model="showQuickTag" max-width="360">
       <v-card>
-        <v-card-title>新建标签</v-card-title>
+        <v-card-title>{{ t('templates.form.newTag') }}</v-card-title>
         <v-card-text>
-          <v-text-field v-model="quickName" label="名称" variant="outlined" hide-details autofocus @keyup.enter="saveQuickTag" />
+          <v-text-field v-model="quickName" :label="t('templates.form.quickName')" variant="outlined" hide-details autofocus @keyup.enter="saveQuickTag" />
         </v-card-text>
         <v-card-actions>
           <v-spacer />
-          <v-btn variant="text" @click="showQuickTag = false">取消</v-btn>
-          <v-btn color="primary" :loading="quickSaving" @click="saveQuickTag">创建并选用</v-btn>
+          <v-btn variant="text" @click="showQuickTag = false">{{ t('common.cancel') }}</v-btn>
+          <v-btn color="primary" :loading="quickSaving" @click="saveQuickTag">{{ t('templates.form.createAndUse') }}</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -206,6 +206,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import http from '../api/http'
 import IconPicker from './IconPicker.vue'
 import AmapPicker, { type GeoPickResult } from './AmapPicker.vue'
@@ -248,6 +249,7 @@ const emit = defineEmits<{
   delete: []
 }>()
 
+const { t } = useI18n()
 const accounts = useAccountStore()
 const categories = useCategoryStore()
 const tags = useTagStore()
@@ -262,11 +264,11 @@ const showQuickTag = ref(false)
 const quickName = ref('')
 const quickSaving = ref(false)
 
-const typeItems = [
-  { title: '支出', value: 'expense' },
-  { title: '收入', value: 'income' },
-  { title: '转账', value: 'transfer' },
-]
+const typeItems = computed(() => [
+  { title: t('txType.expense'), value: 'expense' },
+  { title: t('txType.income'), value: 'income' },
+  { title: t('txType.transfer'), value: 'transfer' },
+])
 
 const form = reactive({
   name: '',
@@ -288,13 +290,13 @@ const form = reactive({
 
 const formGeoLabel = computed(() => {
   if (form.geoMode === 'route' && form.geoName && form.geoEndName) return `${form.geoName} → ${form.geoEndName}`
-  return form.geoName || (form.geoLng != null ? '已选位置' : '')
+  return form.geoName || (form.geoLng != null ? t('templates.pickedLocation') : '')
 })
 
 const fareRuleItems = computed(() =>
   (fareRules.value || [])
     .filter((r) => r.enabled !== false)
-    .map((r) => ({ title: r.city ? `${r.name}（${r.city}）` : r.name, value: r.id })),
+    .map((r) => ({ title: r.city ? t('templates.form.ruleWithCity', { name: r.name, city: r.city }) : r.name, value: r.id })),
 )
 
 function resetGeo() {
@@ -311,8 +313,8 @@ function clearGeo() {
   resetGeo()
 }
 
-function fillFrom(t: Template | null | undefined) {
-  if (!t) {
+function fillFrom(tpl: Template | null | undefined) {
+  if (!tpl) {
     form.name = ''
     form.type = 'expense'
     form.accountId = null
@@ -325,22 +327,22 @@ function fillFrom(t: Template | null | undefined) {
     amountYuan.value = ''
     return
   }
-  form.name = t.name
-  form.type = t.type
-  form.accountId = t.accountId ?? null
-  form.categoryId = t.categoryId ?? null
-  form.tagIds = t.tagIds || []
-  form.remark = t.remark || ''
-  form.fareRuleId = t.fareRuleId || null
-  form.icon = t.icon || txTypeIcon(t.type)
-  form.geoMode = (t.geoMode as 'point' | 'route') || (t.geoLng != null ? 'point' : '')
-  form.geoLng = t.geoLng ?? null
-  form.geoLat = t.geoLat ?? null
-  form.geoName = t.geoName || ''
-  form.geoEndLng = t.geoEndLng ?? null
-  form.geoEndLat = t.geoEndLat ?? null
-  form.geoEndName = t.geoEndName || ''
-  amountYuan.value = t.amount ? fenToYuan(t.amount) : ''
+  form.name = tpl.name
+  form.type = tpl.type
+  form.accountId = tpl.accountId ?? null
+  form.categoryId = tpl.categoryId ?? null
+  form.tagIds = tpl.tagIds || []
+  form.remark = tpl.remark || ''
+  form.fareRuleId = tpl.fareRuleId || null
+  form.icon = tpl.icon || txTypeIcon(tpl.type)
+  form.geoMode = (tpl.geoMode as 'point' | 'route') || (tpl.geoLng != null ? 'point' : '')
+  form.geoLng = tpl.geoLng ?? null
+  form.geoLat = tpl.geoLat ?? null
+  form.geoName = tpl.geoName || ''
+  form.geoEndLng = tpl.geoEndLng ?? null
+  form.geoEndLat = tpl.geoEndLat ?? null
+  form.geoEndName = tpl.geoEndName || ''
+  amountYuan.value = tpl.amount ? fenToYuan(tpl.amount) : ''
 }
 
 async function loadTemplate() {
@@ -353,8 +355,8 @@ async function loadTemplate() {
     return
   }
   const { data } = await http.get('/templates')
-  const t = (data || []).find((x: Template) => x.id === props.templateId)
-  fillFrom(t || null)
+  const tpl = (data || []).find((x: Template) => x.id === props.templateId)
+  fillFrom(tpl || null)
 }
 
 watch(

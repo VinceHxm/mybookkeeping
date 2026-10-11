@@ -1,4 +1,5 @@
 import dayjs from 'dayjs'
+import { currentLocale, t } from '../i18n'
 
 /** 统计页筛选：from / to 均为含当天的 YYYY-MM-DD */
 export interface StatsFilter {
@@ -22,19 +23,16 @@ export function statsParams(f: StatsFilter, extra: Record<string, unknown> = {})
 /** ¥1,234.56 */
 export function yuan(fen: number, digits = 2): string {
   const n = (fen || 0) / 100
-  const s = Math.abs(n).toLocaleString('zh-CN', { minimumFractionDigits: digits, maximumFractionDigits: digits })
+  const s = Math.abs(n).toLocaleString(currentLocale(), { minimumFractionDigits: digits, maximumFractionDigits: digits })
   return `${n < 0 ? '-' : ''}¥${s}`
 }
 
-/** 日历格、坐标轴用的短金额：128 / 1.2万 / 3.4亿（单位元，不带 ¥） */
+/** 日历格、坐标轴用的短金额（单位元，不带 ¥）：中日 1.2万 / 韩 1.2만 / 英 1.2K，进位由 Intl 按语言决定 */
 export function compactYuan(fen: number): string {
   const y = Math.abs(fen || 0) / 100
   const sign = fen < 0 ? '-' : ''
-  const trim = (s: string) => s.replace(/\.0$/, '')
-  if (y >= 1e8) return sign + trim((y / 1e8).toFixed(1)) + '亿'
-  if (y >= 1e4) return sign + trim((y / 1e4).toFixed(1)) + '万'
-  if (y >= 100) return sign + Math.round(y)
-  return sign + trim(y.toFixed(1))
+  const v = y >= 100 ? Math.round(y) : y
+  return sign + new Intl.NumberFormat(currentLocale(), { notation: 'compact', maximumFractionDigits: 1 }).format(v)
 }
 
 /** 相对上期的变化比例；上期为 0 时无意义返回 null */
@@ -48,9 +46,9 @@ export function percent(r: number, digits = 1): string {
 }
 
 export function periodLabel(key: string, g: Granularity, short = false): string {
-  if (g === 'day') return short ? dayjs(key).format('D') : dayjs(key).format('M月D日')
-  if (g === 'year') return `${key}年`
-  return short ? `${Number(key.slice(5))}月` : dayjs(`${key}-01`).format('YYYY年M月')
+  if (g === 'day') return short ? dayjs(key).format('D') : dayjs(key).format(t('stats.fmt.monthDay'))
+  if (g === 'year') return dayjs(`${key}-01-01`).format(t('stats.fmt.year'))
+  return dayjs(`${key}-01`).format(t(short ? 'stats.fmt.monthShort' : 'stats.fmt.month'))
 }
 
 /** 某个周期对应的起止日期（含当天），用于跳转明细 */
@@ -60,4 +58,6 @@ export function periodRange(key: string, g: Granularity): { from: string; to: st
   return { from: start.format('YYYY-MM-DD'), to: start.endOf(unit).format('YYYY-MM-DD') }
 }
 
-export const granularityUnit: Record<Granularity, string> = { day: '日', month: '月', year: '年' }
+export function granularityUnit(g: Granularity): string {
+  return t(`stats.unit.${g}`)
+}

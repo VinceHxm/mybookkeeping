@@ -1,23 +1,23 @@
 <template>
   <section class="top surface-card">
     <header class="top-head">
-      <span class="top-title">单笔{{ kind === 'income' ? '收入' : '支出' }} Top {{ limit }}</span>
-      <span class="top-sub">按金额从高到低</span>
+      <span class="top-title">{{ t(`stats.top.title.${kind}`, { n: limit }) }}</span>
+      <span class="top-sub">{{ t('stats.top.sub') }}</span>
     </header>
-    <div v-if="!list.length" class="top-empty">{{ loading ? '加载中…' : '暂无记录' }}</div>
+    <div v-if="!list.length" class="top-empty">{{ loading ? t('common.loading') : t('stats.top.empty') }}</div>
     <ol v-else class="top-list" :style="{ '--rows': Math.ceil(list.length / 2) }">
-      <li v-for="(t, i) in list" :key="t.id">
-        <router-link :to="`/transactions/${t.id}`" class="top-row">
+      <li v-for="(tx, i) in list" :key="tx.id">
+        <router-link :to="`/transactions/${tx.id}`" class="top-row">
           <span class="rank" :class="{ 'rank--hot': i < 3 }">{{ i + 1 }}</span>
           <div class="top-main">
-            <div class="top-name">{{ txTitle(t) }}</div>
+            <div class="top-name">{{ txTitle(tx) }}</div>
             <div class="top-meta">
-              {{ dayjs(t.happenedAt).format('M月D日') }}
-              <template v-if="t.category?.name"> · {{ t.category.name }}</template>
-              <template v-if="t.account?.name"> · {{ t.account.name }}</template>
+              {{ dayjs(tx.happenedAt).format(t('stats.fmt.monthDay')) }}
+              <template v-if="tx.category?.name"> · {{ tx.category.name }}</template>
+              <template v-if="tx.account?.name"> · {{ tx.account.name }}</template>
             </div>
           </div>
-          <span :class="kind === 'income' ? 'amount-income' : 'amount-expense'" class="top-amt">{{ yuan(t.amount) }}</span>
+          <span :class="kind === 'income' ? 'amount-income' : 'amount-expense'" class="top-amt">{{ yuan(tx.amount) }}</span>
         </router-link>
       </li>
     </ol>
@@ -26,6 +26,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import http from '../../api/http'
 import type { Transaction } from '../../stores/transaction'
@@ -33,6 +34,7 @@ import { txTitle } from '../../utils/money'
 import { statsParams, yuan, type StatsFilter } from '../../utils/stats'
 
 const props = withDefaults(defineProps<{ filter: StatsFilter; kind: 'expense' | 'income'; limit?: number }>(), { limit: 10 })
+const { t } = useI18n()
 
 const list = ref<Transaction[]>([])
 const loading = ref(false)

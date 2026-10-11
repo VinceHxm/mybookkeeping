@@ -2,7 +2,7 @@
   <div class="page te-page">
     <div class="toolbar">
       <v-btn icon="mdi-arrow-left" variant="text" @click="$router.back()" />
-      <h1>{{ isEdit ? '编辑流水' : '记一笔' }}</h1>
+      <h1>{{ isEdit ? t('txEdit.titleEdit') : t('txEdit.titleNew') }}</h1>
       <v-btn v-if="isEdit" icon="mdi-delete" variant="text" color="error" @click="onDelete" />
       <span v-else style="width:40px" />
     </div>
@@ -13,47 +13,47 @@
     <div v-if="!isEdit" class="ai-row mb-3">
       <v-btn variant="tonal" color="secondary" class="flex1" to="/transactions/recognize">
         <v-icon start>mdi-robot</v-icon>
-        文字识别
+        {{ t('txEdit.textRecognize') }}
       </v-btn>
       <v-btn variant="tonal" color="secondary" class="flex1" @click="showAI = true">
         <v-icon start>mdi-camera</v-icon>
-        票据识图
+        {{ t('txEdit.receiptRecognize') }}
       </v-btn>
     </div>
 
     <div v-if="!isEdit && templates.length" class="tpls mb-3">
       <v-chip
-        v-for="t in templates"
-        :key="t.id"
+        v-for="tpl in templates"
+        :key="tpl.id"
         class="tpl-chip"
         color="primary"
         variant="outlined"
-        @click="applyTemplate(t)"
-      >{{ t.name }}</v-chip>
+        @click="applyTemplate(tpl)"
+      >{{ tpl.name }}</v-chip>
     </div>
 
     <v-btn-toggle v-model="uiMode" mandatory color="primary" class="mb-2 w100" divided>
-      <v-btn value="flow" class="flex1">收支</v-btn>
-      <v-btn value="transfer" class="flex1">转账</v-btn>
-      <v-btn value="repay" class="flex1">还款</v-btn>
+      <v-btn value="flow" class="flex1">{{ t('txEdit.modeFlow') }}</v-btn>
+      <v-btn value="transfer" class="flex1">{{ t('txType.transfer') }}</v-btn>
+      <v-btn value="repay" class="flex1">{{ t('txEdit.modeRepay') }}</v-btn>
     </v-btn-toggle>
 
     <div v-if="uiMode === 'flow'" class="flow-sub mb-3">
       <v-btn-toggle v-model="flowKind" mandatory color="primary" density="comfortable" class="flow-kind" divided>
-        <v-btn value="expense" class="flex1" size="small">支出</v-btn>
-        <v-btn value="income" class="flex1" size="small">收入</v-btn>
+        <v-btn value="expense" class="flex1" size="small">{{ t('txType.expense') }}</v-btn>
+        <v-btn value="income" class="flex1" size="small">{{ t('txType.income') }}</v-btn>
       </v-btn-toggle>
     </div>
     <div v-if="!isEdit && uiMode === 'flow' && flowKind === 'income'" class="mb-3">
       <v-btn variant="tonal" color="info" block @click="refundOpen = true">
         <v-icon start>mdi-ticket-percent-outline</v-icon>
-        从待核销团购券退款
+        {{ t('txEdit.refundFromVoucher') }}
       </v-btn>
     </div>
-    <p v-else-if="uiMode === 'repay'" class="mode-hint mb-3">
-      信用账户还款写这里：从银行卡 / 支付宝等转入信用卡、花呗等，<strong>不计入本月支出</strong>。
-    </p>
-    <p v-else class="mode-hint mb-3">账户之间挪钱（还信用卡 / 花呗请用「还款」）。</p>
+    <i18n-t v-else-if="uiMode === 'repay'" keypath="txEdit.repayHint" tag="p" class="mode-hint mb-3">
+      <template #bold><strong>{{ t('txEdit.repayHintBold') }}</strong></template>
+    </i18n-t>
+    <p v-else class="mode-hint mb-3">{{ t('txEdit.transferHint') }}</p>
 
     <FareRuleSection
       v-if="!isEdit && uiMode === 'flow' && flowKind === 'expense'"
@@ -70,14 +70,12 @@
     <div v-if="wasPending" class="pending-box mb-3">
       <div class="pending-title">
         <v-icon size="18">mdi-timer-sand</v-icon>
-        金额待确认
+        {{ t('txEdit.pendingTitle') }}
       </div>
-      <p class="pending-tip">
-        这笔由周期记账生成，当前金额是预估。等信用卡入账后，把下方金额改成账单上的实际人民币金额再保存，即完成确认。
-      </p>
+      <p class="pending-tip">{{ t('txEdit.pendingTip') }}</p>
       <v-checkbox
         v-model="keepPending"
-        label="账单还没出，保存后仍保持待确认"
+        :label="t('txEdit.keepPending')"
         color="primary"
         density="compact"
         hide-details
@@ -86,7 +84,7 @@
 
     <v-text-field
       v-model="amountYuan"
-      :label="wasPending && keepPending ? '预估金额（元）' : '金额（元）'"
+      :label="wasPending && keepPending ? t('txEdit.amountEstimated') : t('txEdit.amount')"
       type="number"
       inputmode="decimal"
       variant="outlined"
@@ -129,7 +127,7 @@
 
     <section class="form-section mb-3">
       <header class="form-section__head">
-        <h3 class="form-section__title">明细</h3>
+        <h3 class="form-section__title">{{ t('txEdit.details') }}</h3>
       </header>
       <div class="form-section__body">
         <v-select
@@ -137,7 +135,7 @@
           :items="accounts.list"
           item-title="name"
           item-value="id"
-          :label="form.type === 'transfer' ? '转出账户' : '账户'"
+          :label="form.type === 'transfer' ? t('txEdit.fromAccount') : t('txEdit.account')"
           variant="outlined"
           hide-details
           class="field"
@@ -148,7 +146,7 @@
           :items="transferToOptions"
           item-title="name"
           item-value="id"
-          :label="repayActive ? '信用卡账户' : '转入账户'"
+          :label="repayActive ? t('txEdit.creditAccount') : t('txEdit.toAccount')"
           variant="outlined"
           hide-details
           class="field"
@@ -159,12 +157,12 @@
             :items="form.type === 'expense' ? categories.expenseOptions : categories.incomeOptions"
             item-title="name"
             item-value="id"
-            label="分类"
+            :label="t('txEdit.category')"
             variant="outlined"
             class="flex1"
             hide-details
           />
-          <v-btn icon="mdi-plus" variant="tonal" color="primary" title="新增分类" @click="showQuickCategory = true" />
+          <v-btn icon="mdi-plus" variant="tonal" color="primary" :title="t('txEdit.addCategory')" @click="showQuickCategory = true" />
         </div>
 
         <div class="form-field-row field">
@@ -173,7 +171,7 @@
             :items="tags.list"
             item-title="name"
             item-value="id"
-            label="标签"
+            :label="t('txEdit.tag')"
             multiple
             chips
             closable-chips
@@ -181,25 +179,25 @@
             class="flex1"
             hide-details
           />
-          <v-btn icon="mdi-plus" variant="tonal" color="primary" title="新增标签" @click="showQuickTag = true" />
+          <v-btn icon="mdi-plus" variant="tonal" color="primary" :title="t('txEdit.addTag')" @click="showQuickTag = true" />
         </div>
 
-        <v-text-field v-model="form.remark" label="备注" variant="outlined" hide-details class="field" />
-        <NativeDateField v-model="happenedLocal" label="时间" type="datetime-local" variant="outlined" hide-details class="field field--last" />
+        <v-text-field v-model="form.remark" :label="t('txEdit.remark')" variant="outlined" hide-details class="field" />
+        <NativeDateField v-model="happenedLocal" :label="t('txEdit.time')" type="datetime-local" variant="outlined" hide-details class="field field--last" />
       </div>
     </section>
 
     <section v-if="form.type === 'expense'" class="form-section mb-3">
       <header class="form-section__head voucher-head">
         <h3 class="form-section__title">
-          团购券
+          {{ t('txEdit.voucher') }}
           <v-chip
             v-if="isEdit && voucherStatus"
             size="x-small"
             :color="voucherStatusColor[voucherStatus]"
             variant="tonal"
             class="ml-1"
-          >{{ voucherStatusLabel[voucherStatus] }}</v-chip>
+          >{{ voucherStatusLabel(voucherStatus) }}</v-chip>
         </h3>
         <v-switch
           v-model="voucherOn"
@@ -213,17 +211,13 @@
       <div v-if="voucherOn" class="form-section__body">
         <NativeDateField
           v-model="voucherExpireOn"
-          label="过期日（可选）"
+          :label="t('txEdit.voucherExpire')"
           variant="outlined"
           hide-details
           class="field"
         />
-        <p v-if="voucherStatus === 'refunded'" class="form-section__tip">
-          这张券已退款。要撤销，删除对应的退款流水即可恢复为待核销。
-        </p>
-        <p v-else class="form-section__tip">
-          先买后用的券打开此开关，会标记为待核销；用掉后点「一键核销」，过期自动退款时点「退款」直接生成退款收入。
-        </p>
+        <p v-if="voucherStatus === 'refunded'" class="form-section__tip">{{ t('txEdit.voucherRefundedTip') }}</p>
+        <p v-else class="form-section__tip">{{ t('txEdit.voucherTip') }}</p>
         <div v-if="isEdit && savedVoucherStatus && voucherStatus !== 'refunded'" class="voucher-ops">
           <v-btn
             v-if="voucherStatus === 'pending'"
@@ -232,23 +226,23 @@
             color="success"
             :loading="voucherBusy"
             @click="toggleUsed('used')"
-          >一键核销</v-btn>
+          >{{ t('txEdit.markUsed') }}</v-btn>
           <v-btn
             v-else
             size="small"
             variant="text"
             :loading="voucherBusy"
             @click="toggleUsed('pending')"
-          >撤销核销</v-btn>
-          <v-btn size="small" variant="tonal" color="info" @click="refundOpen = true">退款</v-btn>
+          >{{ t('txEdit.unmarkUsed') }}</v-btn>
+          <v-btn size="small" variant="tonal" color="info" @click="refundOpen = true">{{ t('txEdit.refund') }}</v-btn>
         </div>
       </div>
     </section>
 
     <div v-if="refundOfId" class="refund-link mb-3">
       <v-icon size="16">mdi-ticket-percent-outline</v-icon>
-      <span class="flex1">这是一笔团购券退款，删除后原券会恢复为待核销。</span>
-      <v-btn size="small" variant="text" color="primary" :to="`/transactions/${refundOfId}`">查看原券</v-btn>
+      <span class="flex1">{{ t('txEdit.refundLink') }}</span>
+      <v-btn size="small" variant="text" color="primary" :to="`/transactions/${refundOfId}`">{{ t('txEdit.viewVoucher') }}</v-btn>
     </div>
 
     <FareRuleSection
@@ -273,17 +267,22 @@
 
     <v-alert v-if="error" type="error" class="mb-3" density="compact">{{ error }}</v-alert>
     <div class="save-bar">
-      <v-btn color="primary" block size="large" class="hero-cta" :loading="saving" @click="onSave">保存</v-btn>
+      <v-btn color="primary" block size="large" class="hero-cta" :loading="saving" @click="onSave">{{ t('common.save') }}</v-btn>
     </div>
 
     <QuickNameDialog
       v-model="showQuickCategory"
-      title="新增分类"
-      label="分类名称"
-      :hint="`将创建为当前「${form.type === 'income' ? '收入' : '支出'}」分类，可稍后在分类管理里调整层级。`"
+      :title="t('txEdit.addCategory')"
+      :label="t('txEdit.categoryName')"
+      :hint="t('txEdit.categoryHint', { kind: form.type === 'income' ? t('txType.income') : t('txType.expense') })"
       :save="createCategory"
     />
-    <QuickNameDialog v-model="showQuickTag" title="新增标签" label="标签名称" :save="createTag" />
+    <QuickNameDialog
+      v-model="showQuickTag"
+      :title="t('txEdit.addTag')"
+      :label="t('txEdit.tagName')"
+      :save="createTag"
+    />
     <ReceiptRecognizeDialog v-model="showAI" @recognized="applyRecognized" @attached="onReceiptAttached" />
     <VoucherRefundDialog v-model="refundOpen" :voucher="refundVoucher" @refunded="onRefunded" />
   </div>
@@ -292,6 +291,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import http from '../api/http'
 import { useAccountStore } from '../stores/account'
@@ -319,6 +319,7 @@ import ReceiptRecognizeDialog from '../components/ReceiptRecognizeDialog.vue'
 import VoucherRefundDialog from '../components/VoucherRefundDialog.vue'
 
 const props = defineProps<{ id?: string }>()
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const accounts = useAccountStore()
@@ -399,12 +400,12 @@ watch(voucherOn, (on) => {
 async function toggleUsed(status: 'pending' | 'used') {
   voucherBusy.value = true
   try {
-    const t = await tx.setVoucherStatus(editId.value, status)
-    voucherStatus.value = t.voucherStatus || ''
+    const updated = await tx.setVoucherStatus(editId.value, status)
+    voucherStatus.value = updated.voucherStatus || ''
     savedVoucherStatus.value = voucherStatus.value
-    editingTx.value = t
+    editingTx.value = updated
   } catch (e: any) {
-    error.value = e?.message || '操作失败'
+    error.value = e?.message || t('common.failed')
   } finally {
     voucherBusy.value = false
   }
@@ -444,7 +445,7 @@ const fareRuleItems = computed(() =>
   (fareRules.value || [])
     .filter((r) => r.enabled !== false)
     .map((r) => ({
-      title: r.city ? `${r.name}（${r.city}）` : r.name,
+      title: r.city ? t('txEdit.fareRuleCity', { name: r.name, city: r.city }) : r.name,
       value: r.id,
     })),
 )
@@ -479,10 +480,10 @@ const transferToOptions = computed(() => {
   return list
 })
 
-watch(() => form.type, (t, prev) => {
-  if (syncingUiMode || t === prev) return
+watch(() => form.type, (type, prev) => {
+  if (syncingUiMode || type === prev) return
   form.categoryId = undefined
-  if (!(isRepayMode.value && t === 'transfer')) {
+  if (!(isRepayMode.value && type === 'transfer')) {
     form.toAccountId = undefined
   }
 })
@@ -532,13 +533,13 @@ function enterUiMode(mode: 'flow' | 'transfer' | 'repay', useDefaultAccount = tr
     if (mode === 'flow') {
       form.type = flowKind.value
       form.toAccountId = undefined
-      if (form.remark === '信用卡还款') form.remark = ''
+      if (form.remark === t('txEdit.repayRemark')) form.remark = ''
       repay.reset()
       if (useDefaultAccount) applyDefaultAccount(flowKind.value)
     } else if (mode === 'transfer') {
       form.type = 'transfer'
       form.categoryId = undefined
-      if (form.remark === '信用卡还款') form.remark = ''
+      if (form.remark === t('txEdit.repayRemark')) form.remark = ''
       // 普通转账不强制信用账户
       if (form.toAccountId && accounts.list.some((a) => a.id === form.toAccountId && a.type === 'credit')) {
         form.toAccountId = undefined
@@ -548,7 +549,7 @@ function enterUiMode(mode: 'flow' | 'transfer' | 'repay', useDefaultAccount = tr
     } else {
       form.type = 'transfer'
       form.categoryId = undefined
-      form.remark = form.remark || '信用卡还款'
+      form.remark = form.remark || t('txEdit.repayRemark')
       repay.auto.value = true
       form.installmentPeriods = Math.max(1, form.installmentPeriods || 1)
       if (useDefaultAccount) applyDefaultAccount('repay')
@@ -585,48 +586,48 @@ async function loadSideData() {
   } catch { /* ignore */ }
 }
 
-function applyEditTransaction(t: Awaited<ReturnType<typeof tx.get>>) {
-  if (t.type === 'revalue') return
+function applyEditTransaction(item: Awaited<ReturnType<typeof tx.get>>) {
+  if (item.type === 'revalue') return
   syncingUiMode = true
-  form.type = t.type
-  if (t.type === 'expense' || t.type === 'income') {
+  form.type = item.type
+  if (item.type === 'expense' || item.type === 'income') {
     uiMode.value = 'flow'
-    flowKind.value = t.type
+    flowKind.value = item.type
   } else {
-    const toCredit = t.toAccountId && accounts.list.some((a) => a.id === t.toAccountId && a.type === 'credit')
+    const toCredit = item.toAccountId && accounts.list.some((a) => a.id === item.toAccountId && a.type === 'credit')
     uiMode.value = toCredit ? 'repay' : 'transfer'
   }
-  form.accountId = t.accountId
-  form.toAccountId = t.toAccountId || undefined
-  form.categoryId = t.categoryId || undefined
-  form.tagIds = (t.tags || []).map((x) => x.id)
-  form.remark = t.remark || ''
-  form.geoMode = (t.geoMode as 'point' | 'route') || (t.geoLng != null ? 'point' : '')
-  form.geoLng = t.geoLng ?? null
-  form.geoLat = t.geoLat ?? null
-  form.geoName = t.geoName || ''
-  form.geoEndLng = t.geoEndLng ?? null
-  form.geoEndLat = t.geoEndLat ?? null
-  form.geoEndName = t.geoEndName || ''
-  form.fareRuleId = t.fareRuleId || null
-  form.installmentPeriods = t.installmentPeriods || 1
-  form.installmentDeferCycles = t.installmentDeferCycles || 0
-  interestYuan.value = fenToYuan(t.interestFen || 0)
-  fareEnabled.value = !!t.fareRuleId
-  amountYuan.value = fenToYuan(t.amount)
-  fxEnabled.value = !!(t.foreignCurrency && t.foreignAmount)
-  fxCurrency.value = t.foreignCurrency || 'USD'
-  fxAmountYuan.value = t.foreignAmount ? fenToYuan(t.foreignAmount) : ''
-  wasPending.value = !!t.amountPending
+  form.accountId = item.accountId
+  form.toAccountId = item.toAccountId || undefined
+  form.categoryId = item.categoryId || undefined
+  form.tagIds = (item.tags || []).map((x) => x.id)
+  form.remark = item.remark || ''
+  form.geoMode = (item.geoMode as 'point' | 'route') || (item.geoLng != null ? 'point' : '')
+  form.geoLng = item.geoLng ?? null
+  form.geoLat = item.geoLat ?? null
+  form.geoName = item.geoName || ''
+  form.geoEndLng = item.geoEndLng ?? null
+  form.geoEndLat = item.geoEndLat ?? null
+  form.geoEndName = item.geoEndName || ''
+  form.fareRuleId = item.fareRuleId || null
+  form.installmentPeriods = item.installmentPeriods || 1
+  form.installmentDeferCycles = item.installmentDeferCycles || 0
+  interestYuan.value = fenToYuan(item.interestFen || 0)
+  fareEnabled.value = !!item.fareRuleId
+  amountYuan.value = fenToYuan(item.amount)
+  fxEnabled.value = !!(item.foreignCurrency && item.foreignAmount)
+  fxCurrency.value = item.foreignCurrency || 'USD'
+  fxAmountYuan.value = item.foreignAmount ? fenToYuan(item.foreignAmount) : ''
+  wasPending.value = !!item.amountPending
   keepPending.value = false
-  editingTx.value = t
-  voucherStatus.value = t.voucherStatus || ''
+  editingTx.value = item
+  voucherStatus.value = item.voucherStatus || ''
   savedVoucherStatus.value = voucherStatus.value
-  voucherOn.value = !!t.voucherStatus
-  voucherExpireOn.value = t.voucherExpireOn || ''
-  refundOfId.value = t.refundOfId || null
-  happenedLocal.value = dayjs(t.happenedAt).format('YYYY-MM-DDTHH:mm')
-  existingAttachments.value = (t.attachments || []).map((a) => ({ id: a.id, url: a.url }))
+  voucherOn.value = !!item.voucherStatus
+  voucherExpireOn.value = item.voucherExpireOn || ''
+  refundOfId.value = item.refundOfId || null
+  happenedLocal.value = dayjs(item.happenedAt).format('YYYY-MM-DDTHH:mm')
+  existingAttachments.value = (item.attachments || []).map((a) => ({ id: a.id, url: a.url }))
   attachmentIds.value = existingAttachments.value.map((a) => a.id)
   // 等 watch 跑完再放开，避免 form.type 变更把刚写入的 categoryId 清掉
   void nextTick(() => { syncingUiMode = false })
@@ -641,12 +642,12 @@ onMounted(async () => {
   const txP = isEdit.value ? tx.get(editId.value) : null
 
   if (txP) {
-    const [t] = await Promise.all([txP, storesP])
-    if (t.type === 'revalue') {
-      void router.replace(`/accounts/${t.accountId}/ledger`)
+    const [item] = await Promise.all([txP, storesP])
+    if (item.type === 'revalue') {
+      void router.replace(`/accounts/${item.accountId}/ledger`)
       return
     }
-    applyEditTransaction(t)
+    applyEditTransaction(item)
     if (uiMode.value === 'repay' && form.toAccountId) {
       void repay.load(form.toAccountId)
     }
@@ -698,8 +699,8 @@ onMounted(async () => {
   const tplId = Number(route.query.templateId || 0)
   if (tplId > 0) {
     await loadSideData()
-    const t = templates.value.find((x) => x.id === tplId)
-    if (t) await applyTemplate(t)
+    const tpl = templates.value.find((x) => x.id === tplId)
+    if (tpl) await applyTemplate(tpl)
   }
 })
 
@@ -742,32 +743,32 @@ function onReceiptAttached(att: { id: number; url: string }) {
   existingAttachments.value = [...existingAttachments.value, att]
 }
 
-async function applyTemplate(t: any) {
+async function applyTemplate(tpl: any) {
   syncingUiMode = true
-  form.type = t.type
-  if (t.type === 'expense' || t.type === 'income') {
+  form.type = tpl.type
+  if (tpl.type === 'expense' || tpl.type === 'income') {
     uiMode.value = 'flow'
-    flowKind.value = t.type
+    flowKind.value = tpl.type
   } else {
-    const toCredit = t.toAccountId && accounts.list.some((a) => a.id === t.toAccountId && a.type === 'credit')
+    const toCredit = tpl.toAccountId && accounts.list.some((a) => a.id === tpl.toAccountId && a.type === 'credit')
     uiMode.value = toCredit ? 'repay' : 'transfer'
   }
   syncingUiMode = false
   suppressDefaultAccountOnce()
-  if (t.accountId) form.accountId = t.accountId
-  form.toAccountId = t.toAccountId || undefined
-  form.categoryId = t.categoryId || undefined
-  form.tagIds = t.tagIds || []
-  form.remark = t.remark?.trim() || t.name || ''
-  if (t.geoLng != null && t.geoLat != null) {
-    form.geoMode = (t.geoMode as 'point' | 'route') || (t.geoEndLng != null ? 'route' : 'point')
-    form.geoLng = t.geoLng
-    form.geoLat = t.geoLat
-    form.geoName = t.geoName || ''
+  if (tpl.accountId) form.accountId = tpl.accountId
+  form.toAccountId = tpl.toAccountId || undefined
+  form.categoryId = tpl.categoryId || undefined
+  form.tagIds = tpl.tagIds || []
+  form.remark = tpl.remark?.trim() || tpl.name || ''
+  if (tpl.geoLng != null && tpl.geoLat != null) {
+    form.geoMode = (tpl.geoMode as 'point' | 'route') || (tpl.geoEndLng != null ? 'route' : 'point')
+    form.geoLng = tpl.geoLng
+    form.geoLat = tpl.geoLat
+    form.geoName = tpl.geoName || ''
     if (form.geoMode === 'route') {
-      form.geoEndLng = t.geoEndLng ?? null
-      form.geoEndLat = t.geoEndLat ?? null
-      form.geoEndName = t.geoEndName || ''
+      form.geoEndLng = tpl.geoEndLng ?? null
+      form.geoEndLat = tpl.geoEndLat ?? null
+      form.geoEndName = tpl.geoEndName || ''
     } else {
       form.geoEndLng = null
       form.geoEndLat = null
@@ -776,11 +777,11 @@ async function applyTemplate(t: any) {
   }
 
   // 先写入模板金额，避免选规则触发 preview 时原价为空被写成 0
-  const tplAmount = Number(t.amount) || 0
+  const tplAmount = Number(tpl.amount) || 0
   if (tplAmount > 0) amountYuan.value = fenToYuan(tplAmount)
 
-  const ruleId = t.fareRuleId || t.fareRule?.id
-  const rule = fareRules.value.find((r) => r.id === ruleId) || t.fareRule
+  const ruleId = tpl.fareRuleId || tpl.fareRule?.id
+  const rule = fareRules.value.find((r) => r.id === ruleId) || tpl.fareRule
   if (ruleId && rule) {
     const userCity = getCachedCity()
     if (cityAllowsAuto(rule.city || '', userCity)) {
@@ -795,7 +796,7 @@ async function applyTemplate(t: any) {
       }
       return
     }
-    fareHint.value = rule.city ? `地市不匹配（规则：${rule.city}），未自动启用` : ''
+    fareHint.value = rule.city ? t('txEdit.fareCityMismatch', { city: rule.city }) : ''
   }
 }
 
@@ -840,14 +841,14 @@ async function applySuggestedFare(force = false, baseFen?: number) {
       amountYuan.value = fenToYuan(base)
     }
   } catch (e: any) {
-    fareHint.value = e.message || '预览失败'
+    fareHint.value = e.message || t('txEdit.previewFailed')
   } finally {
     farePreviewLoading.value = false
   }
 }
 
 async function createCategory(name: string) {
-  if (form.type === 'transfer') throw new Error('转账无需分类')
+  if (form.type === 'transfer') throw new Error(t('txEdit.transferNoCategory'))
   const cat = await categories.create({ name, kind: form.type, icon: 'mdi-shape', sort: 0 })
   form.categoryId = cat.id
 }
@@ -860,17 +861,17 @@ async function createTag(name: string) {
 async function onSave() {
   error.value = ''
   const amount = yuanToFen(amountYuan.value || '0')
-  if (amount < 0) { error.value = '金额无效'; return }
+  if (amount < 0) { error.value = t('txEdit.invalidAmount'); return }
   if (amount === 0 && !(fareEnabled.value && form.fareRuleId)) {
-    error.value = '请输入金额'
+    error.value = t('txEdit.enterAmount')
     return
   }
-  if (!form.accountId) { error.value = '请选择账户'; return }
+  if (!form.accountId) { error.value = t('txEdit.selectAccount'); return }
   const useFx = fxEnabled.value && form.type !== 'transfer'
   const fxCode = fxCurrency.value.trim().toUpperCase()
   const fxFen = useFx ? yuanToFen(fxAmountYuan.value || '0') : 0
-  if (useFx && !/^[A-Z]{3,8}$/.test(fxCode)) { error.value = '请选择或填写外币币种（如 USD）'; return }
-  if (useFx && fxFen <= 0) { error.value = '请填写外币金额'; return }
+  if (useFx && !/^[A-Z]{3,8}$/.test(fxCode)) { error.value = t('txEdit.fxCurrencyRequired'); return }
+  if (useFx && fxFen <= 0) { error.value = t('txEdit.fxAmountRequired'); return }
   saving.value = true
   try {
     const payload = {
@@ -904,14 +905,14 @@ async function onSave() {
     else await tx.create(payload)
     await router.replace('/')
   } catch (e: any) {
-    error.value = e.message || '保存失败'
+    error.value = e.message || t('txEdit.saveFailed')
   } finally {
     saving.value = false
   }
 }
 
 async function onDelete() {
-  if (!confirm('确定删除这笔流水？')) return
+  if (!confirm(t('txEdit.confirmDelete'))) return
   await tx.remove(editId.value)
   await router.replace('/')
 }

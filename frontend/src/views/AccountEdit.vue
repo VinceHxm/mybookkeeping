@@ -2,11 +2,11 @@
   <div class="page edit-page">
     <div class="toolbar">
       <v-btn icon="mdi-arrow-left" variant="text" @click="goBack" />
-      <h1>{{ accountId ? '编辑账户' : '新建账户' }}</h1>
-      <v-btn color="primary" variant="text" :loading="formRef?.saving" @click="onSave">保存</v-btn>
+      <h1>{{ accountId ? t('accountEdit.editTitle') : t('accountEdit.newTitle') }}</h1>
+      <v-btn color="primary" variant="text" :loading="formRef?.saving" @click="onSave">{{ t('common.save') }}</v-btn>
     </div>
 
-    <div v-if="loading" class="loading-tip">加载中…</div>
+    <div v-if="loading" class="loading-tip">{{ t('common.loading') }}</div>
     <AccountEditForm
       v-else
       ref="formRef"
@@ -19,7 +19,7 @@
 
     <DeleteConfirmDialog
       v-model="confirmOpen"
-      :name="initial?.name || '此账户'"
+      :name="initial?.name || t('accountEdit.thisAccount')"
       :loading="deleting"
       @confirm="doDelete"
     />
@@ -29,10 +29,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import AccountEditForm from '../components/AccountEditForm.vue'
 import DeleteConfirmDialog from '../components/DeleteConfirmDialog.vue'
 import { useAccountStore, type Account } from '../stores/account'
 
+const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const accounts = useAccountStore()

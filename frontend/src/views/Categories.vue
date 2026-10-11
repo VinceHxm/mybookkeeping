@@ -2,13 +2,13 @@
   <div class="page">
     <div class="toolbar">
       <v-btn icon="mdi-arrow-left" variant="text" to="/mine" />
-      <h1>分类管理</h1>
+      <h1>{{ t('categories.title') }}</h1>
       <v-btn icon="mdi-plus" variant="text" color="primary" @click="openCreate(null)" />
     </div>
 
     <v-tabs v-model="tab" color="primary" class="mb-3" density="comfortable">
-      <v-tab value="expense">支出</v-tab>
-      <v-tab value="income">收入</v-tab>
+      <v-tab value="expense">{{ t('txType.expense') }}</v-tab>
+      <v-tab value="income">{{ t('txType.income') }}</v-tab>
     </v-tabs>
 
     <div class="cat-columns">
@@ -20,8 +20,8 @@
         @delete="askDelete(c)"
       >
         <template #meta>
-          一级分类
-          <span v-if="childrenOf(c.id).length"> · {{ childrenOf(c.id).length }} 个子分类</span>
+          {{ t('categories.root') }}
+          <span v-if="childrenOf(c.id).length"> · {{ t('categories.childCount', { n: childrenOf(c.id).length }) }}</span>
         </template>
       </EntityCard>
       <EntityCard
@@ -33,15 +33,17 @@
         @edit="openEdit(ch)"
         @delete="askDelete(ch)"
       >
-        <template #meta>属于「{{ c.name }}」</template>
+        <template #meta>{{ t('categories.belongsTo', { name: c.name }) }}</template>
       </EntityCard>
     </section>
     </div>
-    <div v-if="!roots.length" class="empty-tip">暂无{{ tab === 'expense' ? '支出' : '收入' }}分类</div>
+    <div v-if="!roots.length" class="empty-tip">
+      {{ tab === 'expense' ? t('categories.emptyExpense') : t('categories.emptyIncome') }}
+    </div>
 
     <v-dialog v-if="!isMobile" v-model="dialog" max-width="440" scrollable>
       <v-card>
-        <v-card-title>{{ editing ? '编辑分类' : '新建分类' }}</v-card-title>
+        <v-card-title>{{ editing ? t('categories.edit') : t('categories.create') }}</v-card-title>
         <v-card-text>
           <CategoryEditForm
             v-if="dialog"
@@ -56,8 +58,8 @@
         </v-card-text>
         <v-card-actions>
           <v-spacer />
-          <v-btn variant="text" @click="dialog = false">取消</v-btn>
-          <v-btn color="primary" :loading="dialogFormRef?.saving" @click="onDialogSave">保存</v-btn>
+          <v-btn variant="text" @click="dialog = false">{{ t('common.cancel') }}</v-btn>
+          <v-btn color="primary" :loading="dialogFormRef?.saving" @click="onDialogSave">{{ t('common.save') }}</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -74,12 +76,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import EntityCard from '../components/EntityCard.vue'
 import CategoryEditForm from '../components/CategoryEditForm.vue'
 import DeleteConfirmDialog from '../components/DeleteConfirmDialog.vue'
 import { useCategoryStore, type Category } from '../stores/category'
 import { useBreakpoint } from '../composables/useBreakpoint'
 
+const { t } = useI18n()
 const categories = useCategoryStore()
 const router = useRouter()
 const { isMobile } = useBreakpoint()
@@ -148,7 +152,7 @@ async function doDelete() {
     if (editing.value?.id === pendingDelete.value.id) dialog.value = false
     pendingDelete.value = null
   } catch (e: any) {
-    alert(e.message || '删除失败')
+    alert(e.message || t('ui.deleteFailed'))
   } finally {
     deleting.value = false
   }

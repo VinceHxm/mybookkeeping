@@ -2,10 +2,10 @@
   <div class="page">
     <div class="toolbar">
       <v-btn icon="mdi-arrow-left" variant="text" to="/mine" />
-      <h1>计费规则</h1>
+      <h1>{{ t('fare.title') }}</h1>
       <v-btn icon="mdi-plus" variant="text" color="primary" @click="openCreate" />
     </div>
-    <p class="page-hint">先定名称与基础折扣，再按需打开免费日、阶梯、时段等模块。原价可空；记账手填金额始终为准。</p>
+    <p class="page-hint">{{ t('fare.hint') }}</p>
 
     <div class="card-grid">
     <EntityCard
@@ -18,24 +18,24 @@
       @delete="askDelete(r)"
     >
       <template #badges>
-        <v-chip v-if="!r.enabled" size="x-small" variant="tonal">已停用</v-chip>
+        <v-chip v-if="!r.enabled" size="x-small" variant="tonal">{{ t('fare.disabled') }}</v-chip>
         <v-chip v-if="r.city" size="x-small" variant="tonal" color="primary">{{ r.city }}</v-chip>
-        <v-chip v-if="r.freeOnHoliday" size="x-small" variant="tonal" color="success">节假日免</v-chip>
+        <v-chip v-if="r.freeOnHoliday" size="x-small" variant="tonal" color="success">{{ t('fare.holidayFree') }}</v-chip>
       </template>
       <template #meta>
-        <div>{{ r.baseFen ? `默认原价 ¥${fenToYuan(r.baseFen)}` : '原价由模板 / 记一笔提供' }}</div>
+        <div>{{ r.baseFen ? t('fare.defaultBase', { amount: `¥${fenToYuan(r.baseFen)}` }) : t('fare.baseFromTemplate') }}</div>
         <div>
-          <span v-if="r.cardRate && r.cardRate !== 1">刷卡 {{ rateToZhe(r.cardRate) }} 折 · </span>
+          <span v-if="r.cardRate && r.cardRate !== 1">{{ t('fare.cardRate', { zhe: rateToZhe(r.cardRate), pct: ratePct(r.cardRate) }) }} · </span>
           {{ cycleLabel(r) }}
-          <span v-if="r.tiers?.length"> · {{ r.tiers.length }} 金额档</span>
-          <span v-if="r.countTiers?.length"> · {{ r.countTiers.length }} 次数档</span>
-          <span v-if="r.timeWindows?.length"> · {{ r.timeWindows.length }} 时段</span>
-          <span v-if="r.freePeriods?.length"> · {{ r.freePeriods.length }} 免费日</span>
+          <span v-if="r.tiers?.length"> · {{ t('fare.amountTiers', { n: r.tiers.length }) }}</span>
+          <span v-if="r.countTiers?.length"> · {{ t('fare.countTiers', { n: r.countTiers.length }) }}</span>
+          <span v-if="r.timeWindows?.length"> · {{ t('fare.timeWindows', { n: r.timeWindows.length }) }}</span>
+          <span v-if="r.freePeriods?.length"> · {{ t('fare.freeDays', { n: r.freePeriods.length }) }}</span>
         </div>
       </template>
     </EntityCard>
     </div>
-    <p v-if="!list.length" class="empty">暂无规则，点右上角添加</p>
+    <p v-if="!list.length" class="empty">{{ t('fare.empty') }}</p>
 
     <DeleteConfirmDialog
       v-model="confirmOpen"
@@ -49,22 +49,19 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import http from '../api/http'
 import EntityCard from '../components/EntityCard.vue'
 import DeleteConfirmDialog from '../components/DeleteConfirmDialog.vue'
 import { fenToYuan } from '../utils/money'
-import { rateToZhe, type FareRule } from '../utils/fare'
+import { cycleLabel, ratePct, rateToZhe, type FareRule } from '../utils/fare'
 
+const { t } = useI18n()
 const router = useRouter()
 const list = ref<FareRule[]>([])
 const confirmOpen = ref(false)
 const pendingDelete = ref<FareRule | null>(null)
 const deleting = ref(false)
-
-function cycleLabel(r: FareRule) {
-  if (r.cycleType === 'from_day') return `每月${r.cycleStartDay}日起算`
-  return '自然月'
-}
 
 async function reload() {
   const { data } = await http.get('/fare-rules')

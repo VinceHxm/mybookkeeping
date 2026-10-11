@@ -8,6 +8,7 @@ import (
 
 	"mybookkeeping/internal/config"
 	"mybookkeeping/internal/database"
+	"mybookkeeping/internal/i18n"
 	"mybookkeeping/internal/service"
 )
 
@@ -21,7 +22,7 @@ func main() {
 	}
 
 	cfg := config.Load()
-	db, err := database.OpenMySQL(cfg)
+	db, err := database.Open(cfg)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -31,9 +32,9 @@ func main() {
 		log.Fatalf("创建/重置失败: %v", err)
 	}
 	cat := service.NewCategoryService(db)
-	_ = cat.EnsureDefaults(user.ID)
+	_ = cat.EnsureDefaults(user.ID, i18n.ZhCN)
 	tag := service.NewTagService(db)
-	_ = tag.EnsureDefaults(user.ID)
+	_ = tag.EnsureDefaults(user.ID, i18n.ZhCN)
 	acc := service.NewAccountService(db)
 	list, _ := acc.List(user.ID, true)
 	if len(list) == 0 {

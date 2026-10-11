@@ -294,6 +294,18 @@ myBookkeeping/
 - **区块头统一用 `MetaHead`**（图标 + 标题 + 说明 + 右侧插槽放开关/徽标），不要再各自写 `meta-head` 样式。
 - 记一笔页现有拆分：`FareRuleSection`（计费规则）、`CreditExtrasPanel` + `useRepaySuggestion`（信用卡分期 / 还款建议）、`ForeignPaymentFields`（外币）、`LocationSection`（地点 + 地图弹窗）、`ReceiptRecognizeDialog`（票据识图）、`QuickNameDialog`（快捷新建分类 / 标签）。
 
+### 5.3 多语言
+
+支持 `zh-CN`（基准）/ `en` / `ja` / `ko`，全部页面已迁移。新增界面文案一律走 i18n，不再写中文硬编码。
+
+- **前端**：`vue-i18n`（Composition 模式）。通用文案在 `src/i18n/locales/*.ts`（`zh-CN.ts` 定义结构，其余语言用 `MessageSchema` 约束）；各页面 / 功能的文案放 `src/i18n/modules/<命名空间>.ts`，文件名即命名空间，一个文件内写全四种语言，用 `const en: typeof zh` + `satisfies LocaleBundle<typeof zh>` 约束，漏键 `npm run build` 直接报错。组件内 `const { t } = useI18n()`；组件外（utils / store / axios）用 `import { t } from '../i18n'`。含链接或加粗的句子用 `<i18n-t>` 插槽，不拆句拼接。避免用 `t` 当循环变量或函数参数名。
+- **格式**：日期用 dayjs 本地化格式；金额千分位与紧凑金额（万 / 만 / K）走 `Intl.NumberFormat(currentLocale())`，不手写单位；人民币仍显示 `¥`。
+- **语言来源**：登录后以用户设置 `locale` 为准（设置页、登录 / 注册页切换，选中即保存）；未登录或老账号为空时取本地缓存 `mbk_locale` → 浏览器语言 → 中文。
+- **后端报错**：前端每个请求带 `Accept-Language`；service 层继续写中文 `errors.New`，`handler.Fail` / 中间件出口用 `i18n.T` 按中文原文查 `internal/i18n/messages*.go`（按领域分文件）翻译，查不到回退中文。原文含数字时写成 `%d` / `%s` 模板。同一原文可在多个文件登记，但译文必须一致（`TestNoConflictingMessages` 检查）。**改中文报错原文须同步改翻译表的键。** 后端兜底的展示文案（统计里的「未分类」、分期默认名、流水页说明等）同样在 handler 出口 `i18n.T`。 前端需要按错误类型分支时用 `FailCode` 返回稳定 `code`（如 `user_disabled`），不要匹配文案。
+- **默认分类**：四语名称全部入库（`Category.PresetKey` 为中文预设名，`NameZh/En/Ja/Ko` 为译名，译名源在 `internal/i18n/presets.go`），`Name` 跟随用户界面语言；切换语言时整套重命名，不会多出一套。用户改名后清空四语名、只用自定义名（`PresetKey` 保留，补齐时不会再补回）。老账号未改名的中文默认分类在登录 / 切换语言时按任一语言名称回填。凭证退款用的「退款」分类同样走预设。
+- **默认标签**：按注册语言生成一次（`User.PresetLocale`），之后视为用户数据不随语言变化；按名补齐只对中文预设执行。新增分类 / 标签预设须同时加译名，`TestPresetNamesTranslated` 会检查。
+- **不翻译**：用户自建数据（账户 / 改名后的分类 / 标签 / 备注等）、法定节假日、高德地名、AI 识别 Prompt。
+
 ---
 
 ## 6. AI 能力约定
@@ -322,6 +334,8 @@ Prompt 须带上用户当前的账户 / 分类 / 标签名单；信用卡还款�
 
 | 日期 | 说明 |
 |------|------|
+| 2026-10-10 | 多语言全量迁移：全部页面接入 i18n（文案按功能拆到 `src/i18n/modules`），后端报错与兜底展示文案按领域补齐翻译；默认分类四语入库并跟随界面语言（改名后保持自定义名，老账号自动回填）；默认标签保持按注册语言生成 |
+| 2026-10-10 | 多语言试点：前端接入 vue-i18n（中 / 英 / 日 / 韩），迁移登录、注册、首页、我的、设置；后端按 Accept-Language 翻译报错，用户设置新增 `locale`，新用户按注册语言生成默认分类与标签 |
 | 2026-10-08 | 刷卡分期支持选择首期出账（随刷卡 / 下期），账单拆分、分期明细、账户流水的出账期数同步按推迟后的日期计算 |
 | 2026-10-08 | 账户页信用卡展示「分期中」明细（流水分期 + 存量分期：已出账期数、剩余本金、下期入账、末期），账单接口新增 `installments`；修复 `futureInstallment` 误把未出账的一次性消费算作分期 |
 | 2026-10-08 | 信用卡账单批量接口 `GET /accounts/credit-statements`：账户页一次请求、后端两次查询算完全部卡；还款提醒同样改为批量计算 |

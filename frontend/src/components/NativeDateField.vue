@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import dayjs from 'dayjs'
+import { useI18n } from 'vue-i18n'
 
 defineOptions({ inheritAttrs: false })
+
+const { t } = useI18n()
 
 const props = withDefaults(defineProps<{
   type?: 'date' | 'datetime-local' | 'time'
@@ -29,20 +32,20 @@ const displayText = computed(() => {
   if (!model.value) return ''
   if (props.type === 'date') {
     const d = dayjs(model.value)
-    return d.isValid() ? d.format('YYYY年M月D日') : model.value
+    return d.isValid() ? d.format(t('ui.date.dateFormat')) : model.value
   }
   if (props.type === 'time') {
     const d = dayjs(`2000-01-01T${model.value}`)
     return d.isValid() ? d.format('HH:mm') : model.value
   }
   const d = dayjs(model.value)
-  return d.isValid() ? d.format('YYYY年M月D日 HH:mm') : model.value
+  return d.isValid() ? d.format(t('ui.date.dateTimeFormat')) : model.value
 })
 
 const placeholder = computed(() => {
-  if (props.type === 'time') return '选择时间'
-  if (props.type === 'datetime-local') return '选择日期时间'
-  return '选择日期'
+  if (props.type === 'time') return t('ui.date.pickTime')
+  if (props.type === 'datetime-local') return t('ui.date.pickDateTime')
+  return t('ui.date.pickDate')
 })
 
 function syncFromModel() {
@@ -140,7 +143,7 @@ function confirm() {
     >
       <v-card class="picker-card" rounded="xl">
         <div class="picker-title">
-          {{ type === 'time' ? '选择时间' : type === 'datetime-local' ? '选择日期时间' : '选择日期' }}
+          {{ placeholder }}
         </div>
 
         <v-date-picker
@@ -159,7 +162,7 @@ function confirm() {
           <v-select
             v-model="hour"
             :items="hourItems"
-            label="时"
+            :label="t('ui.date.hour')"
             variant="outlined"
             density="compact"
             hide-details
@@ -168,7 +171,7 @@ function confirm() {
           <v-select
             v-model="minute"
             :items="minuteItems"
-            label="分"
+            :label="t('ui.date.minute')"
             variant="outlined"
             density="compact"
             hide-details
@@ -176,10 +179,10 @@ function confirm() {
         </div>
 
         <div class="picker-actions">
-          <v-btn variant="text" color="primary" @click="clear">清除</v-btn>
+          <v-btn variant="text" color="primary" @click="clear">{{ t('ui.date.clear') }}</v-btn>
           <v-spacer />
-          <v-btn v-if="type !== 'time'" variant="text" color="primary" @click="setToday">今天</v-btn>
-          <v-btn color="primary" variant="flat" class="confirm-btn" @click="confirm">确定</v-btn>
+          <v-btn v-if="type !== 'time'" variant="text" color="primary" @click="setToday">{{ t('ui.date.today') }}</v-btn>
+          <v-btn color="primary" variant="flat" class="confirm-btn" @click="confirm">{{ t('ui.date.ok') }}</v-btn>
         </div>
       </v-card>
     </v-dialog>

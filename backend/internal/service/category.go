@@ -115,8 +115,9 @@ func (s *CategoryService) Update(userID, id uint64, in CategoryInput) (*model.Ca
 	if err := s.db.Where("id = ? AND user_id = ?", id, userID).First(&c).Error; err != nil {
 		return nil, err
 	}
-	if in.Name != "" {
+	if in.Name != "" && in.Name != c.Name {
 		c.Name = in.Name
+		c.NameZh, c.NameEn, c.NameJa, c.NameKo = "", "", "", ""
 	}
 	c.Icon = in.Icon
 	c.Sort = in.Sort
@@ -142,7 +143,7 @@ func (s *CategoryService) Update(userID, id uint64, in CategoryInput) (*model.Ca
 			c.ParentID = in.ParentID
 		}
 	}
-	if err := s.db.Model(&c).Select("Name", "Icon", "Sort", "ParentID").Updates(&c).Error; err != nil {
+	if err := s.db.Model(&c).Select("Name", "NameZh", "NameEn", "NameJa", "NameKo", "Icon", "Sort", "ParentID").Updates(&c).Error; err != nil {
 		return nil, err
 	}
 	return &c, nil
@@ -263,125 +264,3 @@ var defaultIncomePresets = []presetNode{
 	}},
 }
 
-// EnsureDefaults 新用户写入完整二级预设；老用户按名称补齐缺失的一级/二级（不改已有结构）
-func (s *CategoryService) EnsureDefaults(userID uint64) error {
-	var count int64
-	s.db.Model(&model.Category{}).Where("user_id = ?", userID).Count(&count)
-	if count == 0 {
-		return s.seedFullPresets(userID)
-	}
-	return s.supplementPresets(userID)
-}
-
-func (s *CategoryService) seedFullPresets(userID uint64) error {
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		if err := createPresetTree(tx, userID, "expense", defaultExpensePresets); err != nil {
-			return err
-		}
-		return createPresetTree(tx, userID, "income", defaultIncomePresets)
-	})
-}
-
-func createPresetTree(tx *gorm.DB, userID uint64, kind string, nodes []presetNode) error {
-	for i, n := range nodes {
-		parent := model.Category{
-			UserID: userID, Name: n.Name, Kind: kind,
-			Icon: n.Icon, Sort: i + 1,
-		}
-		if err := tx.Create(&parent).Error; err != nil {
-			return err
-		}
-		for j, ch := range n.Children {
-			pid := parent.ID
-			child := model.Category{
-				UserID: userID, Name: ch.Name, Kind: kind,
-				Icon: ch.Icon, Sort: j + 1, ParentID: &pid,
-			}
-			if err := tx.Create(&child).Error; err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-func (s *CategoryService) supplementPresets(userID uint64) error {
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		if err := supplementKind(tx, userID, "expense", defaultExpensePresets); err != nil {
-			return err
-		}
-		return supplementKind(tx, userID, "income", defaultIncomePresets)
-	})
-}
-
-func supplementKind(tx *gorm.DB, userID uint64, kind string, presets []presetNode) error {
-	var existing []model.Category
-	if err := tx.Where("user_id = ? AND kind = ?", userID, kind).Find(&existing).Error; err != nil {
-		return err
-	}
-	rootByName := map[string]model.Category{}
-	childNamesUnder := map[uint64]map[string]struct{}{}
-	rootNames := map[string]struct{}{}
-	for _, c := range existing {
-		if c.ParentID == nil {
-			rootByName[c.Name] = c
-			rootNames[c.Name] = struct{}{}
-		} else {
-			m := childNamesUnder[*c.ParentID]
-			if m == nil {
-				m = map[string]struct{}{}
-				childNamesUnder[*c.ParentID] = m
-			}
-			m[c.Name] = struct{}{}
-		}
-	}
-
-	nextSort := len(rootByName) + 1
-	for _, p := range presets {
-		parent, ok := rootByName[p.Name]
-		if !ok {
-			// 子名已作为一级存在时跳过整棵树，避免「工资」一级与「职业收入/工资」重复
-			conflict := false
-			for _, ch := range p.Children {
-				if _, exists := rootNames[ch.Name]; exists {
-					conflict = true
-					break
-				}
-			}
-			if conflict {
-				continue
-			}
-			parent = model.Category{
-				UserID: userID, Name: p.Name, Kind: kind,
-				Icon: p.Icon, Sort: nextSort,
-			}
-			if err := tx.Create(&parent).Error; err != nil {
-				return err
-			}
-			nextSort++
-			rootByName[p.Name] = parent
-			rootNames[p.Name] = struct{}{}
-			childNamesUnder[parent.ID] = map[string]struct{}{}
-		}
-		have := childNamesUnder[parent.ID]
-		if have == nil {
-			have = map[string]struct{}{}
-			childNamesUnder[parent.ID] = have
-		}
-		for j, ch := range p.Children {
-			if _, exists := have[ch.Name]; exists {
-				continue
-			}
-			pid := parent.ID
-			child := model.Category{
-				UserID: userID, Name: ch.Name, Kind: kind,
-				Icon: ch.Icon, Sort: j + 1, ParentID: &pid,
-			}
-			if err := tx.Create(&child).Error; err != nil {
-				return err
-			}
-			have[ch.Name] = struct{}{}
-		}
-	}
-	return nil
-}

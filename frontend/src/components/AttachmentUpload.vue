@@ -1,21 +1,26 @@
 <template>
   <section class="meta-block mb-3">
-    <MetaHead icon="mdi-paperclip" :title="title" :subtitle="subtitle" class="mb-3">
-      <span v-if="previews.length" class="meta-count">{{ previews.length }} 张</span>
+    <MetaHead
+      icon="mdi-paperclip"
+      :title="title ?? t('attachment.title')"
+      :subtitle="subtitle ?? t('attachment.subtitle')"
+      class="mb-3"
+    >
+      <span v-if="previews.length" class="meta-count">{{ t('attachment.count', { n: previews.length }) }}</span>
     </MetaHead>
 
     <div v-if="!previews.length" class="empty-actions">
       <label class="action-tile">
         <input type="file" accept="image/*" hidden @change="onFile" />
         <v-icon size="28" color="primary">mdi-image-plus-outline</v-icon>
-        <span class="action-title">添加图片</span>
-        <span class="action-sub">相册或文件</span>
+        <span class="action-title">{{ t('attachment.addImage') }}</span>
+        <span class="action-sub">{{ t('attachment.addImageSub') }}</span>
       </label>
       <label class="action-tile">
         <input type="file" accept="image/*" capture="environment" hidden @change="onFile" />
         <v-icon size="28" color="primary">mdi-camera-outline</v-icon>
-        <span class="action-title">拍照</span>
-        <span class="action-sub">手机摄像头</span>
+        <span class="action-title">{{ t('attachment.takePhoto') }}</span>
+        <span class="action-sub">{{ t('attachment.takePhotoSub') }}</span>
       </label>
     </div>
 
@@ -29,8 +34,8 @@
         @click="openPreview(idx)"
         @keydown.enter="openPreview(idx)"
       >
-        <img :src="a.url" alt="附件预览" />
-        <button type="button" class="rm" aria-label="删除附件" @click.stop="remove(a.id)">
+        <img :src="a.url" :alt="t('attachment.preview')" />
+        <button type="button" class="rm" :aria-label="t('attachment.remove')" @click.stop="remove(a.id)">
           <v-icon size="14">mdi-close</v-icon>
         </button>
       </div>
@@ -39,7 +44,7 @@
         <v-progress-circular v-if="uploading" indeterminate size="22" width="2" color="primary" />
         <template v-else>
           <v-icon size="22" color="primary">mdi-plus</v-icon>
-          <span>继续加</span>
+          <span>{{ t('attachment.addMore') }}</span>
         </template>
       </label>
     </div>
@@ -52,17 +57,17 @@
         class="lightbox"
         role="dialog"
         aria-modal="true"
-        aria-label="附件预览"
+        :aria-label="t('attachment.preview')"
         @click.self="closePreview"
       >
-        <button type="button" class="lb-close" aria-label="关闭预览" @click="closePreview">
+        <button type="button" class="lb-close" :aria-label="t('attachment.closePreview')" @click="closePreview">
           <v-icon size="22">mdi-close</v-icon>
         </button>
         <button
           v-if="previews.length > 1"
           type="button"
           class="lb-nav lb-prev"
-          aria-label="上一张"
+          :aria-label="t('attachment.prev')"
           @click.stop="shiftPreview(-1)"
         >
           <v-icon size="28">mdi-chevron-left</v-icon>
@@ -70,14 +75,14 @@
         <img
           class="lb-img"
           :src="previews[previewIndex]?.url"
-          alt="附件大图"
+          :alt="t('attachment.large')"
           @click.stop
         />
         <button
           v-if="previews.length > 1"
           type="button"
           class="lb-nav lb-next"
-          aria-label="下一张"
+          :aria-label="t('attachment.next')"
           @click.stop="shiftPreview(1)"
         >
           <v-icon size="28">mdi-chevron-right</v-icon>
@@ -92,21 +97,17 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import http from '../api/http'
 import MetaHead from './MetaHead.vue'
 
-const props = withDefaults(
-  defineProps<{
-    modelValue: number[]
-    existing?: { id: number; url: string }[]
-    title?: string
-    subtitle?: string
-  }>(),
-  {
-    title: '附件',
-    subtitle: '票据 / 小票照片，可选 · 点图可放大',
-  },
-)
+const props = defineProps<{
+  modelValue: number[]
+  existing?: { id: number; url: string }[]
+  title?: string
+  subtitle?: string
+}>()
+const { t } = useI18n()
 const emit = defineEmits<{ 'update:modelValue': [ids: number[]] }>()
 
 const local = ref<{ id: number; url: string }[]>([...(props.existing || [])])
@@ -189,7 +190,7 @@ async function onFile(e: Event) {
     local.value.push({ id: data.id, url: data.url })
     sync()
   } catch (err: any) {
-    error.value = err.message || '上传失败'
+    error.value = err.message || t('attachment.uploadFailed')
   } finally {
     uploading.value = false
   }

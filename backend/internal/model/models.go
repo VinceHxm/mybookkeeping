@@ -16,6 +16,8 @@ type User struct {
 	ExpenseColor     string    `gorm:"size:16;default:#c45c3e" json:"expenseColor"`
 	IncomeColor      string    `gorm:"size:16;default:#1b7f5a" json:"incomeColor"`
 	Theme            string    `gorm:"size:16;default:light" json:"theme"` // light/dark/system
+	Locale           string    `gorm:"size:16;not null;default:''" json:"locale"` // 界面语言；空=老账号，前端按浏览器
+	PresetLocale     string    `gorm:"size:16;not null;default:''" json:"-"`      // 默认分类/标签的生成语言；空=中文（老账号）
 	CreatedAt        time.Time `json:"createdAt"`
 	UpdatedAt        time.Time `json:"updatedAt"`
 }
@@ -94,6 +96,13 @@ type Category struct {
 	Kind      string     `gorm:"size:16;not null" json:"kind"` // expense/income
 	Icon      string     `gorm:"size:64" json:"icon"`
 	Sort      int        `gorm:"not null;default:0" json:"sort"`
+	// 默认分类：PresetKey 为预设中文原名，改名后保留，用于补齐时识别；
+	// NameZh/En/Ja/Ko 为四语名，Name 随用户语言取其一；用户改名后四语名清空，只用自定义名。
+	PresetKey string     `gorm:"size:64;not null;default:''" json:"-"`
+	NameZh    string     `gorm:"size:64;not null;default:''" json:"-"`
+	NameEn    string     `gorm:"size:64;not null;default:''" json:"-"`
+	NameJa    string     `gorm:"size:64;not null;default:''" json:"-"`
+	NameKo    string     `gorm:"size:64;not null;default:''" json:"-"`
 	CreatedAt time.Time  `json:"createdAt"`
 	UpdatedAt time.Time  `json:"updatedAt"`
 	Children  []Category `gorm:"-" json:"children,omitempty"`

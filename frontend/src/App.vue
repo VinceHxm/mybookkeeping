@@ -7,12 +7,12 @@
     :theme="themeName"
   >
     <!-- 桌面端：左侧导航 -->
-    <nav v-if="showNav && isDesktop" class="side-nav" aria-label="主导航">
+    <nav v-if="showNav && isDesktop" class="side-nav" :aria-label="t('nav.main')">
       <div class="side-brand">
-        <div class="side-logo">记</div>
+        <div class="side-logo">{{ t('app.logo') }}</div>
         <div>
-          <div class="side-title">我的账本</div>
-          <div class="side-sub">快记优先</div>
+          <div class="side-title">{{ t('app.name') }}</div>
+          <div class="side-sub">{{ t('app.tagline') }}</div>
         </div>
       </div>
       <v-btn
@@ -67,6 +67,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { useTheme } from 'vuetify'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from './stores/auth'
 import PasswordConfirmDialog from './components/PasswordConfirmDialog.vue'
 import {
@@ -76,6 +77,7 @@ import {
 } from './composables/useAppTheme'
 
 const route = useRoute()
+const { t } = useI18n()
 const auth = useAuthStore()
 const vuetifyTheme = useTheme()
 const { setPreference, syncFromProfile } = useAppTheme()
@@ -95,18 +97,14 @@ const themeIcon = computed(() => {
   if (themePref.value === 'light') return 'mdi-white-balance-sunny'
   return 'mdi-theme-light-dark'
 })
-const themeLabel = computed(() => {
-  if (themePref.value === 'dark') return '深色'
-  if (themePref.value === 'light') return '浅色'
-  return '跟随系统'
-})
+const themeLabel = computed(() => t(`theme.${themePref.value}`))
 
-const navItems = [
-  { value: 'home', to: '/', label: '首页', icon: 'mdi-home-outline' },
-  { value: 'list', to: '/transactions', label: '明细', icon: 'mdi-format-list-bulleted' },
-  { value: 'stats', to: '/stats', label: '统计', icon: 'mdi-chart-pie-outline' },
-  { value: 'mine', to: '/mine', label: '我的', icon: 'mdi-account-outline' },
-]
+const navItems = computed(() => [
+  { value: 'home', to: '/', label: t('nav.home'), icon: 'mdi-home-outline' },
+  { value: 'list', to: '/transactions', label: t('nav.list'), icon: 'mdi-format-list-bulleted' },
+  { value: 'stats', to: '/stats', label: t('nav.stats'), icon: 'mdi-chart-pie-outline' },
+  { value: 'mine', to: '/mine', label: t('nav.mine'), icon: 'mdi-account-outline' },
+])
 
 function onResize() {
   width.value = window.innerWidth

@@ -7,7 +7,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"mybookkeeping/internal/i18n"
 	"mybookkeeping/internal/middleware"
+	"mybookkeeping/internal/model"
 	"mybookkeeping/internal/service"
 )
 
@@ -32,16 +34,30 @@ func (a *API) Login(c *gin.Context) {
 		return
 	}
 	if errors.Is(err, service.ErrUserDisabled) {
-		Fail(c, http.StatusForbidden, err.Error())
+		FailCode(c, http.StatusForbidden, "user_disabled", err.Error())
 		return
 	}
 	if err != nil {
 		ServerError(c, err.Error())
 		return
 	}
-	_ = a.categories.EnsureDefaults(user.ID)
-	_ = a.tags.EnsureDefaults(user.ID)
+	a.ensureDefaults(c, user)
 	OK(c, gin.H{"token": token, "user": user})
+}
+
+// ensureDefaults 默认分类跟随界面语言（老账号未设语言时取本次请求语言）；
+// 默认标签按注册语言生成，老账号 PresetLocale 为空即当初按中文生成。
+func (a *API) ensureDefaults(c *gin.Context, u *model.User) {
+	uiLocale := u.Locale
+	if uiLocale == "" {
+		uiLocale = i18n.FromRequest(c)
+	}
+	_ = a.categories.EnsureDefaults(u.ID, uiLocale)
+	tagLocale := u.PresetLocale
+	if tagLocale == "" {
+		tagLocale = i18n.ZhCN
+	}
+	_ = a.tags.EnsureDefaults(u.ID, tagLocale)
 }
 
 func (a *API) Register(c *gin.Context) {
@@ -58,7 +74,7 @@ func (a *API) Register(c *gin.Context) {
 		BadRequest(c, "参数错误")
 		return
 	}
-	user, err := a.auth.Register(req.Username, req.Password, req.Email)
+	user, err := a.auth.Register(req.Username, req.Password, req.Email, i18n.FromRequest(c))
 	if errors.Is(err, service.ErrUserExists) || errors.Is(err, service.ErrWeakPassword) {
 		BadRequest(c, err.Error())
 		return
@@ -67,8 +83,7 @@ func (a *API) Register(c *gin.Context) {
 		ServerError(c, err.Error())
 		return
 	}
-	_ = a.categories.EnsureDefaults(user.ID)
-	_ = a.tags.EnsureDefaults(user.ID)
+	a.ensureDefaults(c, user)
 	// 注册后直接登录
 	token, _, err := a.auth.Login(c.Request.Context(), req.Username, req.Password, c.ClientIP())
 	if err != nil {
@@ -91,6 +106,7 @@ func (a *API) ForgotPassword(c *gin.Context) {
 		ServerError(c, err.Error())
 		return
 	}
+	res.Message = i18n.T(i18n.FromRequest(c), res.Message)
 	OK(c, res)
 }
 
@@ -136,11 +152,10 @@ func (a *API) Me(c *gin.Context) {
 				_ = a.auth.Logout(c.Request.Context(), s)
 			}
 		}
-		Fail(c, http.StatusForbidden, service.ErrUserDisabled.Error())
+		FailCode(c, http.StatusForbidden, "user_disabled", service.ErrUserDisabled.Error())
 		return
 	}
-	_ = a.categories.EnsureDefaults(user.ID)
-	_ = a.tags.EnsureDefaults(user.ID)
+	a.ensureDefaults(c, user)
 	OK(c, user)
 }
 
@@ -172,6 +187,7 @@ func (a *API) UpdateSettings(c *gin.Context) {
 		ExpenseColor            *string `json:"expenseColor"`
 		IncomeColor             *string `json:"incomeColor"`
 		Theme                   *string `json:"theme"`
+		Locale                  *string `json:"locale"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		BadRequest(c, "参数错误")
@@ -180,6 +196,7 @@ func (a *API) UpdateSettings(c *gin.Context) {
 	in := service.UserSettingsInput{
 		Email: req.Email, WeekStart: req.WeekStart,
 		ExpenseColor: req.ExpenseColor, IncomeColor: req.IncomeColor, Theme: req.Theme,
+		Locale: req.Locale,
 	}
 	if req.ClearDefaultAcc {
 		var nilID *uint64
@@ -199,6 +216,9 @@ func (a *API) UpdateSettings(c *gin.Context) {
 	if err != nil {
 		BadRequest(c, err.Error())
 		return
+	}
+	if req.Locale != nil {
+		_ = a.categories.EnsureDefaults(user.ID, user.Locale)
 	}
 	OK(c, user)
 }

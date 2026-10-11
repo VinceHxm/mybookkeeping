@@ -1,9 +1,9 @@
 <template>
   <div class="picker">
     <header class="bar">
-      <v-btn icon="mdi-close" variant="text" aria-label="关闭" @click="$emit('close')" />
+      <v-btn icon="mdi-close" variant="text" :aria-label="t('amap.close')" @click="$emit('close')" />
       <div class="bar-center">
-        <div class="bar-title">选择地点</div>
+        <div class="bar-title">{{ t('amap.title') }}</div>
         <div class="bar-sub">{{ barSub }}</div>
       </div>
       <v-btn
@@ -11,7 +11,7 @@
         variant="tonal"
         color="primary"
         :loading="locating"
-        :aria-label="mode === 'transit' ? '定位当前城市' : '定位到当前位置'"
+        :aria-label="mode === 'transit' ? t('amap.locateCity') : t('amap.locateHere')"
         @click="mode === 'transit' ? resolveCityFromGps() : locateAndPick()"
       />
     </header>
@@ -25,8 +25,8 @@
       >
         <v-icon size="20">mdi-map-marker</v-icon>
         <div class="mode-text">
-          <strong>单点</strong>
-          <span>门店 / 当前位置</span>
+          <strong>{{ t('amap.modes.point') }}</strong>
+          <span>{{ t('amap.modes.pointDesc') }}</span>
         </div>
       </button>
       <button
@@ -37,8 +37,8 @@
       >
         <v-icon size="20">mdi-map-marker-path</v-icon>
         <div class="mode-text">
-          <strong>起终点</strong>
-          <span>打车 / 路费</span>
+          <strong>{{ t('amap.modes.route') }}</strong>
+          <span>{{ t('amap.modes.routeDesc') }}</span>
         </div>
       </button>
       <button
@@ -49,8 +49,8 @@
       >
         <v-icon size="20">mdi-subway-variant</v-icon>
         <div class="mode-text">
-          <strong>公交地铁</strong>
-          <span>搜线路选站</span>
+          <strong>{{ t('amap.modes.transit') }}</strong>
+          <span>{{ t('amap.modes.transitDesc') }}</span>
         </div>
       </button>
     </div>
@@ -86,13 +86,13 @@
       <div class="city-row">
         <v-text-field
           v-model="cityInput"
-          label="城市（必填）"
-          placeholder="如 上海、杭州"
+          :label="t('amap.city')"
+          :placeholder="t('amap.cityPlaceholder')"
           variant="outlined"
           density="compact"
           hide-details="auto"
           :error="cityError"
-          :error-messages="cityError ? '请先填写城市再搜线路' : ''"
+          :error-messages="cityError ? t('amap.cityRequired') : ''"
           prepend-inner-icon="mdi-city-variant-outline"
           clearable
           class="city-field"
@@ -106,16 +106,16 @@
           :loading="locating"
           @click="resolveCityFromGps"
         >
-          定位
+          {{ t('amap.locate') }}
         </v-btn>
       </div>
       <p v-if="!selectedLine" class="city-hint">
-        {{ cityReady ? `已限定：${cityReady}` : '先标定城市，避免搜到外地线路、浪费配额' }}
+        {{ cityReady ? t('amap.cityLimited', { city: cityReady }) : t('amap.cityHint') }}
       </p>
       <v-text-field
         v-if="!selectedLine"
         v-model="lineKeyword"
-        label="搜线路名（如 2号线、301路）"
+        :label="t('amap.lineSearch')"
         variant="outlined"
         density="compact"
         hide-details
@@ -133,7 +133,7 @@
             :loading="lineSearching"
             :disabled="!cityReady"
             @click="searchLines"
-          >搜索</v-btn>
+          >{{ t('amap.search') }}</v-btn>
         </template>
       </v-text-field>
       <div v-if="lineError" class="line-error">{{ lineError }}</div>
@@ -144,7 +144,7 @@
           <strong>{{ selectedLine.name }}</strong>
           <span>{{ selectedLine.startStop }} → {{ selectedLine.endStop }}</span>
         </div>
-        <v-btn size="small" variant="text" color="primary" @click="clearSelectedLine">更换</v-btn>
+        <v-btn size="small" variant="text" color="primary" @click="clearSelectedLine">{{ t('amap.change') }}</v-btn>
       </div>
 
       <div v-if="!selectedLine && lineResults.length" class="tips line-tips">
@@ -164,13 +164,13 @@
           <div class="station-done">
             <div class="station-done-text">
               <strong>{{ transitStart.name }} → {{ transitEnd.name }}</strong>
-              <span>上下站已选，可看地图确认</span>
+              <span>{{ t('amap.stationsPicked') }}</span>
             </div>
-            <v-btn size="small" variant="text" color="primary" @click="resetStations">重选</v-btn>
+            <v-btn size="small" variant="text" color="primary" @click="resetStations">{{ t('amap.reselect') }}</v-btn>
           </div>
         </template>
         <template v-else>
-          <div class="station-hint">点选上车站 → 下车站（列表可滚动）</div>
+          <div class="station-hint">{{ t('amap.stationHint') }}</div>
           <div class="station-list">
             <button
               v-for="(st, i) in transitStations"
@@ -194,7 +194,7 @@
     <div v-if="recentPlaces.length && mode !== 'transit' && !searchTips.length" class="recent">
       <div class="recent-label">
         <v-icon size="14">mdi-history</v-icon>
-        <span>最近</span>
+        <span>{{ t('amap.recent') }}</span>
       </div>
       <div class="recent-chips">
         <button
@@ -218,8 +218,8 @@
         :class="{ active: routeStep === 'start', done: !!start }"
         @click="routeStep = 'start'"
       >
-        <span class="step-dot start">起</span>
-        <span class="step-label">{{ start ? '已选起点' : '选起点' }}</span>
+        <span class="step-dot start">{{ t('amap.dot.start') }}</span>
+        <span class="step-label">{{ start ? t('amap.startPicked') : t('amap.pickStart') }}</span>
       </button>
       <div class="step-line" aria-hidden="true" />
       <button
@@ -228,27 +228,27 @@
         :class="{ active: routeStep === 'end', done: !!end }"
         @click="routeStep = 'end'"
       >
-        <span class="step-dot end">终</span>
-        <span class="step-label">{{ end ? '已选终点' : '选终点' }}</span>
+        <span class="step-dot end">{{ t('amap.dot.end') }}</span>
+        <span class="step-label">{{ end ? t('amap.endPicked') : t('amap.pickEnd') }}</span>
       </button>
     </div>
 
     <div v-if="mode === 'transit' && transitStart && !transitEnd" class="route-steps">
       <div class="step done">
-        <span class="step-dot start">上</span>
+        <span class="step-dot start">{{ t('amap.dot.board') }}</span>
         <span class="step-label">{{ transitStart.name }}</span>
       </div>
       <div class="step-line" aria-hidden="true" />
       <div class="step">
-        <span class="step-dot end">下</span>
-        <span class="step-label">请选下车站</span>
+        <span class="step-dot end">{{ t('amap.dot.alight') }}</span>
+        <span class="step-label">{{ t('amap.pickAlight') }}</span>
       </div>
     </div>
 
     <div class="map-wrap">
       <div ref="mapEl" class="map" />
       <div v-if="loadError" class="err-overlay">{{ loadError }}</div>
-      <div v-else-if="locating && !hintPrimary" class="map-toast">正在定位…</div>
+      <div v-else-if="locating && !hintPrimary" class="map-toast">{{ t('amap.locating') }}</div>
     </div>
 
     <footer class="sheet">
@@ -272,6 +272,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import http from '../api/http'
 import { loadAmap } from '../utils/amap'
 
@@ -317,6 +318,8 @@ const emit = defineEmits<{
   close: []
 }>()
 
+const { t } = useI18n()
+
 const mapEl = ref<HTMLElement | null>(null)
 const mode = ref<'point' | 'route' | 'transit'>(props.initialMode === 'route' ? 'route' : 'point')
 const routeStep = ref<'start' | 'end'>('start')
@@ -360,9 +363,9 @@ const canConfirm = computed(() => {
 })
 
 const barSub = computed(() => {
-  if (mode.value === 'point') return '搜索或点地图选位置'
-  if (mode.value === 'route') return '搜索或点选起终点'
-  return cityReady.value ? `${cityReady.value} · 搜线路选站` : '先标定城市再搜线路'
+  if (mode.value === 'point') return t('amap.sub.point')
+  if (mode.value === 'route') return t('amap.sub.route')
+  return cityReady.value ? t('amap.sub.transit', { city: cityReady.value }) : t('amap.sub.transitNoCity')
 })
 
 function normalizeCity(raw: string) {
@@ -420,35 +423,35 @@ function extractCityFromGeoResult(result: any): string {
 
 const searchLabel = computed(() =>
   mode.value === 'route'
-    ? (routeStep.value === 'start' ? '搜索起点' : '搜索终点')
-    : '搜索地名 / 门店',
+    ? (routeStep.value === 'start' ? t('amap.searchStart') : t('amap.searchEnd'))
+    : t('amap.searchPlace'),
 )
 
 const sheetKicker = computed(() => {
-  if (mode.value === 'point') return '已选位置'
+  if (mode.value === 'point') return t('amap.kicker.picked')
   if (mode.value === 'transit') {
-    if (transitStart.value && transitEnd.value) return selectedLine.value?.name || '行程'
-    if (transitStart.value) return '已选上车站，请选下车站'
-    return '请选择上车站'
+    if (transitStart.value && transitEnd.value) return selectedLine.value?.name || t('amap.kicker.trip')
+    if (transitStart.value) return t('amap.kicker.boardPicked')
+    return t('amap.kicker.pickBoard')
   }
-  if (start.value && end.value) return '行程'
-  if (routeStep.value === 'start') return '当前：选择起点'
-  return '当前：选择终点'
+  if (start.value && end.value) return t('amap.kicker.trip')
+  if (routeStep.value === 'start') return t('amap.kicker.pickingStart')
+  return t('amap.kicker.pickingEnd')
 })
 
 const hintPrimary = computed(() => {
   if (mode.value === 'point') {
-    return picked.value?.name || (locating.value ? '正在获取当前位置…' : '搜索或在地图上点选')
+    return picked.value?.name || (locating.value ? t('amap.hint.locating') : t('amap.hint.tapMap'))
   }
   if (mode.value === 'transit') {
     if (transitStart.value && transitEnd.value) return transitStart.value.name
     if (transitStart.value) return transitStart.value.name
-    if (!cityReady.value) return '请先填写或定位当前城市'
-    return '再搜索并选择线路'
+    if (!cityReady.value) return t('amap.hint.needCity')
+    return t('amap.hint.searchLine')
   }
   if (start.value && end.value) return start.value.name
   if (start.value) return start.value.name
-  return locating.value ? '正在获取当前位置作为起点…' : '先选起点'
+  return locating.value ? t('amap.hint.locatingStart') : t('amap.hint.pickStartFirst')
 })
 
 const hintSecondary = computed(() => {
@@ -456,17 +459,17 @@ const hintSecondary = computed(() => {
     return `→ ${transitEnd.value.name}`
   }
   if (mode.value === 'route' && start.value && end.value) return `→ ${end.value.name}`
-  if (mode.value === 'route' && start.value && !end.value) return '下一步：选终点'
+  if (mode.value === 'route' && start.value && !end.value) return t('amap.hint.nextEnd')
   return ''
 })
 
 const confirmLabel = computed(() => {
   if (!canConfirm.value) {
-    if (mode.value === 'point') return '请先选位置'
-    if (mode.value === 'transit') return '请选齐上下车站'
-    return '请选齐起终点'
+    if (mode.value === 'point') return t('amap.confirm.needPoint')
+    if (mode.value === 'transit') return t('amap.confirm.needStations')
+    return t('amap.confirm.needRoute')
   }
-  return mode.value === 'point' ? '使用此位置' : '确认行程'
+  return mode.value === 'point' ? t('amap.confirm.usePoint') : t('amap.confirm.useRoute')
 })
 
 function parseLngLat(loc: any): { lng: number; lat: number } | null {
@@ -509,7 +512,7 @@ function ensureMarker(kind: 'point' | 'start' | 'end', lng: number, lat: number)
     }
     return
   }
-  const label = kind === 'start' ? '起' : '终'
+  const label = t(kind === 'start' ? 'amap.dot.start' : 'amap.dot.end')
   const color = kind === 'start' ? '#1b7f5a' : '#c62828'
   const labelHtml = {
     content: `<div style="background:${color};color:#fff;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.2)">${label}</div>`,
@@ -665,7 +668,7 @@ async function resolveCityFromGps() {
       return
     }
     cityError.value = true
-    lineError.value = '未能自动定位城市，请手动填写'
+    lineError.value = t('amap.err.cityLocateFailed')
   } finally {
     locating.value = false
   }
@@ -731,7 +734,7 @@ function searchLines() {
   const city = cityReady.value
   if (!city) {
     cityError.value = true
-    lineError.value = '请先填写或定位城市'
+    lineError.value = t('amap.err.needCity')
     return
   }
   const q = lineKeyword.value.trim()
@@ -755,7 +758,7 @@ function searchLines() {
       lineSearching.value = false
       if (status !== 'complete' || !result?.lineInfo?.length) {
         lineResults.value = []
-        lineError.value = status === 'no_data' ? `在「${city}」未找到该线路` : '线路搜索失败，请换个关键词'
+        lineError.value = status === 'no_data' ? t('amap.err.lineNotFound', { city }) : t('amap.err.lineFailed')
         return
       }
       lineResults.value = (result.lineInfo as any[]).map((line) => {
@@ -982,7 +985,7 @@ onMounted(async () => {
       await locateAndPick()
     }
   } catch (e: any) {
-    loadError.value = e.message || '地图加载失败'
+    loadError.value = e.message || t('amap.loadFailed')
   }
 })
 

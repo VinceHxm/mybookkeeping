@@ -10,10 +10,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 
+	"mybookkeeping/internal/i18n"
+	"mybookkeeping/internal/kv"
 	"mybookkeeping/internal/model"
 )
 
@@ -39,18 +40,18 @@ var (
 
 type AuthService struct {
 	db                 *gorm.DB
-	rdb                *redis.Client
+	kv                 kv.Store
 	ttl                time.Duration
 	resetTokenTTL      time.Duration
 	resetTokenInResp   bool
 }
 
-func NewAuthService(db *gorm.DB, rdb *redis.Client, ttl time.Duration, resetTTLHours int, resetInResp bool) *AuthService {
+func NewAuthService(db *gorm.DB, store kv.Store, ttl time.Duration, resetTTLHours int, resetInResp bool) *AuthService {
 	if resetTTLHours <= 0 {
 		resetTTLHours = 2
 	}
 	return &AuthService{
-		db: db, rdb: rdb, ttl: ttl,
+		db: db, kv: store, ttl: ttl,
 		resetTokenTTL:    time.Duration(resetTTLHours) * time.Hour,
 		resetTokenInResp: resetInResp,
 	}
@@ -82,11 +83,14 @@ func (s *AuthService) checkLoginLimit(ctx context.Context, ip, username string) 
 		key   string
 		limit int
 	}{{userKey, loginFailPerUser}, {ipKey, loginFailPerIP}} {
-		n, err := s.rdb.Get(ctx, k.key).Int()
-		if err != nil || n < k.limit {
+		v, ok, err := s.kv.Get(ctx, k.key)
+		if err != nil || !ok {
 			continue
 		}
-		ttl, _ := s.rdb.TTL(ctx, k.key).Result()
+		if n, err := strconv.Atoi(v); err != nil || n < k.limit {
+			continue
+		}
+		ttl, _ := s.kv.TTL(ctx, k.key)
 		if ttl <= 0 {
 			ttl = loginFailWindow
 		}
@@ -98,9 +102,7 @@ func (s *AuthService) checkLoginLimit(ctx context.Context, ip, username string) 
 func (s *AuthService) recordLoginFailure(ctx context.Context, ip, username string) {
 	userKey, ipKey := loginFailKeys(ip, username)
 	for _, key := range []string{userKey, ipKey} {
-		if n, err := s.rdb.Incr(ctx, key).Result(); err == nil && n == 1 {
-			_ = s.rdb.Expire(ctx, key, loginFailWindow).Err()
-		}
+		_, _ = s.kv.Incr(ctx, key, loginFailWindow)
 	}
 }
 
@@ -126,27 +128,26 @@ func (s *AuthService) Login(ctx context.Context, username, password, ip string) 
 		return "", nil, ErrUserDisabled
 	}
 	userKey, _ := loginFailKeys(ip, username)
-	_ = s.rdb.Del(ctx, userKey).Err()
+	_ = s.kv.Del(ctx, userKey)
 	token, err = randomToken(32)
 	if err != nil {
 		return "", nil, err
 	}
 	uidStr := strconv.FormatUint(u.ID, 10)
-	pipe := s.rdb.Pipeline()
-	pipe.Set(ctx, "sess:"+token, uidStr, s.ttl)
-	pipe.SAdd(ctx, "usess:"+uidStr, token)
-	pipe.Expire(ctx, "usess:"+uidStr, s.ttl)
-	if _, err := pipe.Exec(ctx); err != nil {
-		return "", nil, fmt.Errorf("redis set session: %w", err)
+	if err := s.kv.Set(ctx, "sess:"+token, uidStr, s.ttl); err != nil {
+		return "", nil, fmt.Errorf("set session: %w", err)
+	}
+	if err := s.kv.SAdd(ctx, "usess:"+uidStr, token, s.ttl); err != nil {
+		return "", nil, fmt.Errorf("set session: %w", err)
 	}
 	return token, &u, nil
 }
 
 func (s *AuthService) Logout(ctx context.Context, token string) error {
-	uidStr, err := s.rdb.Get(ctx, "sess:"+token).Result()
-	_ = s.rdb.Del(ctx, "sess:"+token).Err()
-	if err == nil && uidStr != "" {
-		_ = s.rdb.SRem(ctx, "usess:"+uidStr, token).Err()
+	uidStr, ok, err := s.kv.Get(ctx, "sess:"+token)
+	_ = s.kv.Del(ctx, "sess:"+token)
+	if err == nil && ok && uidStr != "" {
+		_ = s.kv.SRem(ctx, "usess:"+uidStr, token)
 	}
 	return nil
 }
@@ -159,23 +160,25 @@ func (s *AuthService) RevokeUserSessions(ctx context.Context, userID uint64) err
 // RevokeOtherSessions 踢掉该用户除 keepToken 外的全部会话（修改密码时保留当前设备）
 func (s *AuthService) RevokeOtherSessions(ctx context.Context, userID uint64, keepToken string) error {
 	key := "usess:" + strconv.FormatUint(userID, 10)
-	tokens, err := s.rdb.SMembers(ctx, key).Result()
-	if err != nil && !errors.Is(err, redis.Nil) {
+	tokens, err := s.kv.SMembers(ctx, key)
+	if err != nil {
 		return err
 	}
-	pipe := s.rdb.Pipeline()
+	var sessKeys, removed []string
 	for _, t := range tokens {
 		if t == keepToken {
 			continue
 		}
-		pipe.Del(ctx, "sess:"+t)
-		pipe.SRem(ctx, key, t)
+		sessKeys = append(sessKeys, "sess:"+t)
+		removed = append(removed, t)
+	}
+	if err := s.kv.Del(ctx, sessKeys...); err != nil {
+		return err
 	}
 	if keepToken == "" {
-		pipe.Del(ctx, key)
+		return s.kv.Del(ctx, key)
 	}
-	_, err = pipe.Exec(ctx)
-	return err
+	return s.kv.SRem(ctx, key, removed...)
 }
 
 func (s *AuthService) GetUser(id uint64) (*model.User, error) {
@@ -187,10 +190,11 @@ func (s *AuthService) GetUser(id uint64) (*model.User, error) {
 }
 
 func (s *AuthService) CreateUser(username, password string) (*model.User, error) {
-	return s.Register(username, password, "")
+	return s.Register(username, password, "", "")
 }
 
-func (s *AuthService) Register(username, password, email string) (*model.User, error) {
+// Register locale 为注册时的界面语言，同时决定默认分类 / 标签用哪种语言生成
+func (s *AuthService) Register(username, password, email, locale string) (*model.User, error) {
 	username = strings.TrimSpace(username)
 	email = strings.TrimSpace(email)
 	if username == "" {
@@ -217,6 +221,8 @@ func (s *AuthService) Register(username, password, email string) (*model.User, e
 		ExpenseColor: "#c45c3e",
 		IncomeColor:  "#1b7f5a",
 		Theme:        "light",
+		Locale:       i18n.Normalize(locale),
+		PresetLocale: i18n.Normalize(locale),
 	}
 	if err := s.db.Create(u).Error; err != nil {
 		return nil, err
@@ -367,7 +373,7 @@ func (s *AuthService) ForgotPassword(ctx context.Context, username string) (*For
 	if err != nil {
 		return nil, err
 	}
-	if err := s.rdb.Set(ctx, "reset:"+token, strconv.FormatUint(u.ID, 10), s.resetTokenTTL).Err(); err != nil {
+	if err := s.kv.Set(ctx, "reset:"+token, strconv.FormatUint(u.ID, 10), s.resetTokenTTL); err != nil {
 		return nil, err
 	}
 	out := &ForgotResult{Message: "已生成重置令牌（个人部署默认直接返回，请尽快使用）"}
@@ -381,8 +387,8 @@ func (s *AuthService) ResetPassword(ctx context.Context, token, newPwd string) e
 	if len(newPwd) < MinPasswordLen {
 		return ErrWeakPassword
 	}
-	uidStr, err := s.rdb.Get(ctx, "reset:"+token).Result()
-	if err != nil {
+	uidStr, ok, err := s.kv.Get(ctx, "reset:"+token)
+	if err != nil || !ok {
 		return ErrBadResetToken
 	}
 	uid, _ := strconv.ParseUint(uidStr, 10, 64)
@@ -393,7 +399,7 @@ func (s *AuthService) ResetPassword(ctx context.Context, token, newPwd string) e
 	if err := s.db.Model(&model.User{}).Where("id = ?", uid).Update("password_hash", string(hash)).Error; err != nil {
 		return err
 	}
-	_ = s.rdb.Del(ctx, "reset:"+token).Err()
+	_ = s.kv.Del(ctx, "reset:"+token)
 	_ = s.RevokeUserSessions(ctx, uid)
 	return nil
 }
@@ -406,12 +412,20 @@ type UserSettingsInput struct {
 	ExpenseColor            *string
 	IncomeColor             *string
 	Theme                   *string
+	Locale                  *string
 }
 
 func (s *AuthService) UpdateSettings(userID uint64, in UserSettingsInput) (*model.User, error) {
 	var u model.User
 	if err := s.db.First(&u, userID).Error; err != nil {
 		return nil, err
+	}
+	if in.Locale != nil {
+		l := i18n.Normalize(*in.Locale)
+		if l == "" {
+			return nil, errors.New("不支持的语言")
+		}
+		u.Locale = l
 	}
 	if in.Email != nil {
 		u.Email = strings.TrimSpace(*in.Email)

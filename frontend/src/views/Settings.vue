@@ -2,13 +2,13 @@
   <div class="page">
     <div class="toolbar">
       <v-btn icon="mdi-arrow-left" variant="text" to="/mine" />
-      <h1>设置</h1>
+      <h1>{{ t('settings.title') }}</h1>
       <span style="width:40px" />
     </div>
 
     <div class="settings-grid">
     <section class="set-block">
-    <h2 class="sec">外观</h2>
+    <h2 class="sec">{{ t('settings.appearance') }}</h2>
     <div class="theme-grid mb-4">
       <button
         v-for="opt in themeOptions"
@@ -23,39 +23,57 @@
       </button>
     </div>
 
-    <h2 class="sec">偏好</h2>
+    <h2 class="sec">{{ t('locale.label') }}</h2>
+    <div class="locale-grid">
+      <button
+        v-for="opt in SUPPORTED_LOCALES"
+        :key="opt.value"
+        type="button"
+        class="theme-opt"
+        :class="{ active: locale === opt.value }"
+        @click="changeLocale(opt.value)"
+      >
+        <span>{{ opt.label }}</span>
+      </button>
+    </div>
+    <p class="pref-tip mb-4">{{ t('settings.localeTip') }}</p>
+
+    <h2 class="sec">{{ t('settings.preferences') }}</h2>
     <v-select
       v-model="form.weekStart"
-      :items="[{ title: '周一', value: 1 }, { title: '周日', value: 0 }]"
-      label="一周起始"
+      :items="[{ title: t('settings.monday'), value: 1 }, { title: t('settings.sunday'), value: 0 }]"
+      :label="t('settings.weekStart')"
       variant="outlined"
       class="mb-2"
     />
     <div class="colors mb-3">
-      <v-text-field v-model="form.expenseColor" label="支出颜色" type="color" variant="outlined" />
-      <v-text-field v-model="form.incomeColor" label="收入颜色" type="color" variant="outlined" />
+      <v-text-field v-model="form.expenseColor" :label="t('settings.expenseColor')" type="color" variant="outlined" />
+      <v-text-field v-model="form.incomeColor" :label="t('settings.incomeColor')" type="color" variant="outlined" />
     </div>
-    <v-text-field v-model="form.email" label="邮箱" variant="outlined" class="mb-2" />
-    <p class="pref-tip mb-3">默认还款 / 消费账户请到「账户管理」里设置，卡片上会显示标记。</p>
-    <v-btn color="primary" block class="mb-6 set-submit" :loading="saving" @click="saveSettings">保存偏好</v-btn>
+    <v-text-field v-model="form.email" :label="t('settings.email')" variant="outlined" class="mb-2" />
+    <p class="pref-tip mb-3">{{ t('settings.defaultAccountTip') }}</p>
+    <v-btn color="primary" block class="mb-6 set-submit" :loading="saving" @click="saveSettings">{{ t('settings.savePrefs') }}</v-btn>
     </section>
 
     <section class="set-block">
-    <h2 class="sec">修改密码</h2>
-    <v-text-field v-model="oldPassword" label="原密码" type="password" variant="outlined" />
-    <v-text-field v-model="newPassword" label="新密码" type="password" variant="outlined" />
+    <h2 class="sec">{{ t('settings.changePassword') }}</h2>
+    <v-text-field v-model="oldPassword" :label="t('settings.oldPassword')" type="password" variant="outlined" />
+    <v-text-field v-model="newPassword" :label="t('settings.newPassword')" type="password" variant="outlined" />
     <v-alert v-if="msg" :type="msgType" density="compact" class="mb-2">{{ msg }}</v-alert>
-    <v-btn color="secondary" block class="set-submit" :loading="pwdLoading" @click="changePwd">更新密码</v-btn>
+    <v-btn color="secondary" block class="set-submit" :loading="pwdLoading" @click="changePwd">{{ t('settings.updatePassword') }}</v-btn>
     </section>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '../stores/auth'
 import { useAppTheme, type ThemePreference } from '../composables/useAppTheme'
+import { SUPPORTED_LOCALES, setLocale, type AppLocale } from '../i18n'
 
+const { t, locale } = useI18n()
 const auth = useAuthStore()
 const { setPreference } = useAppTheme()
 const saving = ref(false)
@@ -65,11 +83,18 @@ const newPassword = ref('')
 const msg = ref('')
 const msgType = ref<'success' | 'error'>('success')
 
-const themeOptions: { title: string; value: ThemePreference; icon: string }[] = [
-  { title: '浅色', value: 'light', icon: 'mdi-white-balance-sunny' },
-  { title: '深色', value: 'dark', icon: 'mdi-weather-night' },
-  { title: '跟随系统', value: 'system', icon: 'mdi-theme-light-dark' },
-]
+const themeOptions = computed<{ title: string; value: ThemePreference; icon: string }[]>(() => [
+  { title: t('theme.light'), value: 'light', icon: 'mdi-white-balance-sunny' },
+  { title: t('theme.dark'), value: 'dark', icon: 'mdi-weather-night' },
+  { title: t('theme.system'), value: 'system', icon: 'mdi-theme-light-dark' },
+])
+
+/** 语言与主题预览不同：选中即保存，避免刷新后又变回去 */
+function changeLocale(l: AppLocale) {
+  if (l === locale.value) return
+  setLocale(l)
+  auth.updateSettings({ locale: l }).catch(() => {})
+}
 
 const form = reactive({
   weekStart: 1,
@@ -113,10 +138,10 @@ async function saveSettings() {
       incomeColor: form.incomeColor,
     })
     applyLocalTheme()
-    msg.value = '已保存'
+    msg.value = t('settings.saved')
     msgType.value = 'success'
   } catch (e: any) {
-    msg.value = e.message || '保存失败'
+    msg.value = e.message || t('settings.saveFailed')
     msgType.value = 'error'
   } finally {
     saving.value = false
@@ -128,12 +153,12 @@ async function changePwd() {
   pwdLoading.value = true
   try {
     await auth.changePassword(oldPassword.value, newPassword.value)
-    msg.value = '密码已更新'
+    msg.value = t('settings.passwordUpdated')
     msgType.value = 'success'
     oldPassword.value = ''
     newPassword.value = ''
   } catch (e: any) {
-    msg.value = e.message || '失败'
+    msg.value = e.message || t('common.failed')
     msgType.value = 'error'
   } finally {
     pwdLoading.value = false
@@ -148,6 +173,15 @@ async function changePwd() {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 10px;
+}
+.locale-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 8px;
+}
+@media (max-width: 420px) {
+  .locale-grid { grid-template-columns: repeat(2, 1fr); }
 }
 .theme-opt {
   display: flex;

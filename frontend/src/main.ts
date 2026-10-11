@@ -1,4 +1,4 @@
-import { createApp } from 'vue'
+import { createApp, watch } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
@@ -8,20 +8,23 @@ import '@mdi/font/css/materialdesignicons.css'
 import { createVuetify } from 'vuetify'
 import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
-import { zhHans } from 'vuetify/locale'
+import { en, ja, ko, zhHans } from 'vuetify/locale'
 
 import './styles.css'
 import { getStoredTheme, resolveThemeMode, syncDocumentTheme } from './composables/useAppTheme'
+import { currentLocale, i18n, type AppLocale } from './i18n'
 
 const bootMode = syncDocumentTheme(getStoredTheme())
+
+const VUETIFY_LOCALE: Record<AppLocale, string> = { 'zh-CN': 'zhHans', en: 'en', ja: 'ja', ko: 'ko' }
 
 const vuetify = createVuetify({
   components,
   directives,
   locale: {
-    locale: 'zhHans',
+    locale: VUETIFY_LOCALE[currentLocale()],
     fallback: 'en',
-    messages: { zhHans },
+    messages: { zhHans, en, ja, ko },
   },
   defaults: {
     VBtn: { rounded: 'lg' },
@@ -75,7 +78,11 @@ const vuetify = createVuetify({
   },
 })
 
-createApp(App).use(createPinia()).use(router).use(vuetify).mount('#app')
+createApp(App).use(createPinia()).use(i18n).use(router).use(vuetify).mount('#app')
+
+watch(i18n.global.locale, (l) => {
+  vuetify.locale.current.value = VUETIFY_LOCALE[l as AppLocale]
+})
 
 // 确保与 document 同步（防止启动竞态）
 vuetify.theme.global.name.value = resolveThemeMode(getStoredTheme())

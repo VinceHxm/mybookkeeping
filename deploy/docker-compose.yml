@@ -1,5 +1,6 @@
 # 飞牛单应用：前后端打进同一个镜像，只跑这一个服务。
 # MySQL / Redis / MinIO 均走 .env 里的外置地址，不在此编排。
+# 不想依赖外部服务：改用 docker-compose.lite.yml（SQLite 单容器）。
 #
 # 使用前：
 #   cp .env.example .env   # 或直接用与 backend/.env 相同内容

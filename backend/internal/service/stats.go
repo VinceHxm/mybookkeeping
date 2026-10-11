@@ -132,20 +132,34 @@ func (s *StatsService) Summary(userID uint64, q StatsQuery) (*Summary, error) {
 	trendFrom := monthStart
 	trendTo := monthEnd.AddDate(0, 1, 0)
 
+	// 按本地时区在内存里分月汇总，避免依赖各数据库不同的日期格式化函数
+	type txRow struct {
+		HappenedAt time.Time
+		Type       string
+		Amount     int64
+	}
+	var txRows []txRow
+	tdb := s.db.Table("transactions").
+		Select("happened_at, type, amount").
+		Where("user_id = ? AND happened_at >= ? AND happened_at < ? AND type IN ?", userID, trendFrom, trendTo, []string{"expense", "income"})
+	if q.AccountID != nil {
+		tdb = tdb.Where("(account_id = ? OR to_account_id = ?)", *q.AccountID, *q.AccountID)
+	}
+	if err := tdb.Scan(&txRows).Error; err != nil {
+		return nil, err
+	}
 	type monthRow struct {
 		Ym     string
 		Type   string
 		Amount int64
 	}
-	var rows []monthRow
-	tdb := s.db.Table("transactions").
-		Select("DATE_FORMAT(happened_at, '%Y-%m') as ym, type, COALESCE(SUM(amount),0) as amount").
-		Where("user_id = ? AND happened_at >= ? AND happened_at < ? AND type IN ?", userID, trendFrom, trendTo, []string{"expense", "income"})
-	if q.AccountID != nil {
-		tdb = tdb.Where("account_id = ? OR to_account_id = ?", *q.AccountID, *q.AccountID)
+	sums := map[[2]string]int64{}
+	for _, r := range txRows {
+		sums[[2]string{r.HappenedAt.In(time.Local).Format("2006-01"), r.Type}] += r.Amount
 	}
-	if err := tdb.Group("ym, type").Scan(&rows).Error; err != nil {
-		return nil, err
+	rows := make([]monthRow, 0, len(sums))
+	for k, v := range sums {
+		rows = append(rows, monthRow{Ym: k[0], Type: k[1], Amount: v})
 	}
 	trendMap := map[string]*MonthTrend{}
 	for i := 0; i < months; i++ {

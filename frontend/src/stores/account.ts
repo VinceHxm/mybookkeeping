@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import http from '../api/http'
 import { createDictCache } from './dictCache'
+import { t } from '../i18n'
 import type { Transaction } from './transaction'
 
 export interface CreditInstallmentPlan {
@@ -135,13 +136,20 @@ export interface InvestSummary {
   revalued: number
 }
 
-export const ACCOUNT_TYPE_LABELS: Record<string, string> = {
-  cash: '现金',
-  bank: '银行卡',
-  credit: '信用',
-  invest: '理财',
-  other: '其他',
+export const ACCOUNT_TYPES = ['cash', 'bank', 'credit', 'invest', 'other'] as const
+
+/** 按当前语言取账户类型名；未知类型原样返回 */
+export function accountTypeLabel(type: string): string {
+  return (ACCOUNT_TYPES as readonly string[]).includes(type) ? t(`accounts.type.${type}`) : type
 }
+
+/** 兼容旧用法：取值时按当前语言翻译 */
+export const ACCOUNT_TYPE_LABELS: Record<string, string> = Object.defineProperties(
+  {} as Record<string, string>,
+  Object.fromEntries(
+    ACCOUNT_TYPES.map((k) => [k, { get: () => accountTypeLabel(k), enumerable: true }]),
+  ),
+)
 
 export interface AccountLedger {
   accountId: number

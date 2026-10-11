@@ -4,17 +4,17 @@
       <header class="summary surface-card">
         <div class="summary-grid">
           <div class="summary-cell">
-            <div class="muted">本月支出</div>
+            <div class="muted">{{ t('home.monthExpense') }}</div>
             <div class="big amount-expense">¥{{ fenToYuan(summary?.monthExpense || 0) }}</div>
           </div>
           <div class="summary-divider" aria-hidden="true" />
           <div class="summary-cell">
-            <div class="muted">本月收入</div>
+            <div class="muted">{{ t('home.monthIncome') }}</div>
             <div class="big amount-income">¥{{ fenToYuan(summary?.monthIncome || 0) }}</div>
           </div>
           <div class="summary-divider wide-only" aria-hidden="true" />
           <router-link to="/stats" class="summary-cell summary-link wide-only">
-            <div class="muted">本月结余 <v-icon size="14">mdi-chevron-right</v-icon></div>
+            <div class="muted">{{ t('home.monthNet') }} <v-icon size="14">mdi-chevron-right</v-icon></div>
             <div class="big" :class="monthNet >= 0 ? 'amount-income' : 'amount-expense'">
               {{ monthNet < 0 ? '-' : '' }}¥{{ fenToYuan(Math.abs(monthNet)) }}
             </div>
@@ -32,15 +32,15 @@
         >
           <v-icon size="14" start>mdi-ticket-percent-outline</v-icon>
           <span class="repay-tag-text">
-            {{ expiringVouchers }} 张团购券快过期
-            <small>3 天内到期或已过期，记得核销或退款</small>
+            {{ t('home.vouchersExpiring', { n: expiringVouchers }) }}
+            <small>{{ t('home.vouchersExpiringHint') }}</small>
           </span>
         </router-link>
         <router-link v-if="pendingCount" class="repay-tag pending-tag" :to="pendingRoute">
           <v-icon size="14" start>mdi-timer-sand</v-icon>
           <span class="repay-tag-text">
-            {{ pendingCount === 1 && pendingFirst ? `${txTitle(pendingFirst)} 金额待确认` : `${pendingCount} 笔金额待确认` }}
-            <small>按账单改实际金额</small>
+            {{ pendingCount === 1 && pendingFirst ? t('home.pendingOne', { title: txTitle(pendingFirst) }) : t('home.pendingMany', { n: pendingCount }) }}
+            <small>{{ t('home.pendingHint') }}</small>
           </span>
         </router-link>
         <router-link
@@ -51,46 +51,46 @@
         >
           <v-icon size="14" start>mdi-credit-card-clock-outline</v-icon>
           <span class="repay-tag-text">
-            {{ r.accountName }}还 ¥{{ fenToYuan(r.amountFen) }}
-            <small>{{ r.daysUntilDue === 0 ? '今天到期' : '明天到期' }}</small>
+            {{ t('home.repay', { name: r.accountName, amount: `¥${fenToYuan(r.amountFen)}` }) }}
+            <small>{{ r.daysUntilDue === 0 ? t('home.dueToday') : t('home.dueTomorrow') }}</small>
           </span>
         </router-link>
       </div>
 
-      <router-link to="/transactions/new" class="fab-record" aria-label="记一笔">
+      <router-link to="/transactions/new" class="fab-record" :aria-label="t('home.record')">
         <span class="fab-ring" aria-hidden="true" />
         <span class="fab-core">
           <v-icon size="48">mdi-plus</v-icon>
-          <span class="fab-label">记一笔</span>
+          <span class="fab-label">{{ t('home.record') }}</span>
         </span>
       </router-link>
 
       <div class="tpl-block">
         <div class="tpl-head">
-          <span class="tpl-title">快捷模板</span>
-          <router-link class="tpl-manage" to="/templates">管理</router-link>
+          <span class="tpl-title">{{ t('home.quickTemplates') }}</span>
+          <router-link class="tpl-manage" to="/templates">{{ t('common.manage') }}</router-link>
         </div>
-        <div v-if="!templates.length" class="tpl-empty">
-          暂无模板，去
-          <router-link to="/templates">我的 · 记账模板</router-link>
-          添加后可一键入账
-        </div>
+        <i18n-t v-if="!templates.length" keypath="home.noTemplates" tag="div" class="tpl-empty">
+          <template #link>
+            <router-link to="/templates">{{ t('home.noTemplatesLink') }}</router-link>
+          </template>
+        </i18n-t>
         <div v-else class="tpl-grid">
           <button
-            v-for="t in templates"
-            :key="t.id"
+            v-for="tpl in templates"
+            :key="tpl.id"
             type="button"
             class="tpl-btn"
             :disabled="quickBusy != null"
-            @click="askQuickUse(t)"
+            @click="askQuickUse(tpl)"
           >
-            <v-icon size="22" class="tpl-ico">{{ t.icon || 'mdi-flash' }}</v-icon>
-            <span class="tpl-name">{{ t.name }}</span>
-            <span v-if="t.amount > 0" class="tpl-amt">¥{{ fenToYuan(t.amount) }}</span>
-            <span v-else class="tpl-amt muted-amt">待填</span>
+            <v-icon size="22" class="tpl-ico">{{ tpl.icon || 'mdi-flash' }}</v-icon>
+            <span class="tpl-name">{{ tpl.name }}</span>
+            <span v-if="tpl.amount > 0" class="tpl-amt">¥{{ fenToYuan(tpl.amount) }}</span>
+            <span v-else class="tpl-amt muted-amt">{{ t('home.tplAmountUnset') }}</span>
           </button>
         </div>
-        <p class="tpl-hint">点模板会先确认再入账；要改内容请用「记一笔」</p>
+        <p class="tpl-hint">{{ t('home.tplHint') }}</p>
       </div>
     </section>
 
@@ -98,11 +98,11 @@
 
     <section class="home-bottom anim-in" style="--d: 140ms">
       <div class="bottom-head">
-        <h2 class="section-label tight">最近流水</h2>
-        <router-link v-if="tx.recent.length" class="link-more" to="/transactions">全部</router-link>
+        <h2 class="section-label tight">{{ t('home.recent') }}</h2>
+        <router-link v-if="tx.recent.length" class="link-more" to="/transactions">{{ t('common.all') }}</router-link>
       </div>
 
-      <div v-if="!tx.recent.length" class="empty-tip">还没有记录，点上方按钮开始记账</div>
+      <div v-if="!tx.recent.length" class="empty-tip">{{ t('home.emptyRecent') }}</div>
       <v-list v-else bg-color="transparent" class="recent">
         <v-list-item
           v-for="(item, i) in recentShown"
@@ -119,7 +119,7 @@
           </template>
           <v-list-item-title>
             {{ txTitle(item) }}
-            <v-chip v-if="item.amountPending" size="x-small" color="warning" variant="tonal" class="ml-1">待确认</v-chip>
+            <v-chip v-if="item.amountPending" size="x-small" color="warning" variant="tonal" class="ml-1">{{ t('home.pendingChip') }}</v-chip>
           </v-list-item-title>
           <v-list-item-subtitle>
             <template v-if="txSubCategory(item)">{{ txSubCategory(item) }} · </template>
@@ -143,36 +143,36 @@
 
     <v-dialog v-model="confirmOpen" max-width="360">
       <v-card class="confirm-card">
-        <v-card-title class="confirm-title">确认记账</v-card-title>
+        <v-card-title class="confirm-title">{{ t('home.confirmTitle') }}</v-card-title>
         <v-card-text class="confirm-body">
           <template v-if="pendingTpl">
-            <p class="confirm-msg">
-              使用模板「<strong>{{ pendingTpl.name }}</strong>」立即记一笔？
-            </p>
+            <i18n-t keypath="home.confirmMsg" tag="p" class="confirm-msg">
+              <template #name><strong>{{ pendingTpl.name }}</strong></template>
+            </i18n-t>
             <ul class="confirm-meta">
-              <li>类型：{{ typeLabel(pendingTpl.type as any) }}</li>
-              <li v-if="pendingTpl.amount > 0">金额：¥{{ fenToYuan(pendingTpl.amount) }}</li>
-              <li v-else-if="pendingTpl.fareRuleId">金额：按计费规则计算</li>
-              <li v-else>金额：未设（将打开编辑页）</li>
+              <li>{{ t('home.confirmType', { type: typeLabel(pendingTpl.type) }) }}</li>
+              <li v-if="pendingTpl.amount > 0">{{ t('home.confirmAmount', { amount: `¥${fenToYuan(pendingTpl.amount)}` }) }}</li>
+              <li v-else-if="pendingTpl.fareRuleId">{{ t('home.confirmAmountByRule') }}</li>
+              <li v-else>{{ t('home.confirmAmountUnset') }}</li>
             </ul>
           </template>
         </v-card-text>
         <v-card-actions class="confirm-actions">
-          <v-btn variant="text" :disabled="quickBusy != null" @click="cancelQuick">取消</v-btn>
+          <v-btn variant="text" :disabled="quickBusy != null" @click="cancelQuick">{{ t('common.cancel') }}</v-btn>
           <v-spacer />
           <v-btn
             variant="tonal"
             color="primary"
             :disabled="quickBusy != null || !pendingTpl"
             @click="editInstead"
-          >去编辑</v-btn>
+          >{{ t('home.editInstead') }}</v-btn>
           <v-btn
             color="primary"
             variant="flat"
             :loading="quickBusy != null"
             :disabled="!pendingTpl"
             @click="confirmQuick"
-          >确认入账</v-btn>
+          >{{ t('home.confirmCreate') }}</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -182,6 +182,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import http from '../api/http'
 import { useTransactionStore, type Transaction } from '../stores/transaction'
@@ -191,6 +192,7 @@ import type { Template } from '../components/TemplateEditForm.vue'
 import HomeInsights, { type HomeInsightsData } from '../components/HomeInsights.vue'
 import { useBreakpoint } from '../composables/useBreakpoint'
 
+const { t } = useI18n()
 const tx = useTransactionStore()
 const router = useRouter()
 const { width } = useBreakpoint()
@@ -280,47 +282,47 @@ async function confirmQuick() {
   await quickUse(t)
 }
 
-async function quickUse(t: Template) {
+async function quickUse(tpl: Template) {
   if (quickBusy.value) return
-  if (!canQuickCreate(t)) {
+  if (!canQuickCreate(tpl)) {
     confirmOpen.value = false
     pendingTpl.value = null
-    await router.push({ path: '/transactions/new', query: { templateId: String(t.id) } })
+    await router.push({ path: '/transactions/new', query: { templateId: String(tpl.id) } })
     return
   }
-  quickBusy.value = t.id
+  quickBusy.value = tpl.id
   try {
-    const amount = await resolveAmount(t)
-    if (amount <= 0 || !t.accountId) {
+    const amount = await resolveAmount(tpl)
+    if (amount <= 0 || !tpl.accountId) {
       confirmOpen.value = false
       pendingTpl.value = null
-      await router.push({ path: '/transactions/new', query: { templateId: String(t.id) } })
+      await router.push({ path: '/transactions/new', query: { templateId: String(tpl.id) } })
       return
     }
     await tx.create({
-      type: t.type,
+      type: tpl.type,
       amount,
-      accountId: t.accountId,
-      toAccountId: t.toAccountId || null,
-      categoryId: t.categoryId || null,
-      tagIds: t.tagIds || [],
-      remark: t.remark?.trim() || t.name || '',
-      fareRuleId: t.fareRuleId || null,
-      geoMode: t.geoMode || undefined,
-      geoLng: t.geoLng ?? null,
-      geoLat: t.geoLat ?? null,
-      geoName: t.geoName || '',
-      geoEndLng: t.geoEndLng ?? null,
-      geoEndLat: t.geoEndLat ?? null,
-      geoEndName: t.geoEndName || '',
+      accountId: tpl.accountId,
+      toAccountId: tpl.toAccountId || null,
+      categoryId: tpl.categoryId || null,
+      tagIds: tpl.tagIds || [],
+      remark: tpl.remark?.trim() || tpl.name || '',
+      fareRuleId: tpl.fareRuleId || null,
+      geoMode: tpl.geoMode || undefined,
+      geoLng: tpl.geoLng ?? null,
+      geoLat: tpl.geoLat ?? null,
+      geoName: tpl.geoName || '',
+      geoEndLng: tpl.geoEndLng ?? null,
+      geoEndLat: tpl.geoEndLat ?? null,
+      geoEndName: tpl.geoEndName || '',
       happenedAt: dayjs().toISOString(),
     })
     confirmOpen.value = false
     pendingTpl.value = null
-    showFlash(`已记「${t.name}」¥${fenToYuan(amount)}`)
+    showFlash(t('home.recorded', { name: tpl.name, amount: `¥${fenToYuan(amount)}` }))
     await refreshHome()
   } catch (e: any) {
-    showFlash(e?.message || '记账失败')
+    showFlash(e?.message || t('home.recordFailed'))
   } finally {
     quickBusy.value = null
   }

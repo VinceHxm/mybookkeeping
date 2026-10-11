@@ -1,7 +1,7 @@
 <template>
   <v-dialog :model-value="state.open" max-width="380" persistent @update:model-value="(v) => !v && cancel()">
     <v-card class="pwd-card">
-      <v-card-title class="title">{{ state.title }}</v-card-title>
+      <v-card-title class="title">{{ state.title || t('pwdConfirm.verifyTitle') }}</v-card-title>
       <v-card-text>
         <p v-if="state.message" class="msg">{{ state.message }}</p>
         <form @submit.prevent="submit">
@@ -9,7 +9,7 @@
           <v-text-field
             ref="inputRef"
             v-model="password"
-            label="登录密码"
+            :label="t('pwdConfirm.password')"
             :type="showPwd ? 'text' : 'password'"
             autocomplete="current-password"
             variant="outlined"
@@ -23,9 +23,9 @@
         </form>
       </v-card-text>
       <v-card-actions class="actions">
-        <v-btn variant="text" :disabled="loading" @click="cancel">取消</v-btn>
+        <v-btn variant="text" :disabled="loading" @click="cancel">{{ t('common.cancel') }}</v-btn>
         <v-spacer />
-        <v-btn color="primary" variant="flat" :loading="loading" :disabled="!password" @click="submit">确认查看</v-btn>
+        <v-btn color="primary" variant="flat" :loading="loading" :disabled="!password" @click="submit">{{ t('pwdConfirm.confirm') }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -33,9 +33,11 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { passwordConfirmState as state } from '../composables/usePasswordConfirm'
 import { useAuthStore } from '../stores/auth'
 
+const { t } = useI18n()
 const auth = useAuthStore()
 const password = ref('')
 const error = ref('')
@@ -74,7 +76,7 @@ async function submit() {
     const result = await state.run(password.value)
     close(result)
   } catch (e: any) {
-    error.value = e?.message || '验证失败'
+    error.value = e?.message || t('pwdConfirm.failed')
     password.value = ''
   } finally {
     loading.value = false

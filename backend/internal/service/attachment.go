@@ -45,12 +45,12 @@ var attachmentTypes = map[string]string{
 
 type AttachmentService struct {
 	db     *gorm.DB
-	minio  *storage.MinIO
+	store  storage.Store
 	secret []byte
 }
 
-func NewAttachmentService(db *gorm.DB, minio *storage.MinIO, secret []byte) *AttachmentService {
-	return &AttachmentService{db: db, minio: minio, secret: secret}
+func NewAttachmentService(db *gorm.DB, store storage.Store, secret []byte) *AttachmentService {
+	return &AttachmentService{db: db, store: store, secret: secret}
 }
 
 // Upload 按文件内容识别真实类型（不信任客户端声明），仅接受白名单内的图片 / PDF。
@@ -70,7 +70,7 @@ func (s *AttachmentService) Upload(ctx context.Context, userID uint64, declaredT
 		return nil, ErrAttachmentType
 	}
 	key := fmt.Sprintf("u%d/%s%s", userID, uuid.NewString(), ext)
-	if err := s.minio.Upload(ctx, key, ct, io.MultiReader(bytes.NewReader(head), reader), size); err != nil {
+	if err := s.store.Upload(ctx, key, ct, io.MultiReader(bytes.NewReader(head), reader), size); err != nil {
 		return nil, err
 	}
 	att := &model.Attachment{
@@ -134,7 +134,7 @@ func (s *AttachmentService) OpenSigned(ctx context.Context, id uint64, expStr, s
 	if !hmac.Equal([]byte(sig), []byte(s.sign(att.ID, att.UserID, exp))) {
 		return nil, 0, "", ErrAttachmentNotFound
 	}
-	rc, size, err := s.minio.Open(ctx, att.ObjectKey)
+	rc, size, err := s.store.Open(ctx, att.ObjectKey)
 	if err != nil {
 		return nil, 0, "", ErrAttachmentNotFound
 	}

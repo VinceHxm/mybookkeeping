@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"mybookkeeping/internal/i18n"
 	"mybookkeeping/internal/middleware"
 	"mybookkeeping/internal/service"
 )
@@ -30,6 +31,12 @@ func (a *API) StatsSummary(c *gin.Context) {
 	if err != nil {
 		ServerError(c, err.Error())
 		return
+	}
+	loc := i18n.FromRequest(c)
+	for i := range sum.ByCategory {
+		if sum.ByCategory[i].CategoryID == 0 {
+			sum.ByCategory[i].CategoryName = i18n.T(loc, sum.ByCategory[i].CategoryName)
+		}
 	}
 	OK(c, sum)
 }
@@ -58,6 +65,14 @@ func (a *API) StatsBreakdown(c *gin.Context) {
 	if err != nil {
 		ServerError(c, err.Error())
 		return
+	}
+	// 只翻 service 生成的占位名：ID 0 为「未分类 / 无标签」，下钻时与父类同 ID 的项为「xx（未细分）」；其余是用户数据
+	loc := i18n.FromRequest(c)
+	for i := range out.Items {
+		it := &out.Items[i]
+		if it.ID == 0 || (out.By == "category" && q.ParentID != nil && it.ID == *q.ParentID) {
+			it.Name = i18n.T(loc, it.Name)
+		}
 	}
 	OK(c, out)
 }

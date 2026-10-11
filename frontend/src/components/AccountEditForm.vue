@@ -2,21 +2,21 @@
   <div class="form-sections">
     <section class="form-section">
       <header class="form-section__head">
-        <h3 class="form-section__title">基本信息</h3>
+        <h3 class="form-section__title">{{ t('accountEdit.basic') }}</h3>
       </header>
       <div class="form-section__body">
-        <v-text-field v-model="form.name" label="名称" variant="outlined" hide-details class="field" />
+        <v-text-field v-model="form.name" :label="t('accountEdit.name')" variant="outlined" hide-details class="field" />
         <v-select
           v-model="form.type"
           :items="typeItems"
-          label="类型"
+          :label="t('accountEdit.type')"
           variant="outlined"
           hide-details
           class="field"
         />
         <v-text-field
           v-model.number="form.sort"
-          label="排序"
+          :label="t('accountEdit.sort')"
           type="number"
           variant="outlined"
           hide-details
@@ -27,36 +27,36 @@
 
     <section v-if="form.type === 'invest'" class="form-section">
       <header class="form-section__head">
-        <h3 class="form-section__title">平台</h3>
+        <h3 class="form-section__title">{{ t('accountEdit.platform') }}</h3>
       </header>
       <div class="form-section__body">
         <v-text-field
           v-model="form.institution"
-          label="平台 / 券商"
+          :label="t('accountEdit.platformLabel')"
           variant="outlined"
           hide-details
           class="field field--last"
-          placeholder="如：支付宝、华泰证券"
+          :placeholder="t('accountEdit.platformPlaceholder')"
         />
       </div>
     </section>
 
     <section v-if="form.type === 'bank' || form.type === 'credit'" class="form-section">
       <header class="form-section__head">
-        <h3 class="form-section__title">卡片信息</h3>
+        <h3 class="form-section__title">{{ t('accountEdit.card') }}</h3>
       </header>
       <div class="form-section__body">
         <v-text-field
           v-model="form.institution"
-          :label="form.type === 'credit' ? '发卡机构' : '开户行'"
+          :label="form.type === 'credit' ? t('accountEdit.issuer') : t('accountEdit.bankBranch')"
           variant="outlined"
           hide-details
           class="field"
-          placeholder="如：工商银行"
+          :placeholder="t('accountEdit.bankPlaceholder')"
         />
         <v-text-field
           v-model="form.cardNo"
-          label="卡号"
+          :label="t('accountEdit.cardNo')"
           variant="outlined"
           hide-details
           class="field"
@@ -69,7 +69,7 @@
         />
         <v-text-field
           v-model="form.holderName"
-          label="户名 / 持卡人"
+          :label="t('accountEdit.holderName')"
           variant="outlined"
           hide-details
           class="field field--last"
@@ -79,19 +79,19 @@
           @blur="onSecretBlur('holderName')"
         />
         <p class="form-section__tip">
-          卡号与户名默认脱敏；点眼睛向服务器拉取明文（不常驻）。修改请先清空再填完整号码，否则保存不会覆盖原值。
+          {{ t('accountEdit.cardTip') }}
         </p>
       </div>
     </section>
 
     <section v-if="form.type === 'credit'" class="form-section">
       <header class="form-section__head">
-        <h3 class="form-section__title">额度</h3>
+        <h3 class="form-section__title">{{ t('accountEdit.limit') }}</h3>
       </header>
       <div class="form-section__body">
         <v-text-field
           v-model="creditLimitYuan"
-          label="信用额度（元）"
+          :label="t('accountEdit.creditLimit')"
           type="number"
           inputmode="decimal"
           variant="outlined"
@@ -101,7 +101,7 @@
         />
         <v-text-field
           v-model="availableCreditYuan"
-          label="可用额度（元）"
+          :label="t('accountEdit.availableCredit')"
           type="number"
           inputmode="decimal"
           variant="outlined"
@@ -111,7 +111,7 @@
         />
         <v-text-field
           v-model="usedCreditYuan"
-          :label="accountId ? '已用额度（元）' : '初始已用额度（元）'"
+          :label="accountId ? t('accountEdit.usedCredit') : t('accountEdit.initialUsedCredit')"
           type="number"
           inputmode="decimal"
           variant="outlined"
@@ -120,20 +120,20 @@
           @update:model-value="onUsedCreditChange"
         />
         <p class="form-section__tip">
-          银行 App 常见只显示可用：填可用后自动算已用 = 额度 − 可用；也可直接改已用，可用会同步。保存以已用为准。
+          {{ t('accountEdit.limitTip') }}
         </p>
       </div>
     </section>
 
     <section v-if="form.type === 'credit'" class="form-section">
       <header class="form-section__head">
-        <h3 class="form-section__title">账单</h3>
+        <h3 class="form-section__title">{{ t('accountEdit.statement') }}</h3>
       </header>
       <div class="form-section__body">
         <div class="form-section__group">
           <v-text-field
             v-model="billedYuan"
-            label="已出账（元）"
+            :label="t('accountEdit.billed')"
             type="number"
             inputmode="decimal"
             variant="outlined"
@@ -143,22 +143,21 @@
           />
           <v-text-field
             :model-value="unbilledYuan"
-            label="未出账（元）"
+            :label="t('accountEdit.unbilled')"
             type="number"
             variant="outlined"
             readonly
             hide-details
             class="field field--last"
           />
-          <p class="form-section__tip">
-            只填银行/花呗「已出账、当前应还」的金额。上期已还清、下期还在累积时请填
-            <strong>0</strong>——花呗里的「本期已累计」不是已出账，应留在未出账里。未出账 = 已用 − 已出账。
-          </p>
+          <i18n-t keypath="accountEdit.billedTip" tag="p" class="form-section__tip">
+            <template #zero><strong>0</strong></template>
+          </i18n-t>
         </div>
         <div class="form-section__group">
           <v-text-field
             v-model.number="form.billingDay"
-            label="账单日（1-28）"
+            :label="t('accountEdit.billingDay')"
             type="number"
             variant="outlined"
             hide-details
@@ -166,14 +165,14 @@
           />
           <v-text-field
             v-model.number="form.paymentDueDay"
-            label="还款日（1-28，可选）"
+            :label="t('accountEdit.dueDay')"
             type="number"
             variant="outlined"
             hide-details
             class="field field--last"
           />
           <p class="form-section__tip">
-            设置账单日后可看本期已还/待还；填写还款日后，临近还款日会在首页提醒（无欠款不提醒）。
+            {{ t('accountEdit.billingTip') }}
           </p>
         </div>
       </div>
@@ -181,14 +180,18 @@
 
     <section v-if="form.type === 'credit'" class="form-section">
       <header class="form-section__head">
-        <h3 class="form-section__title">存量分期（可选）</h3>
+        <h3 class="form-section__title">{{ t('accountEdit.plans') }}</h3>
       </header>
       <div class="form-section__body">
         <p class="form-section__tip form-section__tip--alone">
-          本金与期数只填<strong>尚未出账</strong>的部分（App「分期待还」里还没进账单的剩余本金、剩余期数），不改已用额度。
-          系统里的「出账」= 账单日那一次结账，不是花呗正在累积的那一期。
-          若上方「已出账」里已经含了该分期的一期，选「另有一期已含在已出账」，那一期<strong>不要</strong>再算进这里的本金和期数；
-          上期已还清、累计还在滚时，已出账填 0，选「下次出账起」。
+          <i18n-t keypath="accountEdit.plansTip1" tag="span">
+            <template #unbilled><strong>{{ t('accountEdit.plansTipUnbilled') }}</strong></template>
+          </i18n-t>
+          {{ t('accountEdit.plansTip2') }}
+          <i18n-t keypath="accountEdit.plansTip3" tag="span">
+            <template #not><strong>{{ t('accountEdit.plansTipNot') }}</strong></template>
+          </i18n-t>
+          {{ t('accountEdit.plansTip4') }}
         </p>
         <div
           v-for="(row, idx) in planRows"
@@ -197,17 +200,17 @@
         >
           <v-text-field
             v-model="row.name"
-            label="名称"
+            :label="t('accountEdit.planName')"
             variant="outlined"
             hide-details
             density="compact"
             class="field"
-            placeholder="如：京东 12 期"
+            :placeholder="t('accountEdit.planNamePlaceholder')"
           />
           <div class="plan-row__grid">
             <v-text-field
               v-model="row.principalYuan"
-              label="未出账剩余本金"
+              :label="t('accountEdit.planPrincipal')"
               type="number"
               inputmode="decimal"
               variant="outlined"
@@ -218,7 +221,7 @@
             />
             <v-text-field
               v-model.number="row.periods"
-              label="未出账剩余期数"
+              :label="t('accountEdit.planPeriods')"
               type="number"
               min="1"
               :max="row.firstDueMode === 'current' ? 59 : 60"
@@ -229,7 +232,7 @@
             />
             <v-text-field
               v-model="row.interestYuan"
-              label="每期利息"
+              :label="t('accountEdit.planInterest')"
               type="number"
               inputmode="decimal"
               variant="outlined"
@@ -241,7 +244,7 @@
             <v-select
               v-model="row.firstDueMode"
               :items="firstDueModeItems"
-              label="首期如何入账"
+              :label="t('accountEdit.planFirstDue')"
               variant="outlined"
               hide-details
               density="compact"
@@ -249,49 +252,51 @@
             />
           </div>
           <div class="plan-row__actions">
-            <span v-if="planShareHint(row)" class="plan-share">约每期 ¥{{ planShareHint(row) }}</span>
-            <v-btn size="small" variant="text" color="error" @click="removePlanRow(idx)">移除</v-btn>
+            <span v-if="planShareHint(row)" class="plan-share">{{ t('accountEdit.planShare', { amount: planShareHint(row) }) }}</span>
+            <v-btn size="small" variant="text" color="error" @click="removePlanRow(idx)">{{ t('accountEdit.remove') }}</v-btn>
           </div>
         </div>
         <v-btn size="small" variant="tonal" color="primary" class="mt-1" @click="addPlanRow">
-          添加分期计划
+          {{ t('accountEdit.addPlan') }}
         </v-btn>
         <div v-if="planSummary.futurePrincipal > 0 || planSummary.includedInBilled > 0 || planRows.length" class="plan-summary">
           <div v-if="planSummary.includedInBilled > 0">
-            已出账里含分期约 ¥{{ fenToYuan(planSummary.includedInBilled) }}（按每期均摊估算，仅用于拆分展示；本期应还以已出账为准，不会再计入未出账）
+            {{ t('accountEdit.sumIncluded', { amount: fenToYuan(planSummary.includedInBilled) }) }}
           </div>
           <div v-if="planSummary.futurePrincipal > 0">
-            尚未出账的分期本金 ¥{{ fenToYuan(planSummary.futurePrincipal) }}
+            {{ t('accountEdit.sumFuture', { amount: fenToYuan(planSummary.futurePrincipal) }) }}
             <template v-if="planSummary.nextShare > 0">
-              · 其中下次出账约 ¥{{ fenToYuan(planSummary.nextShare) }}
+              {{ t('accountEdit.sumNextShare', { amount: fenToYuan(planSummary.nextShare) }) }}
             </template>
           </div>
           <div>
-            未出账里的非分期约 ¥{{ fenToYuan(planSummary.nonInstallmentUnbilled) }}
+            {{ t('accountEdit.sumNonInstallment', { amount: fenToYuan(planSummary.nonInstallmentUnbilled) }) }}
             <template v-if="planSummary.nextShare > 0">
-              · 估下次出账合计约 ¥{{ fenToYuan(planSummary.nonInstallmentUnbilled + planSummary.nextShare) }}
+              {{ t('accountEdit.sumNextTotal', { amount: fenToYuan(planSummary.nonInstallmentUnbilled + planSummary.nextShare) }) }}
             </template>
           </div>
           <div v-if="planSummary.warnBilledZeroButIncluded" class="plan-warn">
-            已出账为 0，但分期选了「另有一期已含在已出账」——请改成「下次出账起」，否则首期会对着已关闭的账单周期。
+            {{ t('accountEdit.warnBilledZero') }}
           </div>
           <div v-if="planSummary.warnAccruingAsBilled" class="plan-warn">
-            若上期已还清、这里填的是花呗「已累计」而非应还账单，请把已出账改回 0，分期选「下次出账起」。
+            {{ t('accountEdit.warnAccruing') }}
           </div>
-          <div v-if="planSummary.overUnbilled" class="plan-warn">尚未出账的分期本金已超过未出账，请核对已用/已出账或分期金额</div>
-          <div v-if="!form.billingDay" class="plan-warn">请先设置账单日，才能正确映射首期出账日</div>
+          <div v-if="planSummary.overUnbilled" class="plan-warn">{{ t('accountEdit.warnOverUnbilled') }}</div>
+          <div v-if="!form.billingDay" class="plan-warn">{{ t('accountEdit.warnNoBillingDay') }}</div>
         </div>
       </div>
     </section>
 
     <section v-else-if="form.type !== 'credit'" class="form-section">
       <header class="form-section__head">
-        <h3 class="form-section__title">{{ form.type === 'invest' ? '市值' : '余额' }}</h3>
+        <h3 class="form-section__title">{{ form.type === 'invest' ? t('accountEdit.marketValue') : t('accountEdit.balance') }}</h3>
       </header>
       <div class="form-section__body">
         <v-text-field
           v-model="balanceYuan"
-          :label="form.type === 'invest' ? (accountId ? '市值（元）' : '当前市值（元）') : (accountId ? '余额（元）' : '初始余额（元）')"
+          :label="form.type === 'invest'
+            ? (accountId ? t('accountEdit.marketValueYuan') : t('accountEdit.currentMarketValueYuan'))
+            : (accountId ? t('accountEdit.balanceYuan') : t('accountEdit.initialBalanceYuan'))"
           type="number"
           inputmode="decimal"
           variant="outlined"
@@ -299,20 +304,20 @@
           class="field field--last"
         />
         <p v-if="form.type === 'invest'" class="form-section__tip">
-          买入 / 赎回记成与银行卡之间的转账；行情变化请在账户列表点「校准市值」，会留下盈亏记录。这里直接改不留记录。
+          {{ t('accountEdit.investTip') }}
         </p>
-        <p v-else-if="accountId" class="form-section__tip">可直接改余额，不自动生成流水。</p>
+        <p v-else-if="accountId" class="form-section__tip">{{ t('accountEdit.balanceTip') }}</p>
       </div>
     </section>
 
     <section v-if="accountId" class="form-section">
       <header class="form-section__head">
-        <h3 class="form-section__title">默认用途</h3>
+        <h3 class="form-section__title">{{ t('accountEdit.defaults') }}</h3>
       </header>
       <div class="form-section__body">
         <v-switch
           v-model="asDefaultExpense"
-          label="默认消费账户（记收支时优先选用；全局仅一个）"
+          :label="t('accountEdit.defaultExpense')"
           color="primary"
           hide-details
           density="compact"
@@ -322,76 +327,79 @@
         <v-switch
           v-if="form.type !== 'credit'"
           v-model="asDefaultRepay"
-          label="默认还款账户（还信用卡时优先作转出；全局仅一个）"
+          :label="t('accountEdit.defaultRepay')"
           color="primary"
           hide-details
           density="compact"
           class="field field--last"
           :disabled="form.archived"
         />
-        <p v-else class="form-section__tip">信用账户不能设为默认还款账户。</p>
-        <p class="form-section__tip">开启后会替换原先的同类型默认账户；可与另一类默认设为同一账户。</p>
+        <p v-else class="form-section__tip">{{ t('accountEdit.creditNoRepay') }}</p>
+        <p class="form-section__tip">{{ t('accountEdit.defaultsTip') }}</p>
       </div>
     </section>
 
     <section class="form-section">
       <header class="form-section__head">
-        <h3 class="form-section__title">存放位置</h3>
+        <h3 class="form-section__title">{{ t('accountEdit.storage') }}</h3>
       </header>
       <div class="form-section__body">
         <v-textarea
           v-model="form.storageNote"
-          label="位置说明"
+          :label="t('accountEdit.storageNote')"
           variant="outlined"
           hide-details
           class="field"
           rows="2"
           auto-grow
-          placeholder="如：客厅抽屉第二层 / 钱包夹层 / 保险柜"
+          :placeholder="t('accountEdit.storagePlaceholder')"
         />
         <AttachmentUpload
           v-model="attachmentIds"
           :existing="formAttachments"
-          title="位置照片"
-          subtitle="柜子、抽屉等现场照片，可选 · 点图可放大"
+          :title="t('accountEdit.storagePhotos')"
+          :subtitle="t('accountEdit.storagePhotosSub')"
         />
       </div>
     </section>
 
     <section class="form-section">
       <header class="form-section__head">
-        <h3 class="form-section__title">其他</h3>
+        <h3 class="form-section__title">{{ t('accountEdit.other') }}</h3>
       </header>
       <div class="form-section__body">
         <v-text-field
           v-model="form.remark"
-          label="备注（可选）"
+          :label="t('accountEdit.remark')"
           variant="outlined"
           hide-details
           :class="accountId ? 'field' : 'field field--last'"
         />
         <template v-if="accountId">
-          <v-switch v-model="form.archived" label="归档（隐藏，保留流水）" hide-details class="field" />
+          <v-switch v-model="form.archived" :label="t('accountEdit.archive')" hide-details class="field" />
           <v-btn class="mt-1" variant="tonal" size="small" :loading="reconciling" @click="markReconciled">
-            标记已对账
+            {{ t('accountEdit.markReconciled') }}
           </v-btn>
         </template>
       </div>
     </section>
 
     <div v-if="accountId" class="danger-zone">
-      <div class="danger-title">危险操作</div>
-      <p class="danger-tip">删除账户不可恢复；若仍有流水关联可能无法删除。</p>
-      <v-btn color="error" variant="outlined" block @click="emit('delete')">删除此账户</v-btn>
+      <div class="danger-title">{{ t('accountEdit.danger') }}</div>
+      <p class="danger-tip">{{ t('accountEdit.dangerTip') }}</p>
+      <v-btn color="error" variant="outlined" block @click="emit('delete')">{{ t('accountEdit.deleteAccount') }}</v-btn>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import AttachmentUpload from './AttachmentUpload.vue'
 import {
+  ACCOUNT_TYPES,
+  accountTypeLabel,
   useAccountStore,
   creditUsedFen,
   creditBilledFenOf,
@@ -415,6 +423,7 @@ const emit = defineEmits<{
   reconciled: []
 }>()
 
+const { t } = useI18n()
 const accounts = useAccountStore()
 const auth = useAuthStore()
 const saving = ref(false)
@@ -447,10 +456,10 @@ type PlanRow = {
 
 let planKeySeq = 1
 const planRows = ref<PlanRow[]>([])
-const firstDueModeItems = [
-  { title: '下次出账起', value: 'next' },
-  { title: '另有一期已含在已出账', value: 'current' },
-]
+const firstDueModeItems = computed(() => [
+  { title: t('accountEdit.planFirstNext'), value: 'next' },
+  { title: t('accountEdit.planFirstCurrent'), value: 'current' },
+])
 
 const form = reactive({
   name: '',
@@ -466,13 +475,12 @@ const form = reactive({
   remark: '',
 })
 
-const typeItems = [
-  { title: '现金', value: 'cash' },
-  { title: '银行卡', value: 'bank' },
-  { title: '信用', value: 'credit' },
-  { title: '理财（基金 / 股票）', value: 'invest' },
-  { title: '其他', value: 'other' },
-]
+const typeItems = computed(() =>
+  ACCOUNT_TYPES.map((v) => ({
+    title: v === 'invest' ? t('accountEdit.typeInvestLong') : accountTypeLabel(v),
+    value: v,
+  })),
+)
 
 const unbilledYuan = computed(() => {
   const used = yuanToFen(usedCreditYuan.value)
@@ -631,7 +639,8 @@ function buildInstallmentPlansPayload(): CreditInstallmentPlan[] {
       const inputFen = Math.max(0, yuanToFen(row.principalYuan))
       if (inputFen <= 0 && !row.name.trim()) return null
       const common = {
-        name: row.name.trim() || '存量分期',
+        // 留空由后端填默认名
+        name: row.name.trim(),
         interestPerPeriodFen: Math.max(0, yuanToFen(row.interestYuan)),
         sort: i,
       }
@@ -748,7 +757,7 @@ async function toggleFormReveal() {
   revealLoading.value = true
   try {
     const data = await confirmWithPassword(
-      { title: '验证身份', message: '查看完整卡号与户名前，请输入登录密码。' },
+      { title: t('pwdConfirm.verifyTitle'), message: t('pwdConfirm.revealMessage') },
       (pwd) => accounts.fetchSensitive(id, pwd),
     )
     if (!data) return
@@ -827,11 +836,11 @@ function onBilledChange() {
 async function save() {
   if (saving.value) return
   if (form.type === 'credit' && planRows.value.length && !form.billingDay) {
-    alert('补录存量分期前请先设置账单日（1-28）')
+    alert(t('accountEdit.needBillingDay'))
     return
   }
   if (form.type === 'credit' && planSummary.value.overUnbilled) {
-    if (!confirm('存量分期本金合计已超过未出账，仍要保存吗？')) return
+    if (!confirm(t('accountEdit.confirmOverUnbilled'))) return
   }
   saving.value = true
   try {

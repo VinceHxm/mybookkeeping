@@ -5,7 +5,7 @@
         <v-icon :icon="model || fallback" />
       </v-avatar>
       <div class="current-text">
-        <strong>{{ title }}</strong>
+        <strong>{{ title || t('icons.defaultTitle') }}</strong>
         <span>{{ iconLabel(model || fallback) }}</span>
       </div>
       <v-icon>{{ open ? 'mdi-chevron-up' : 'mdi-chevron-down' }}</v-icon>
@@ -19,18 +19,18 @@
         hide-details
         clearable
         prepend-inner-icon="mdi-magnify"
-        placeholder="搜索图标…"
+        :placeholder="t('icons.search')"
         class="mb-3"
       />
       <div class="chips hide-scrollbar">
         <button
           v-for="g in groups"
-          :key="g"
+          :key="g.key"
           type="button"
           class="chip"
-          :class="{ active: group === g }"
-          @click="group = g"
-        >{{ g }}</button>
+          :class="{ active: group === g.key }"
+          @click="group = g.key"
+        >{{ g.label }}</button>
       </div>
       <div class="grid hide-scrollbar">
         <button
@@ -52,30 +52,39 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { APP_ICONS, ICON_GROUPS, iconLabel } from '../utils/icons'
+import { useI18n } from 'vue-i18n'
+import { APP_ICONS, ICON_GROUPS, iconGroupLabel, iconLabel, type IconGroup } from '../utils/icons'
 
 withDefaults(defineProps<{
   fallback?: string
   title?: string
 }>(), {
   fallback: 'mdi-shape',
-  title: '图标',
+  title: '',
 })
 
+const { t } = useI18n()
 const model = defineModel<string>({ default: '' })
 
 const open = ref(false)
 const keyword = ref('')
-const group = ref<string>('全部')
+const group = ref<IconGroup | 'all'>('all')
 
-const groups = computed(() => ['全部', ...ICON_GROUPS])
+const groups = computed(() => [
+  { key: 'all' as const, label: t('common.all') },
+  ...ICON_GROUPS.map((g) => ({ key: g, label: iconGroupLabel(g) })),
+])
+
+const items = computed(() =>
+  APP_ICONS.map((i) => ({ ...i, label: iconLabel(i.value), groupLabel: iconGroupLabel(i.group) })),
+)
 
 const filtered = computed(() => {
   const q = keyword.value.trim().toLowerCase()
-  return APP_ICONS.filter((i) => {
-    if (group.value !== '全部' && i.group !== group.value) return false
+  return items.value.filter((i) => {
+    if (group.value !== 'all' && i.group !== group.value) return false
     if (!q) return true
-    return i.label.includes(q) || i.value.toLowerCase().includes(q) || i.group.includes(q)
+    return i.label.toLowerCase().includes(q) || i.value.toLowerCase().includes(q) || i.groupLabel.toLowerCase().includes(q)
   })
 })
 

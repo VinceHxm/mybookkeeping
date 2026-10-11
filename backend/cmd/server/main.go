@@ -10,10 +10,12 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"mybookkeeping/internal/config"
 	"mybookkeeping/internal/database"
 	"mybookkeeping/internal/handler"
+	"mybookkeeping/internal/kv"
 	"mybookkeeping/internal/middleware"
 	"mybookkeeping/internal/service"
 	"mybookkeeping/internal/storage"
@@ -22,33 +24,23 @@ import (
 func main() {
 	cfg := config.Load()
 
-	db, err := database.OpenMySQL(cfg)
+	db, err := database.Open(cfg)
 	if err != nil {
-		log.Fatalf("mysql: %v", err)
+		log.Fatalf("database (%s): %v", cfg.DBDriver, err)
 	}
 
-	rdb, err := database.OpenRedis(cfg)
-	if err != nil {
-		log.Fatalf("redis: %v", err)
-	}
+	sessions, hotCache := openKV(cfg, db)
+	fileStore := openStorage(cfg)
+	log.Printf("drivers: db=%s session=%s storage=%s", cfg.DBDriver, cfg.SessionStore, cfg.StorageDriver)
 
-	var minioStore *storage.MinIO
-	minioReady := false
-	if ms, err := storage.NewMinIO(cfg); err != nil {
-		log.Printf("warn: minio unavailable: %v (attachments disabled)", err)
-	} else {
-		minioStore = ms
-		minioReady = true
-	}
-
-	authSvc := service.NewAuthService(db, rdb, cfg.SessionTTL, cfg.ResetTokenTTLHours, cfg.ResetTokenInResponse)
+	authSvc := service.NewAuthService(db, sessions, cfg.SessionTTL, cfg.ResetTokenTTLHours, cfg.ResetTokenInResponse)
 	if err := authSvc.EnsureAdminRoles(); err != nil {
 		log.Printf("warn: ensure admin roles: %v", err)
 	}
 	accountSvc := service.NewAccountService(db)
 	categorySvc := service.NewCategoryService(db)
 	tagSvc := service.NewTagService(db)
-	holidaySvc := service.NewHolidayService(db, rdb)
+	holidaySvc := service.NewHolidayService(db, hotCache)
 	fareRuleSvc := service.NewFareRuleService(db, holidaySvc)
 	if err := fareRuleSvc.MigrateEmbeddedTemplateFareRules(); err != nil {
 		log.Printf("warn: migrate fare rules: %v", err)
@@ -59,12 +51,12 @@ func main() {
 	statsSvc := service.NewStatsService(db)
 	llmSvc := service.NewLLMService(cfg, db)
 	var attachSvc *service.AttachmentService
-	if minioReady {
-		attachSvc = service.NewAttachmentService(db, minioStore, appSecret(cfg))
+	if fileStore != nil {
+		attachSvc = service.NewAttachmentService(db, fileStore, appSecret(cfg))
 	}
 
-	api := handler.NewAPI(cfg, authSvc, accountSvc, categorySvc, tagSvc, templateSvc, fareRuleSvc, holidaySvc, scheduleSvc, txSvc, attachSvc, statsSvc, llmSvc, minioReady)
-	authMw := middleware.NewAuth(rdb)
+	api := handler.NewAPI(cfg, authSvc, accountSvc, categorySvc, tagSvc, templateSvc, fareRuleSvc, holidaySvc, scheduleSvc, txSvc, attachSvc, statsSvc, llmSvc, fileStore != nil)
+	authMw := middleware.NewAuth(sessions)
 
 	// 周期记账后台任务
 	go func() {
@@ -196,6 +188,63 @@ func main() {
 	log.Printf("listening on %s (ai=%v register=%v)", cfg.ServerAddr, llmSvc.Enabled(), cfg.AllowRegister)
 	if err := r.Run(cfg.ServerAddr); err != nil {
 		log.Fatal(err)
+	}
+}
+
+// openKV 返回会话存储，以及节假日热缓存（DB 模式下为 nil，节假日已有进程内缓存 + 数据库）
+func openKV(cfg *config.Config, db *gorm.DB) (kv.Store, kv.Store) {
+	switch cfg.SessionStore {
+	case "redis":
+		rdb, err := database.OpenRedis(cfg)
+		if err != nil {
+			log.Fatalf("redis: %v (不想用 Redis 可设 SESSION_STORE=db)", err)
+		}
+		s := kv.NewRedisStore(rdb)
+		return s, s
+	case "db":
+		s, err := kv.NewDBStore(db)
+		if err != nil {
+			log.Fatalf("kv store: %v", err)
+		}
+		go func() {
+			ticker := time.NewTicker(time.Hour)
+			defer ticker.Stop()
+			for ; ; <-ticker.C {
+				if _, err := s.PurgeExpired(context.Background()); err != nil {
+					log.Printf("kv purge: %v", err)
+				}
+			}
+		}()
+		return s, nil
+	default:
+		log.Fatalf("unknown SESSION_STORE %q (redis | db)", cfg.SessionStore)
+		return nil, nil
+	}
+}
+
+// openStorage 附件存储不可用时返回 nil（附件功能关闭，其余功能照常）
+func openStorage(cfg *config.Config) storage.Store {
+	switch cfg.StorageDriver {
+	case "minio":
+		ms, err := storage.NewMinIO(cfg)
+		if err != nil {
+			log.Printf("warn: minio unavailable: %v (attachments disabled)", err)
+			return nil
+		}
+		return ms
+	case "local":
+		dir := filepath.Join(cfg.DataDir, "attachments")
+		ls, err := storage.NewLocal(dir)
+		if err != nil {
+			log.Printf("warn: local storage %s: %v (attachments disabled)", dir, err)
+			return nil
+		}
+		return ls
+	case "none":
+		return nil
+	default:
+		log.Fatalf("unknown STORAGE_DRIVER %q (minio | local | none)", cfg.StorageDriver)
+		return nil
 	}
 }
 

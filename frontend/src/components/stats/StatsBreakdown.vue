@@ -2,24 +2,24 @@
   <div class="bd">
     <div class="bd-controls">
       <v-btn-toggle v-model="kind" mandatory density="compact" color="primary" variant="outlined" divided rounded="lg">
-        <v-btn value="expense" size="small">支出</v-btn>
-        <v-btn value="income" size="small">收入</v-btn>
+        <v-btn value="expense" size="small">{{ t('txType.expense') }}</v-btn>
+        <v-btn value="income" size="small">{{ t('txType.income') }}</v-btn>
       </v-btn-toggle>
       <v-btn-toggle v-model="by" mandatory density="compact" color="primary" variant="outlined" divided rounded="lg">
-        <v-btn value="category" size="small">分类</v-btn>
-        <v-btn value="account" size="small">账户</v-btn>
-        <v-btn value="tag" size="small">标签</v-btn>
+        <v-btn value="category" size="small">{{ t('stats.bd.category') }}</v-btn>
+        <v-btn value="account" size="small">{{ t('stats.bd.account') }}</v-btn>
+        <v-btn value="tag" size="small">{{ t('stats.bd.tag') }}</v-btn>
       </v-btn-toggle>
     </div>
 
     <div v-if="parent" class="crumb">
-      <v-btn variant="text" size="small" color="primary" prepend-icon="mdi-chevron-left" @click="parent = null">全部分类</v-btn>
+      <v-btn variant="text" size="small" color="primary" prepend-icon="mdi-chevron-left" @click="parent = null">{{ t('stats.bd.allCategories') }}</v-btn>
       <span class="crumb-sep">/</span>
       <span class="crumb-cur">{{ parent.name }}</span>
     </div>
 
     <div v-if="!items.length" class="empty-tip surface-card">
-      {{ loading ? '加载中…' : `该区间暂无${kindLabel}` }}
+      {{ loading ? t('common.loading') : t(`stats.bd.empty.${kind}`) }}
     </div>
     <div v-else class="bd-grid" :class="{ loading }">
       <div class="bd-chart surface-card">
@@ -27,8 +27,10 @@
       </div>
       <div class="bd-list surface-card">
         <div class="bd-list-head">
-          <span>{{ items.length }} 项</span>
-          <span>合计 <b>{{ yuan(total) }}</b></span>
+          <span>{{ t('stats.bd.itemCount', { n: items.length }) }}</span>
+          <i18n-t keypath="stats.bd.total" tag="span">
+            <template #amount><b>{{ yuan(total) }}</b></template>
+          </i18n-t>
         </div>
         <component
           :is="canOpen(it) ? 'button' : 'div'"
@@ -44,12 +46,12 @@
           </span>
           <div class="bd-main">
             <div class="bd-line">
-              <span class="bd-name">{{ it.name || '（已删除）' }}</span>
+              <span class="bd-name">{{ it.name || t('stats.bd.deleted') }}</span>
               <span class="bd-amt">{{ yuan(it.amount) }}</span>
             </div>
             <div class="bd-bar"><i :style="{ width: barWidth(it), background: colorAt(i) }" /></div>
             <div class="bd-sub">
-              <span>{{ it.count }} 笔<template v-if="drillable(it)"> · 含子类</template></span>
+              <span>{{ t('stats.count', { n: it.count }) }}<template v-if="drillable(it)"> · {{ t('stats.bd.withSub') }}</template></span>
               <span>{{ total ? percent(it.amount / total) : '—' }}</span>
             </div>
           </div>
@@ -59,7 +61,7 @@
         </component>
       </div>
     </div>
-    <p v-if="by === 'tag' && items.length" class="bd-hint">一笔流水有多个标签时会分别计入各标签，占比合计可能超过 100%。</p>
+    <p v-if="by === 'tag' && items.length" class="bd-hint">{{ t('stats.bd.tagHint') }}</p>
 
     <StatsTopList :filter="filter" :kind="kind" class="mt-3" />
   </div>
@@ -68,6 +70,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { PieChart } from 'echarts/charts'
@@ -95,6 +98,7 @@ interface Item {
 
 const props = defineProps<{ filter: StatsFilter }>()
 const router = useRouter()
+const { t, locale } = useI18n()
 const chart = useChartTheme()
 const { isDesktop } = useBreakpoint()
 
@@ -105,7 +109,6 @@ const items = ref<Item[]>([])
 const total = ref(0)
 const loading = ref(false)
 
-const kindLabel = computed(() => (kind.value === 'income' ? '收入' : '支出'))
 const maxAmount = computed(() => Math.max(1, ...items.value.map((i) => i.amount)))
 /** 饼图最多 8 块，其余并成「其他」，列表仍完整展示 */
 const PIE_MAX = 8
@@ -156,7 +159,7 @@ const pieOption = computed(() => {
   const data = head.map((it, i) => ({ name: it.name, value: it.amount, itemId: it.id, itemStyle: { color: colorAt(i) } }))
   if (rest.length) {
     data.push({
-      name: `其他 ${rest.length} 项`,
+      name: t('stats.bd.others', { n: rest.length }),
       value: rest.reduce((s, it) => s + it.amount, 0),
       itemId: -1,
       itemStyle: { color: OTHER_COLOR },
@@ -166,7 +169,7 @@ const pieOption = computed(() => {
     backgroundColor: 'transparent',
     title: {
       text: yuan(total.value, 0),
-      subtext: parent.value ? parent.value.name : `${kindLabel.value}合计`,
+      subtext: parent.value ? parent.value.name : t(`stats.bd.kindTotal.${kind.value}`),
       left: 'center',
       top: 'center',
       textStyle: { color: c.dark ? '#e6f0ea' : '#15261f', fontSize: isDesktop.value ? 20 : 16, fontWeight: 700 },
@@ -175,7 +178,7 @@ const pieOption = computed(() => {
     },
     tooltip: {
       trigger: 'item',
-      formatter: (p: any) => `${p.marker}${p.name}<br/>${yuan(p.value)}（${p.percent}%）`,
+      formatter: (p: any) => `${p.marker}${p.name}<br/>${yuan(p.value)}${t('stats.bd.tipPct', { pct: `${p.percent}%` })}`,
     },
     series: [{
       type: 'pie',
@@ -208,6 +211,8 @@ watch([kind, by, () => props.filter.from, () => props.filter.to, () => props.fil
   else load()
 }, { immediate: true })
 watch(parent, load)
+// 「未分类 / 无标签」等占位名由后端按语言返回，切换语言后重新拉取
+watch(locale, load)
 </script>
 
 <style scoped>

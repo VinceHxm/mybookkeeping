@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"mybookkeeping/internal/i18n"
 	"mybookkeeping/internal/model"
 )
 
@@ -17,6 +18,7 @@ const (
 	VoucherRefunded = "refunded"
 
 	refundCategoryName = "退款"
+	refundRemarkPrefix = "团购券退款"
 )
 
 // normalizeVoucher 仅支出可标记为券；refunded 不能经普通保存写入
@@ -87,9 +89,10 @@ func (s *TransactionService) RefundVoucher(userID, id uint64, in VoucherRefundIn
 		if accountID == 0 {
 			accountID = orig.AccountID
 		}
+		locale := userLocale(tx, userID)
 		catID := in.CategoryID
 		if catID == nil || *catID == 0 {
-			id, err := ensureRefundCategory(tx, userID)
+			id, err := ensureRefundCategory(tx, userID, locale)
 			if err != nil {
 				return err
 			}
@@ -101,10 +104,7 @@ func (s *TransactionService) RefundVoucher(userID, id uint64, in VoucherRefundIn
 		}
 		remark := strings.TrimSpace(in.Remark)
 		if remark == "" {
-			remark = "团购券退款"
-			if r := strings.TrimSpace(orig.Remark); r != "" {
-				remark += "：" + r
-			}
+			remark = refundRemark(locale, orig.Remark)
 		}
 		refIn := TransactionInput{Type: "income", Amount: amount, AccountID: accountID, CategoryID: catID}
 		if err := assertRefsOwned(tx, userID, txRefs(refIn)); err != nil {
@@ -140,19 +140,52 @@ func (s *TransactionService) RefundVoucher(userID, id uint64, in VoucherRefundIn
 	return s.Get(userID, refundID)
 }
 
-func ensureRefundCategory(tx *gorm.DB, userID uint64) (uint64, error) {
+// userLocale 用户界面语言；未设置（老账号）按中文
+func userLocale(tx *gorm.DB, userID uint64) string {
+	var u model.User
+	if err := tx.Select("locale").Where("id = ?", userID).First(&u).Error; err != nil {
+		return i18n.ZhCN
+	}
+	if l := i18n.Normalize(u.Locale); l != "" {
+		return l
+	}
+	return i18n.ZhCN
+}
+
+// ensureRefundCategory 找或建收入分类「退款」：按 PresetKey 识别，兼容老数据按任一语言的名字识别；
+// 新建时与默认分类一样写入四语名，Name 取用户当前语言。
+func ensureRefundCategory(tx *gorm.DB, userID uint64, locale string) (uint64, error) {
+	names := []string{refundCategoryName}
+	for _, l := range []string{i18n.En, i18n.Ja, i18n.Ko} {
+		names = append(names, i18n.Preset(l, refundCategoryName))
+	}
 	var c model.Category
-	err := tx.Where("user_id = ? AND kind = ? AND name = ?", userID, "income", refundCategoryName).
-		Order("parent_id IS NOT NULL, id").First(&c).Error
+	err := tx.Where("user_id = ? AND kind = ? AND (preset_key = ? OR name IN ?)", userID, "income", refundCategoryName, names).
+		Order("preset_key = '', parent_id IS NOT NULL, id").First(&c).Error
 	if err == nil {
 		return c.ID, nil
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return 0, err
 	}
-	c = model.Category{UserID: userID, Name: refundCategoryName, Kind: "income", Icon: "mdi-cash-refund"}
+	c = model.Category{UserID: userID, Kind: "income", Icon: "mdi-cash-refund"}
+	fillPreset(&c, presetNode{Name: refundCategoryName})
+	c.Name = localizedName(&c, locale)
 	if err := tx.Create(&c).Error; err != nil {
 		return 0, err
 	}
 	return c.ID, nil
+}
+
+// refundRemark 退款流水的默认备注，按用户语言生成
+func refundRemark(locale, origRemark string) string {
+	remark := i18n.T(locale, refundRemarkPrefix)
+	if r := strings.TrimSpace(origRemark); r != "" {
+		sep := "："
+		if locale == i18n.En || locale == i18n.Ko {
+			sep = ": "
+		}
+		remark += sep + r
+	}
+	return remark
 }

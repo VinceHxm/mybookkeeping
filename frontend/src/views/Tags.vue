@@ -2,37 +2,37 @@
   <div class="page">
     <div class="toolbar">
       <v-btn icon="mdi-arrow-left" variant="text" to="/mine" />
-      <h1>标签管理</h1>
+      <h1>{{ t('tags.title') }}</h1>
       <v-btn icon="mdi-plus" variant="text" color="primary" @click="openCreate" />
     </div>
 
     <div class="card-grid card-grid--compact">
     <EntityCard
-      v-for="t in tags.list"
-      :key="t.id"
-      :title="t.name"
-      :dot="t.color"
-      @edit="openEdit(t)"
-      @delete="askDelete(t)"
+      v-for="tag in tags.list"
+      :key="tag.id"
+      :title="tag.name"
+      :dot="tag.color"
+      @edit="openEdit(tag)"
+      @delete="askDelete(tag)"
     >
-      <template #meta>标签色用于流水筛选与展示</template>
+      <template #meta>{{ t('tags.meta') }}</template>
     </EntityCard>
     </div>
-    <div v-if="!tags.list.length" class="empty-tip">暂无标签</div>
+    <div v-if="!tags.list.length" class="empty-tip">{{ t('tags.empty') }}</div>
 
     <v-dialog v-model="dialog" max-width="400">
       <v-card>
-        <v-card-title>{{ editing ? '编辑标签' : '新建标签' }}</v-card-title>
+        <v-card-title>{{ editing ? t('tags.edit') : t('tags.create') }}</v-card-title>
         <v-card-text>
           <div class="form-sections">
             <section class="form-section">
               <header class="form-section__head">
-                <h3 class="form-section__title">标签信息</h3>
+                <h3 class="form-section__title">{{ t('tags.info') }}</h3>
               </header>
               <div class="form-section__body">
-                <v-text-field v-model="form.name" label="名称" variant="outlined" hide-details class="field" />
+                <v-text-field v-model="form.name" :label="t('ui.name')" variant="outlined" hide-details class="field" />
                 <div class="color-row field">
-                  <v-text-field v-model="form.color" label="颜色" type="color" variant="outlined" hide-details />
+                  <v-text-field v-model="form.color" :label="t('tags.color')" type="color" variant="outlined" hide-details />
                   <div class="swatches">
                     <button
                       v-for="c in swatches"
@@ -47,7 +47,7 @@
                 </div>
                 <v-text-field
                   v-model.number="form.sort"
-                  label="排序"
+                  :label="t('ui.sort')"
                   type="number"
                   variant="outlined"
                   hide-details
@@ -57,16 +57,16 @@
             </section>
 
             <div v-if="editing" class="danger-zone">
-              <div class="danger-title">危险操作</div>
-              <p class="danger-tip">删除标签不可恢复，已关联流水会失去该标签。</p>
-              <v-btn color="error" variant="outlined" block @click="askDelete(editing)">删除此标签</v-btn>
+              <div class="danger-title">{{ t('ui.dangerZone') }}</div>
+              <p class="danger-tip">{{ t('tags.deleteTip') }}</p>
+              <v-btn color="error" variant="outlined" block @click="askDelete(editing)">{{ t('tags.deleteThis') }}</v-btn>
             </div>
           </div>
         </v-card-text>
         <v-card-actions>
           <v-spacer />
-          <v-btn variant="text" @click="dialog = false">取消</v-btn>
-          <v-btn color="primary" @click="onSave">保存</v-btn>
+          <v-btn variant="text" @click="dialog = false">{{ t('common.cancel') }}</v-btn>
+          <v-btn color="primary" @click="onSave">{{ t('common.save') }}</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -82,10 +82,12 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import EntityCard from '../components/EntityCard.vue'
 import DeleteConfirmDialog from '../components/DeleteConfirmDialog.vue'
 import { useTagStore, type Tag } from '../stores/tag'
 
+const { t } = useI18n()
 const tags = useTagStore()
 const dialog = ref(false)
 const editing = ref<Tag | null>(null)
@@ -104,11 +106,11 @@ function openCreate() {
   form.sort = 0
   dialog.value = true
 }
-function openEdit(t: Tag) {
-  editing.value = t
-  form.name = t.name
-  form.color = t.color
-  form.sort = t.sort
+function openEdit(tag: Tag) {
+  editing.value = tag
+  form.name = tag.name
+  form.color = tag.color
+  form.sort = tag.sort
   dialog.value = true
 }
 async function onSave() {
@@ -117,8 +119,8 @@ async function onSave() {
   dialog.value = false
 }
 
-function askDelete(t: Tag) {
-  pendingDelete.value = t
+function askDelete(tag: Tag) {
+  pendingDelete.value = tag
   confirmOpen.value = true
 }
 

@@ -1,14 +1,14 @@
 <template>
   <div class="ov" :class="{ loading }">
     <div class="ov-card surface-card">
-      <div class="ov-label"><v-icon size="16" class="ov-ic ov-ic--expense">mdi-arrow-up-bold-circle</v-icon>支出</div>
+      <div class="ov-label"><v-icon size="16" class="ov-ic ov-ic--expense">mdi-arrow-up-bold-circle</v-icon>{{ t('txType.expense') }}</div>
       <div class="ov-val amount-expense">{{ yuan(d.expense) }}</div>
       <div class="ov-delta" :class="deltaClass(d.expense, d.prev.expense, false)" :title="prevTitle(d.prev.expense)">
         {{ deltaText(d.expense, d.prev.expense) }}
       </div>
     </div>
     <div class="ov-card surface-card">
-      <div class="ov-label"><v-icon size="16" class="ov-ic ov-ic--income">mdi-arrow-down-bold-circle</v-icon>收入</div>
+      <div class="ov-label"><v-icon size="16" class="ov-ic ov-ic--income">mdi-arrow-down-bold-circle</v-icon>{{ t('txType.income') }}</div>
       <div class="ov-val amount-income">{{ yuan(d.income) }}</div>
       <div class="ov-delta" :class="deltaClass(d.income, d.prev.income, true)" :title="prevTitle(d.prev.income)">
         {{ deltaText(d.income, d.prev.income) }}
@@ -16,7 +16,7 @@
     </div>
     <div class="ov-card ov-card--net surface-card">
       <div class="ov-net-main">
-        <div class="ov-label"><v-icon size="16" class="ov-ic">mdi-scale-balance</v-icon>结余</div>
+        <div class="ov-label"><v-icon size="16" class="ov-ic">mdi-scale-balance</v-icon>{{ t('stats.net') }}</div>
         <div class="ov-val" :class="d.net >= 0 ? 'amount-income' : 'amount-expense'">{{ yuan(d.net) }}</div>
         <div class="ov-delta" :class="deltaClass(d.net, d.prev.net, true)" :title="prevTitle(d.prev.net)">
           {{ deltaText(d.net, d.prev.net) }}
@@ -31,20 +31,20 @@
         >
           <span class="ov-rate-num">{{ d.income ? percent(savingRate, 0) : '—' }}</span>
         </v-progress-circular>
-        <span class="ov-rate-label">结余率</span>
+        <span class="ov-rate-label">{{ t('stats.ov.savingRate') }}</span>
       </div>
     </div>
     <div class="ov-mini surface-card">
       <div class="mini">
-        <span class="mini-label">日均支出</span>
+        <span class="mini-label">{{ t('stats.ov.dailyExpense') }}</span>
         <span class="mini-val">{{ yuan(Math.round(d.expense / Math.max(1, d.days))) }}</span>
       </div>
       <div class="mini">
-        <span class="mini-label">记账笔数</span>
-        <span class="mini-val">{{ d.expenseCount + d.incomeCount }}<small> 笔</small></span>
+        <span class="mini-label">{{ t('stats.ov.recordCount') }}</span>
+        <span class="mini-val">{{ d.expenseCount + d.incomeCount }}<small> {{ t('stats.ov.countUnit') }}</small></span>
       </div>
       <div class="mini">
-        <span class="mini-label">最大单笔</span>
+        <span class="mini-label">{{ t('stats.ov.maxSingle') }}</span>
         <span class="mini-val">{{ yuan(d.maxExpense) }}</span>
       </div>
     </div>
@@ -53,6 +53,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import http from '../../api/http'
 import { changeRatio, percent, statsParams, yuan, type StatsFilter } from '../../utils/stats'
@@ -73,6 +74,7 @@ interface Overview extends Totals {
 }
 
 const props = defineProps<{ filter: StatsFilter }>()
+const { t } = useI18n()
 
 const empty: Totals = { from: '', to: '', expense: 0, income: 0, net: 0, expenseCount: 0, incomeCount: 0 }
 const data = ref<Overview | null>(null)
@@ -82,9 +84,9 @@ const savingRate = computed(() => (d.value.income ? d.value.net / d.value.income
 
 function deltaText(cur: number, prev: number) {
   const r = changeRatio(cur, prev)
-  if (r === null) return cur ? '上期无记录' : '与上期持平'
-  if (Math.abs(r) < 0.0005) return '与上期持平'
-  return `较上期 ${r > 0 ? '↑' : '↓'}${percent(Math.abs(r))}`
+  if (r === null) return t(cur ? 'stats.ov.noPrev' : 'stats.ov.flat')
+  if (Math.abs(r) < 0.0005) return t('stats.ov.flat')
+  return t('stats.ov.vsPrev', { change: `${r > 0 ? '↑' : '↓'}${percent(Math.abs(r))}` })
 }
 
 /** goodWhenUp：收入、结余涨是好事；支出涨是坏事 */
@@ -97,7 +99,7 @@ function deltaClass(cur: number, prev: number, goodWhenUp: boolean) {
 function prevTitle(v: number) {
   const p = d.value.prev
   if (!p.from) return ''
-  return `上期 ${p.from} ~ ${dayjs(p.to).subtract(1, 'day').format('YYYY-MM-DD')}：${yuan(v)}`
+  return t('stats.ov.prevTip', { from: p.from, to: dayjs(p.to).subtract(1, 'day').format('YYYY-MM-DD'), amount: yuan(v) })
 }
 
 async function load() {

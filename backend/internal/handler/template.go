@@ -75,5 +75,6 @@ func (a *API) PreviewTemplateFare(c *gin.Context) {
 		BadRequest(c, err.Error())
 		return
 	}
+	localizeFarePreview(c, res)
 	OK(c, res)
 }

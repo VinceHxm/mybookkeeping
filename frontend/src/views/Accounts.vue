@@ -2,29 +2,29 @@
   <div class="page">
     <div class="toolbar">
       <v-btn icon="mdi-arrow-left" variant="text" to="/mine" />
-      <h1>账户管理</h1>
+      <h1>{{ t('accounts.title') }}</h1>
       <v-btn icon="mdi-plus" variant="text" color="primary" @click="openCreate" />
     </div>
 
-    <v-switch v-model="showArchived" label="显示已归档" hide-details class="mb-2" density="compact" @update:model-value="reload" />
+    <v-switch v-model="showArchived" :label="t('accounts.showArchived')" hide-details class="mb-2" density="compact" @update:model-value="reload" />
     <p class="page-tip">
-      默认消费 / 默认还款各只能选一个账户（可同一账户）。在编辑账户里开关设置；已设默认的卡片会高亮并带角标。
+      {{ t('accounts.pageTip') }}
     </p>
 
     <div v-if="accounts.list.length" class="acct-summary">
       <div class="acct-sum-cell">
-        <span>净资产</span>
+        <span>{{ t('accounts.netWorth') }}</span>
         <strong :class="totals.net >= 0 ? 'amount-income' : 'amount-expense'">{{ totals.net < 0 ? '-' : '' }}¥{{ fenToYuan(Math.abs(totals.net)) }}</strong>
       </div>
       <div class="acct-sum-cell">
-        <span>总资产</span>
+        <span>{{ t('accounts.totalAssets') }}</span>
         <strong>¥{{ fenToYuan(totals.assets) }}</strong>
       </div>
       <div class="acct-sum-cell">
-        <span>总负债</span>
+        <span>{{ t('accounts.totalLiabilities') }}</span>
         <strong class="amount-expense">¥{{ fenToYuan(totals.liabilities) }}</strong>
       </div>
-      <router-link :to="{ path: '/stats', query: { tab: 'assets' } }" class="acct-sum-link">资产走势 <v-icon size="16">mdi-chevron-right</v-icon></router-link>
+      <router-link :to="{ path: '/stats', query: { tab: 'assets' } }" class="acct-sum-link">{{ t('accounts.assetTrend') }} <v-icon size="16">mdi-chevron-right</v-icon></router-link>
     </div>
 
     <div class="card-grid card-grid--wide">
@@ -39,20 +39,20 @@
       @delete="askDelete(a)"
     >
       <template #badges>
-        <v-chip v-if="a.archived" size="x-small" variant="tonal">已归档</v-chip>
-        <v-chip size="x-small" variant="tonal" color="primary">{{ typeMap[a.type] || a.type }}</v-chip>
+        <v-chip v-if="a.archived" size="x-small" variant="tonal">{{ t('accounts.archived') }}</v-chip>
+        <v-chip size="x-small" variant="tonal" color="primary">{{ accountTypeLabel(a.type) }}</v-chip>
         <v-chip
           v-if="isDefaultExpense(a.id)"
           size="x-small"
           variant="flat"
           color="primary"
-        >默认消费</v-chip>
+        >{{ t('accounts.defaultExpense') }}</v-chip>
         <v-chip
           v-if="isDefaultRepay(a.id)"
           size="x-small"
           variant="flat"
           color="info"
-        >默认还款</v-chip>
+        >{{ t('accounts.defaultRepay') }}</v-chip>
       </template>
       <template #meta>
         <div v-if="hasProfile(a)" class="profile-row">
@@ -67,7 +67,7 @@
             v-if="a.cardNo || a.holderName"
             type="button"
             class="reveal-btn no-card-nav"
-            :aria-label="revealCache[a.id] ? '隐藏完整信息' : '输入密码查看完整信息'"
+            :aria-label="revealCache[a.id] ? t('accounts.hideFull') : t('accounts.revealFull')"
             :disabled="revealLoading[a.id]"
             @click.stop="toggleReveal(a)"
             @pointerdown.stop
@@ -77,28 +77,32 @@
         </div>
 
         <template v-if="a.type === 'credit'">
-          <div class="bal-line">已用额度 ¥{{ fenToYuan(creditUsedFen(a)) }}</div>
-          <div v-if="a.creditLimit" class="meta-sub">额度 ¥{{ fenToYuan(a.creditLimit) }} · 可用 ¥{{ fenToYuan(Math.max(0, (a.creditLimit || 0) - creditUsedFen(a))) }}</div>
+          <div class="bal-line">{{ t('accounts.usedCredit', { amount: fenToYuan(creditUsedFen(a)) }) }}</div>
+          <div v-if="a.creditLimit" class="meta-sub">{{ t('accounts.creditLine', { limit: fenToYuan(a.creditLimit), available: fenToYuan(Math.max(0, (a.creditLimit || 0) - creditUsedFen(a))) }) }}</div>
           <div class="split-line">
-            <span>已出账 ¥{{ fenToYuan(displayBilledFen(a)) }}</span>
-            <span>未出账 ¥{{ fenToYuan(displayUnbilledFen(a)) }}</span>
+            <span>{{ t('accounts.billed', { amount: fenToYuan(displayBilledFen(a)) }) }}</span>
+            <span>{{ t('accounts.unbilled', { amount: fenToYuan(displayUnbilledFen(a)) }) }}</span>
           </div>
-          <div v-if="a.billingDay" class="meta-sub">账单日 {{ a.billingDay }} 号<template v-if="a.paymentDueDay"> · 还款日 {{ a.paymentDueDay }} 号</template></div>
+          <div v-if="a.billingDay" class="meta-sub">
+            {{ a.paymentDueDay
+              ? t('accounts.billingAndDueDay', { billing: a.billingDay, due: a.paymentDueDay })
+              : t('accounts.billingDay', { day: a.billingDay }) }}
+          </div>
           <div
             v-if="a.billingDay && statements[a.id]"
             class="stmt-box"
           >
             <div class="stmt-head">
-              <span>本期账单</span>
+              <span>{{ t('accounts.stmt.title') }}</span>
               <span class="stmt-range">{{ statements[a.id].cycleStart }} ~ {{ statements[a.id].cycleEnd }}</span>
             </div>
             <div class="stmt-grid">
               <div class="stmt-cell">
-                <span>本期已还<template v-if="(statements[a.id].refundAmount || 0) > 0">（含退款）</template></span>
+                <span>{{ (statements[a.id].refundAmount || 0) > 0 ? t('accounts.stmt.repaidWithRefund') : t('accounts.stmt.repaid') }}</span>
                 <strong>¥{{ fenToYuan(statements[a.id].repaidAmount) }}</strong>
               </div>
               <div class="stmt-cell">
-                <span>本期待还</span>
+                <span>{{ t('accounts.stmt.periodRemaining') }}</span>
                 <strong>¥{{ fenToYuan(statements[a.id].periodRemaining) }}</strong>
               </div>
               <div class="stmt-cell">
@@ -106,22 +110,22 @@
                 <strong class="warn">¥{{ fenToYuan(afterPayDisplayFen(statements[a.id])) }}</strong>
               </div>
               <div class="stmt-cell">
-                <span>整体待还</span>
+                <span>{{ t('accounts.stmt.totalOutstanding') }}</span>
                 <strong>¥{{ fenToYuan(statements[a.id].totalOutstanding ?? statements[a.id].outstandingBalance) }}</strong>
               </div>
             </div>
             <div class="stmt-sub">
               <template v-if="statements[a.id].periodRemaining === 0 && (statements[a.id].remainingAfterPay || 0) > 0">
-                本期已还清；「剩余已用」= 卡上还欠多少（可提前还）
+                {{ t('accounts.stmt.paidOffHint') }}
                 <template v-if="(statements[a.id].nextPeriodEstimate || 0) > 0">
-                  · 预计下次出账约还 ¥{{ fenToYuan(statements[a.id].nextPeriodEstimate || 0) }}
+                  {{ t('accounts.stmt.nextEstimate', { amount: fenToYuan(statements[a.id].nextPeriodEstimate || 0) }) }}
                 </template>
               </template>
               <template v-else>
-                本期待还 = 本期账单尚未还清部分；还后待还 = 未出账；整体待还 = 已用额度
+                {{ t('accounts.stmt.formulaHint') }}
               </template>
               <template v-if="(statements[a.id].nonInstallmentUnbilled || 0) > 0 && (statements[a.id].futureInstallment || 0) > 0">
-                · 未出账非分期 ¥{{ fenToYuan(statements[a.id].nonInstallmentUnbilled || 0) }}
+                {{ t('accounts.stmt.nonInstallmentUnbilled', { amount: fenToYuan(statements[a.id].nonInstallmentUnbilled || 0) }) }}
               </template>
             </div>
             <template v-if="statements[a.id].installments?.length">
@@ -133,8 +137,8 @@
                 @pointerdown.stop
               >
                 <v-icon size="16">mdi-credit-card-clock-outline</v-icon>
-                <span>分期中 {{ statements[a.id].installments!.length }} 笔</span>
-                <span class="inst-toggle__sum">尚未出账 ¥{{ fenToYuan(statements[a.id].futureInstallment) }}</span>
+                <span>{{ t('accounts.inst.count', { n: statements[a.id].installments!.length }) }}</span>
+                <span class="inst-toggle__sum">{{ t('accounts.inst.futureSum', { amount: fenToYuan(statements[a.id].futureInstallment) }) }}</span>
                 <v-icon size="16" class="inst-toggle__chevron" :class="{ 'is-open': instOpen[a.id] }">mdi-chevron-down</v-icon>
               </button>
               <ul v-if="instOpen[a.id]" class="inst-list">
@@ -152,7 +156,7 @@
                     </div>
                     <div class="inst-side">
                       <strong>¥{{ fenToYuan(it.remainingFen) }}</strong>
-                      <span>{{ it.billedPeriods }}/{{ it.periods }} 期已出账</span>
+                      <span>{{ t('accounts.inst.progress', { billed: it.billedPeriods, total: it.periods }) }}</span>
                     </div>
                   </component>
                 </li>
@@ -164,13 +168,13 @@
           </div>
         </template>
         <template v-else-if="a.type === 'invest'">
-          <div class="bal-line">市值 ¥{{ fenToYuan(a.balance) }}</div>
+          <div class="bal-line">{{ t('accounts.marketValue', { amount: fenToYuan(a.balance) }) }}</div>
           <div class="meta-sub">
-            {{ a.lastReconciledAt ? `上次校准 ${dayjs(a.lastReconciledAt).format('YYYY-MM-DD')}` : '还没校准过市值' }}
+            {{ a.lastReconciledAt ? t('accounts.lastReconciled', { date: dayjs(a.lastReconciledAt).format('YYYY-MM-DD') }) : t('accounts.neverReconciled') }}
           </div>
         </template>
         <template v-else>
-          <div class="bal-line">余额 ¥{{ fenToYuan(a.balance) }}</div>
+          <div class="bal-line">{{ t('accounts.balance', { amount: fenToYuan(a.balance) }) }}</div>
         </template>
         <div class="card-actions">
           <router-link
@@ -180,7 +184,7 @@
             @pointerdown.stop
           >
             <v-icon size="17">mdi-receipt-text-outline</v-icon>
-            <span>流水明细</span>
+            <span>{{ t('accounts.ledger') }}</span>
           </router-link>
           <router-link
             v-if="repayAction(a)"
@@ -202,7 +206,7 @@
             @pointerdown.stop
           >
             <v-icon size="17">mdi-chart-line</v-icon>
-            <span>校准市值</span>
+            <span>{{ t('accounts.revalue') }}</span>
           </button>
         </div>
 
@@ -220,19 +224,19 @@
               @click.stop="openStoragePreview(a, idx)"
               @pointerdown.stop
             >
-              <img :src="att.url" alt="存放位置" />
+              <img :src="att.url" :alt="t('accounts.storagePhoto')" />
             </button>
           </div>
         </div>
       </template>
     </EntityCard>
     </div>
-    <div v-if="!accounts.list.length" class="empty-tip">暂无账户，点右上角添加</div>
+    <div v-if="!accounts.list.length" class="empty-tip">{{ t('accounts.empty') }}</div>
 
     <!-- 宽屏：弹窗编辑 -->
     <v-dialog v-if="!isMobile" v-model="dialog" max-width="480" scrollable>
       <v-card>
-        <v-card-title>{{ editing ? '编辑账户' : '新建账户' }}</v-card-title>
+        <v-card-title>{{ editing ? t('accountEdit.editTitle') : t('accountEdit.newTitle') }}</v-card-title>
         <v-card-text>
           <AccountEditForm
             v-if="dialog"
@@ -246,8 +250,8 @@
         </v-card-text>
         <v-card-actions>
           <v-spacer />
-          <v-btn variant="text" @click="dialog = false">取消</v-btn>
-          <v-btn color="primary" :loading="dialogFormRef?.saving" @click="onDialogSave">保存</v-btn>
+          <v-btn variant="text" @click="dialog = false">{{ t('common.cancel') }}</v-btn>
+          <v-btn color="primary" :loading="dialogFormRef?.saving" @click="onDialogSave">{{ t('common.save') }}</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -260,10 +264,10 @@
         aria-modal="true"
         @click.self="storagePreview = null"
       >
-        <button type="button" class="lb-close" aria-label="关闭" @click="storagePreview = null">
+        <button type="button" class="lb-close" :aria-label="t('accounts.close')" @click="storagePreview = null">
           <v-icon size="22">mdi-close</v-icon>
         </button>
-        <img class="lb-img" :src="storagePreview.url" alt="存放位置大图" />
+        <img class="lb-img" :src="storagePreview.url" :alt="t('accounts.storagePhotoLarge')" />
       </div>
     </Teleport>
 
@@ -281,13 +285,14 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import EntityCard from '../components/EntityCard.vue'
 import DeleteConfirmDialog from '../components/DeleteConfirmDialog.vue'
 import AccountEditForm from '../components/AccountEditForm.vue'
 import RevalueDialog from '../components/RevalueDialog.vue'
 import {
-  ACCOUNT_TYPE_LABELS,
+  accountTypeLabel,
   useAccountStore,
   creditUsedFen,
   creditBilledFenOf,
@@ -303,6 +308,7 @@ import { displayCardNo, displayHolderName } from '../utils/mask'
 import { useBreakpoint } from '../composables/useBreakpoint'
 import { confirmWithPassword } from '../composables/usePasswordConfirm'
 
+const { t } = useI18n()
 const accounts = useAccountStore()
 const auth = useAuthStore()
 const router = useRouter()
@@ -330,7 +336,6 @@ const deleting = ref(false)
 const revealCache = reactive<Record<number, { cardNo: string; holderName: string }>>({})
 const revealLoading = reactive<Record<number, boolean>>({})
 const storagePreview = ref<{ url: string } | null>(null)
-const typeMap = ACCOUNT_TYPE_LABELS
 const revalueOpen = ref(false)
 const revalueAccount = ref<Account | null>(null)
 const statements = ref<Record<number, CreditStatement>>({})
@@ -339,12 +344,14 @@ const instOpen = reactive<Record<number, boolean>>({})
 
 function installmentMeta(it: CreditInstallmentItem) {
   const parts = [
-    it.source === 'plan' ? '存量分期' : `${dayjs(it.happenedOn).format('M/D')} 消费 ¥${fenToYuan(it.principalFen)}`,
-    `下期 ${dayjs(it.nextDueOn).format('M/D')} 入账 ¥${fenToYuan(it.nextShareFen)}`,
+    it.source === 'plan'
+      ? t('accounts.inst.plan')
+      : t('accounts.inst.spent', { date: dayjs(it.happenedOn).format('M/D'), amount: fenToYuan(it.principalFen) }),
+    t('accounts.inst.next', { date: dayjs(it.nextDueOn).format('M/D'), amount: fenToYuan(it.nextShareFen) }),
   ]
-  if (it.interestPerPeriodFen > 0) parts.push(`每期利息 ¥${fenToYuan(it.interestPerPeriodFen)}`)
-  else if (it.interestFen > 0) parts.push(`手续费 ¥${fenToYuan(it.interestFen)}`)
-  parts.push(`末期 ${dayjs(it.lastDueOn).format('YYYY/M')}`)
+  if (it.interestPerPeriodFen > 0) parts.push(t('accounts.inst.interestPerPeriod', { amount: fenToYuan(it.interestPerPeriodFen) }))
+  else if (it.interestFen > 0) parts.push(t('accounts.inst.fee', { amount: fenToYuan(it.interestFen) }))
+  parts.push(t('accounts.inst.last', { date: dayjs(it.lastDueOn).format('YYYY/M') }))
   return parts.join(' · ')
 }
 
@@ -378,7 +385,7 @@ async function loadReveal(id: number) {
   revealLoading[id] = true
   try {
     const data = await confirmWithPassword(
-      { title: '验证身份', message: '查看完整卡号与户名前，请输入登录密码。' },
+      { title: t('pwdConfirm.verifyTitle'), message: t('pwdConfirm.revealMessage') },
       (pwd) => accounts.fetchSensitive(id, pwd),
     )
     if (!data) return
@@ -420,7 +427,7 @@ async function loadStatements() {
   try {
     for (const s of await accounts.creditStatements()) next[s.accountId] = s
   } catch (e: any) {
-    for (const a of cards) errs[a.id] = e?.message || '账单加载失败'
+    for (const a of cards) errs[a.id] = e?.message || t('accounts.stmtLoadFailed')
   }
   statements.value = next
   stmtError.value = errs
@@ -446,8 +453,8 @@ function repayLink(a: Account) {
 function repayAction(a: Account): { label: string; amount: number; urgent: boolean } | null {
   if (a.type !== 'credit' || a.archived) return null
   const left = statements.value[a.id]?.periodRemaining ?? 0
-  if (left > 0) return { label: '还本期', amount: left, urgent: true }
-  if (creditUsedFen(a) > 0) return { label: '提前还款', amount: 0, urgent: false }
+  if (left > 0) return { label: t('accounts.repayThisCycle'), amount: left, urgent: true }
+  if (creditUsedFen(a) > 0) return { label: t('accounts.repayEarly'), amount: 0, urgent: false }
   return null
 }
 
@@ -469,8 +476,8 @@ function displayUnbilledFen(a: Account): number {
 
 /** 本期结清后：格子显示「剩余已用」，避免被理解成下次账单金额 */
 function afterPayLabel(stmt: CreditStatement) {
-  if (stmt.periodRemaining === 0 && (stmt.remainingAfterPay || 0) > 0) return '剩余已用'
-  return '还后待还'
+  if (stmt.periodRemaining === 0 && (stmt.remainingAfterPay || 0) > 0) return t('accounts.stmt.remainingUsed')
+  return t('accounts.stmt.afterPay')
 }
 
 function afterPayDisplayFen(stmt: CreditStatement) {

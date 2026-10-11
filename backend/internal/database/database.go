@@ -40,6 +40,18 @@ func withTimeouts(dsn string) string {
 	return c.FormatDSN()
 }
 
+// Open 按 DB_DRIVER 打开数据库并完成建表迁移
+func Open(cfg *config.Config) (*gorm.DB, error) {
+	switch cfg.DBDriver {
+	case "mysql", "":
+		return OpenMySQL(cfg)
+	case "sqlite":
+		return OpenSQLite(cfg.SQLitePath)
+	default:
+		return nil, fmt.Errorf("unknown DB_DRIVER %q (mysql | sqlite)", cfg.DBDriver)
+	}
+}
+
 func OpenMySQL(cfg *config.Config) (*gorm.DB, error) {
 	db, err := gorm.Open(mysql.Open(withTimeouts(cfg.MySQLDSN)), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Warn),
@@ -58,6 +70,13 @@ func OpenMySQL(cfg *config.Config) (*gorm.DB, error) {
 	// 闲置过久的连接可能已被中间网络设备静默断开，提前回收
 	sqlDB.SetConnMaxIdleTime(10 * time.Minute)
 
+	if err := migrate(db); err != nil {
+		return nil, err
+	}
+	return db, nil
+}
+
+func migrate(db *gorm.DB) error {
 	if err := db.AutoMigrate(
 		&model.User{},
 		&model.Account{},
@@ -73,20 +92,20 @@ func OpenMySQL(cfg *config.Config) (*gorm.DB, error) {
 		&model.HolidayYearRecord{},
 		&model.AppMeta{},
 	); err != nil {
-		return nil, fmt.Errorf("automigrate: %w", err)
+		return fmt.Errorf("automigrate: %w", err)
 	}
 	// 兜底：确保图标字段存在（旧进程未重启时也能在下次启动补齐）
 	if !db.Migrator().HasColumn(&model.Template{}, "icon") {
 		if err := db.Migrator().AddColumn(&model.Template{}, "Icon"); err != nil {
-			return nil, fmt.Errorf("add templates.icon: %w", err)
+			return fmt.Errorf("add templates.icon: %w", err)
 		}
 	}
 	if !db.Migrator().HasColumn(&model.FareRule{}, "icon") {
 		if err := db.Migrator().AddColumn(&model.FareRule{}, "Icon"); err != nil {
-			return nil, fmt.Errorf("add fare_rules.icon: %w", err)
+			return fmt.Errorf("add fare_rules.icon: %w", err)
 		}
 	}
-	return db, nil
+	return nil
 }
 
 func OpenRedis(cfg *config.Config) (*redis.Client, error) {

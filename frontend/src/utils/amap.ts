@@ -1,4 +1,5 @@
 import http from '../api/http'
+import { t } from '../i18n'
 
 declare global {
   interface Window {
@@ -19,7 +20,7 @@ function loadScript(src: string) {
     s.src = src
     s.async = true
     s.onload = () => resolve()
-    s.onerror = () => reject(new Error('高德脚本加载失败'))
+    s.onerror = () => reject(new Error(t('amap.scriptFailed')))
     document.head.appendChild(s)
   })
 }
@@ -30,10 +31,10 @@ export function loadAmap(): Promise<any> {
   if (!pending) {
     pending = (async () => {
       const { data } = await http.get('/amap/config')
-      if (!data?.key) throw new Error('未配置高德地图 Key')
+      if (!data?.key) throw new Error(t('amap.noKey'))
       window._AMapSecurityConfig = { securityJsCode: data.securityJsCode }
       await loadScript(`https://webapi.amap.com/maps?v=2.0&key=${data.key}`)
-      if (!window.AMap) throw new Error('高德脚本加载失败')
+      if (!window.AMap) throw new Error(t('amap.scriptFailed'))
       return window.AMap
     })().catch((e) => {
       pending = null

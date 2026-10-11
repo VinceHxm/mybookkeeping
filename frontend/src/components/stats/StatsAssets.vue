@@ -2,30 +2,30 @@
   <div class="as">
     <div class="as-kpis">
       <div class="kpi kpi--net surface-card">
-        <span class="kpi-label">净资产（当前）</span>
+        <span class="kpi-label">{{ t('stats.assets.netNow') }}</span>
         <span class="kpi-val" :class="data.net >= 0 ? 'amount-income' : 'amount-expense'">{{ yuan(data.net) }}</span>
         <span v-if="netChange !== null" class="kpi-delta" :class="netChange >= 0 ? 'is-good' : 'is-bad'">
-          区间内 {{ netChange >= 0 ? '+' : '' }}{{ yuan(netChange) }}
+          {{ t('stats.assets.inRange', { amount: `${netChange >= 0 ? '+' : ''}${yuan(netChange)}` }) }}
         </span>
       </div>
       <div class="kpi surface-card">
-        <span class="kpi-label">总资产</span>
+        <span class="kpi-label">{{ t('stats.assets.totalAssets') }}</span>
         <span class="kpi-val">{{ yuan(data.assets) }}</span>
       </div>
       <div class="kpi surface-card">
-        <span class="kpi-label">总负债</span>
+        <span class="kpi-label">{{ t('stats.assets.totalLiabilities') }}</span>
         <span class="kpi-val amount-expense">{{ yuan(data.liabilities) }}</span>
       </div>
     </div>
 
     <div class="as-controls">
       <v-btn-toggle v-model="granularity" mandatory density="compact" color="primary" variant="outlined" divided rounded="lg">
-        <v-btn value="day" size="small">按日</v-btn>
-        <v-btn value="month" size="small">按月</v-btn>
-        <v-btn value="year" size="small">按年</v-btn>
+        <v-btn value="day" size="small">{{ t('stats.gran.day') }}</v-btn>
+        <v-btn value="month" size="small">{{ t('stats.gran.month') }}</v-btn>
+        <v-btn value="year" size="small">{{ t('stats.gran.year') }}</v-btn>
       </v-btn-toggle>
       <span class="as-note">
-        {{ filter.accountId ? '仅所选账户' : '全部账户' }}，按当前余额倒推各期末余额
+        {{ t(filter.accountId ? 'stats.assets.noteSelected' : 'stats.assets.noteAll') }}
       </span>
     </div>
 
@@ -39,7 +39,7 @@
           <span class="dist-title">{{ g.title }}</span>
           <span class="dist-total" :class="g.cls">{{ yuan(g.total) }}</span>
         </header>
-        <div v-if="!g.list.length" class="dist-empty">无</div>
+        <div v-if="!g.list.length" class="dist-empty">{{ t('stats.assets.none') }}</div>
         <router-link v-for="a in g.list" :key="a.id" :to="`/accounts/${a.id}/ledger`" class="dist-row">
           <v-icon size="18" class="dist-ic">{{ accountTypeIcon(a.type) }}</v-icon>
           <div class="dist-main">
@@ -58,6 +58,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -88,6 +89,7 @@ interface AssetTrend {
 }
 
 const props = defineProps<{ filter: StatsFilter }>()
+const { t } = useI18n()
 const chart = useChartTheme()
 const { isDesktop } = useBreakpoint()
 
@@ -114,8 +116,8 @@ const groups = computed(() => {
   const assets = data.value.accounts.filter((a) => a.balance > 0)
   const debts = data.value.accounts.filter((a) => a.balance < 0).sort((a, b) => a.balance - b.balance)
   return [
-    { title: '资产账户', list: assets, total: data.value.assets, color: c.income, cls: '' },
-    { title: '负债账户', list: debts, total: data.value.liabilities, color: c.expense, cls: 'amount-expense' },
+    { title: t('stats.assets.assetAccounts'), list: assets, total: data.value.assets, color: c.income, cls: '' },
+    { title: t('stats.assets.debtAccounts'), list: debts, total: data.value.liabilities, color: c.expense, cls: 'amount-expense' },
   ]
 })
 
@@ -130,10 +132,11 @@ const option = computed(() => {
   const visible = isDesktop.value ? 60 : 20
   const zoom = pts.length > visible
   const netColor = c.dark ? '#e8c46a' : '#c99a2e'
+  const names = { net: t('stats.assets.net'), assets: t('stats.assets.assets'), liabilities: t('stats.assets.liabilities') }
   return {
     backgroundColor: 'transparent',
     tooltip: { trigger: 'axis', valueFormatter: (v: number) => yuan(v) },
-    legend: { data: ['净资产', '资产', '负债'], top: 0, textStyle: { color: c.text }, itemWidth: 14, itemHeight: 8 },
+    legend: { data: [names.net, names.assets, names.liabilities], top: 0, textStyle: { color: c.text }, itemWidth: 14, itemHeight: 8 },
     grid: { left: 8, right: 8, top: 34, bottom: zoom ? 44 : 8, containLabel: true },
     xAxis: {
       type: 'category',
@@ -154,7 +157,7 @@ const option = computed(() => {
       : [],
     series: [
       {
-        name: '净资产',
+        name: names.net,
         type: 'line',
         data: pts.map((p) => p.net),
         smooth: true,
@@ -163,8 +166,8 @@ const option = computed(() => {
         itemStyle: { color: netColor },
         areaStyle: { color: netColor + '22' },
       },
-      { name: '资产', type: 'line', data: pts.map((p) => p.assets), smooth: true, showSymbol: false, itemStyle: { color: c.income }, lineStyle: { width: 1.5 } },
-      { name: '负债', type: 'line', data: pts.map((p) => p.liabilities), smooth: true, showSymbol: false, itemStyle: { color: c.expense }, lineStyle: { width: 1.5 } },
+      { name: names.assets, type: 'line', data: pts.map((p) => p.assets), smooth: true, showSymbol: false, itemStyle: { color: c.income }, lineStyle: { width: 1.5 } },
+      { name: names.liabilities, type: 'line', data: pts.map((p) => p.liabilities), smooth: true, showSymbol: false, itemStyle: { color: c.expense }, lineStyle: { width: 1.5 } },
     ],
   }
 })

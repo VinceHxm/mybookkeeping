@@ -2,11 +2,11 @@
   <div class="tr">
     <div class="tr-controls">
       <v-btn-toggle v-model="granularity" mandatory density="compact" color="primary" variant="outlined" divided rounded="lg">
-        <v-btn value="day" size="small">按日</v-btn>
-        <v-btn value="month" size="small">按月</v-btn>
-        <v-btn value="year" size="small">按年</v-btn>
+        <v-btn value="day" size="small">{{ t('stats.gran.day') }}</v-btn>
+        <v-btn value="month" size="small">{{ t('stats.gran.month') }}</v-btn>
+        <v-btn value="year" size="small">{{ t('stats.gran.year') }}</v-btn>
       </v-btn-toggle>
-      <span v-if="actual !== granularity && points.length" class="tr-note">区间较长，已改为按{{ granularityUnit[actual] }}</span>
+      <span v-if="actual !== granularity && points.length" class="tr-note">{{ t('stats.trend.autoSwitched', { unit: granularityUnit(actual) }) }}</span>
     </div>
 
     <div class="tr-grid" :class="{ loading }">
@@ -15,22 +15,22 @@
       </div>
       <div class="tr-side surface-card">
         <div class="side-item">
-          <span class="side-label">平均每{{ unit }}支出</span>
+          <span class="side-label">{{ t(`stats.trend.avgExpense.${actual}`) }}</span>
           <span class="side-val amount-expense">{{ yuan(avg.expense) }}</span>
         </div>
         <div class="side-item">
-          <span class="side-label">平均每{{ unit }}收入</span>
+          <span class="side-label">{{ t(`stats.trend.avgIncome.${actual}`) }}</span>
           <span class="side-val amount-income">{{ yuan(avg.income) }}</span>
         </div>
         <div class="side-item">
-          <span class="side-label">支出最高的{{ unit }}</span>
+          <span class="side-label">{{ t(`stats.trend.peak.${actual}`) }}</span>
           <span class="side-val">
             <template v-if="peak">{{ periodLabel(peak.key, actual) }} · {{ yuan(peak.expense) }}</template>
             <template v-else>—</template>
           </span>
         </div>
         <div class="side-item">
-          <span class="side-label">结余为负的{{ unit }}数</span>
+          <span class="side-label">{{ t(`stats.trend.deficit.${actual}`) }}</span>
           <span class="side-val">{{ deficitCount }} / {{ elapsed.length }}</span>
         </div>
       </div>
@@ -38,13 +38,13 @@
 
     <section class="tr-table surface-card">
       <div class="tbl-head tbl-row">
-        <span>时间</span>
-        <span class="num">收入</span>
-        <span class="num">支出</span>
-        <span class="num">结余</span>
-        <span class="num col-count">笔数</span>
+        <span>{{ t('stats.trend.period') }}</span>
+        <span class="num">{{ t('txType.income') }}</span>
+        <span class="num">{{ t('txType.expense') }}</span>
+        <span class="num">{{ t('stats.net') }}</span>
+        <span class="num col-count">{{ t('stats.trend.count') }}</span>
       </div>
-      <div v-if="!rows.length" class="tbl-empty">该区间暂无收支</div>
+      <div v-if="!rows.length" class="tbl-empty">{{ t('stats.trend.empty') }}</div>
       <button v-for="p in rows" :key="p.key" type="button" class="tbl-row tbl-body" @click="openPeriod(p.key)">
         <span>{{ periodLabel(p.key, actual) }}</span>
         <span class="num amount-income">{{ yuan(p.income) }}</span>
@@ -59,6 +59,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -86,6 +87,7 @@ interface Point {
 
 const props = defineProps<{ filter: StatsFilter }>()
 const router = useRouter()
+const { t } = useI18n()
 const chart = useChartTheme()
 const { isDesktop } = useBreakpoint()
 
@@ -93,8 +95,6 @@ const granularity = ref<Granularity>(defaultGranularity())
 const actual = ref<Granularity>(granularity.value)
 const points = ref<Point[]>([])
 const loading = ref(false)
-
-const unit = computed(() => granularityUnit[actual.value])
 
 function defaultGranularity(): Granularity {
   const days = dayjs(props.filter.to).diff(dayjs(props.filter.from), 'day') + 1
@@ -128,6 +128,7 @@ const option = computed(() => {
   const pts = points.value
   const visible = isDesktop.value ? 40 : 14
   const zoom = pts.length > visible
+  const names = { income: t('txType.income'), expense: t('txType.expense'), net: t('stats.net') }
   return {
     backgroundColor: 'transparent',
     tooltip: {
@@ -135,7 +136,7 @@ const option = computed(() => {
       axisPointer: { type: 'shadow' },
       valueFormatter: (v: number) => yuan(v),
     },
-    legend: { data: ['收入', '支出', '结余'], top: 0, textStyle: { color: c.text }, itemWidth: 14, itemHeight: 8 },
+    legend: { data: [names.income, names.expense, names.net], top: 0, textStyle: { color: c.text }, itemWidth: 14, itemHeight: 8 },
     grid: { left: 8, right: 8, top: 34, bottom: zoom ? 44 : 8, containLabel: true },
     xAxis: {
       type: 'category',
@@ -162,10 +163,10 @@ const option = computed(() => {
         }]
       : [],
     series: [
-      { name: '收入', type: 'bar', data: pts.map((p) => p.income), itemStyle: { color: c.income, borderRadius: [4, 4, 0, 0] }, barMaxWidth: 18 },
-      { name: '支出', type: 'bar', data: pts.map((p) => p.expense), itemStyle: { color: c.expense, borderRadius: [4, 4, 0, 0] }, barMaxWidth: 18 },
+      { name: names.income, type: 'bar', data: pts.map((p) => p.income), itemStyle: { color: c.income, borderRadius: [4, 4, 0, 0] }, barMaxWidth: 18 },
+      { name: names.expense, type: 'bar', data: pts.map((p) => p.expense), itemStyle: { color: c.expense, borderRadius: [4, 4, 0, 0] }, barMaxWidth: 18 },
       {
-        name: '结余',
+        name: names.net,
         type: 'line',
         data: pts.map((p) => p.net),
         smooth: true,

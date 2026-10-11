@@ -2,20 +2,20 @@
   <div class="page recognize-page">
     <div class="toolbar">
       <v-btn icon="mdi-arrow-left" variant="text" @click="$router.back()" />
-      <h1>文字识别记账</h1>
+      <h1>{{ t('recognize.title') }}</h1>
       <span style="width:40px" />
     </div>
 
-    <p class="hint">可贴多段描述，一次识别多笔；确认后直接提交入库。</p>
+    <p class="hint">{{ t('recognize.hint') }}</p>
 
     <v-textarea
       v-model="text"
-      label="记账描述"
+      :label="t('recognize.label')"
       variant="outlined"
       rows="6"
       auto-grow
       :disabled="recognizing || submitting"
-      placeholder="例如：&#10;昨天午饭外卖 36.5 支付宝&#10;地铁 4 元&#10;工资入账 12000 招行&#10;还信用卡 2000 从招行到中信信用卡"
+      :placeholder="t('recognize.placeholder')"
       class="mb-3"
     />
 
@@ -28,17 +28,17 @@
       :disabled="!text.trim() || submitting"
       @click="onRecognize"
     >
-      识别多笔
+      {{ t('recognize.recognizeBtn') }}
     </v-btn>
 
     <v-alert v-if="error" type="error" density="compact" class="mb-3">{{ error }}</v-alert>
 
     <template v-if="items.length">
       <div class="list-head mb-2">
-        <span>识别结果（{{ selectedCount }}/{{ items.length }}）</span>
+        <span>{{ t('recognize.result', { selected: selectedCount, total: items.length }) }}</span>
         <div>
-          <v-btn size="small" variant="text" @click="toggleAll(true)">全选</v-btn>
-          <v-btn size="small" variant="text" @click="toggleAll(false)">清空</v-btn>
+          <v-btn size="small" variant="text" @click="toggleAll(true)">{{ t('recognize.selectAll') }}</v-btn>
+          <v-btn size="small" variant="text" @click="toggleAll(false)">{{ t('recognize.clear') }}</v-btn>
         </div>
       </div>
 
@@ -51,16 +51,16 @@
         <div class="item-top">
           <v-checkbox v-model="row.selected" hide-details density="compact" color="primary" />
           <v-btn-toggle v-model="row.type" mandatory density="compact" color="primary" divided>
-            <v-btn value="expense" size="small">支</v-btn>
-            <v-btn value="income" size="small">收</v-btn>
-            <v-btn value="transfer" size="small">转</v-btn>
+            <v-btn value="expense" size="small">{{ t('recognize.typeExpense') }}</v-btn>
+            <v-btn value="income" size="small">{{ t('recognize.typeIncome') }}</v-btn>
+            <v-btn value="transfer" size="small">{{ t('recognize.typeTransfer') }}</v-btn>
           </v-btn-toggle>
           <v-btn icon="mdi-delete-outline" size="small" variant="text" @click="removeItem(idx)" />
         </div>
 
         <v-text-field
           v-model="row.amountYuan"
-          label="金额（元）"
+          :label="t('txEdit.amount')"
           type="number"
           inputmode="decimal"
           variant="outlined"
@@ -74,7 +74,7 @@
           :items="accounts.list"
           item-title="name"
           item-value="id"
-          :label="row.type === 'transfer' ? '转出账户' : '账户'"
+          :label="row.type === 'transfer' ? t('txEdit.fromAccount') : t('txEdit.account')"
           variant="outlined"
           density="compact"
           class="mb-1"
@@ -86,7 +86,7 @@
           :items="accounts.list.filter((a) => a.id !== row.accountId)"
           item-title="name"
           item-value="id"
-          label="转入账户"
+          :label="t('txEdit.toAccount')"
           variant="outlined"
           density="compact"
           class="mb-1"
@@ -98,7 +98,7 @@
           :items="row.type === 'income' ? categories.incomeOptions : categories.expenseOptions"
           item-title="name"
           item-value="id"
-          label="分类"
+          :label="t('txEdit.category')"
           variant="outlined"
           density="compact"
           class="mb-1"
@@ -106,7 +106,7 @@
         />
         <v-text-field
           v-model="row.remark"
-          label="备注"
+          :label="t('txEdit.remark')"
           variant="outlined"
           density="compact"
           class="mb-1"
@@ -114,7 +114,7 @@
         />
         <NativeDateField
           v-model="row.happenedLocal"
-          label="时间"
+          :label="t('txEdit.time')"
           type="datetime-local"
           variant="outlined"
           density="compact"
@@ -127,7 +127,7 @@
           density="compact"
           class="mt-2"
         >
-          识别为信用卡还款（转账），不计入本月支出
+          {{ t('recognize.creditRepayInfo') }}
         </v-alert>
       </div>
 
@@ -140,7 +140,7 @@
         :disabled="selectedCount === 0"
         @click="onSubmit"
       >
-        确认提交 {{ selectedCount }} 笔
+        {{ t('recognize.submit', { n: selectedCount }) }}
       </v-btn>
     </template>
   </div>
@@ -149,6 +149,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import http from '../api/http'
 import { useAccountStore } from '../stores/account'
@@ -171,6 +172,7 @@ type Row = {
   happenedLocal: string
 }
 
+const { t } = useI18n()
 const router = useRouter()
 const accounts = useAccountStore()
 const categories = useCategoryStore()
@@ -231,7 +233,7 @@ async function onRecognize() {
     const { data } = await http.post('/ai/recognize-text-batch', { text: text.value }, { timeout: 120000 })
     const list = (data?.items || []) as any[]
     if (!list.length) {
-      error.value = '未识别到可记账条目，请补充金额与账户等信息'
+      error.value = t('recognize.noItems')
       items.value = []
       return
     }
@@ -257,7 +259,7 @@ async function onRecognize() {
       }
     })
   } catch (e: any) {
-    error.value = e.message || '识别失败'
+    error.value = e.message || t('recognize.failed')
   } finally {
     recognizing.value = false
   }
@@ -271,19 +273,19 @@ async function onSubmit() {
   for (const r of rows) {
     const amount = yuanToFen(r.amountYuan)
     if (amount <= 0) {
-      error.value = '请检查金额：每笔须大于 0'
+      error.value = t('recognize.errAmount')
       return
     }
     if (!r.accountId) {
-      error.value = '请为每笔选择账户'
+      error.value = t('recognize.errAccount')
       return
     }
     if (r.type === 'transfer' && !r.toAccountId) {
-      error.value = '转账请选择转入账户'
+      error.value = t('recognize.errToAccount')
       return
     }
     if (r.type !== 'transfer' && !r.categoryId) {
-      error.value = '支出/收入请选择分类'
+      error.value = t('recognize.errCategory')
       return
     }
   }
@@ -307,8 +309,8 @@ async function onSubmit() {
     await router.replace('/')
   } catch (e: any) {
     error.value = ok > 0
-      ? `已成功 ${ok} 笔，后续失败：${e.message || '请重试'}`
-      : (e.message || '提交失败')
+      ? t('recognize.partialFail', { ok, msg: e.message || t('recognize.retry') })
+      : (e.message || t('recognize.submitFailed'))
   } finally {
     submitting.value = false
   }

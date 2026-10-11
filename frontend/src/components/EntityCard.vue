@@ -6,7 +6,7 @@
     <div class="swipe-behind" aria-hidden="true">
       <button type="button" class="swipe-del" tabindex="-1" @click.stop="onDeleteClick">
         <v-icon icon="mdi-delete" size="22" />
-        <span>删除</span>
+        <span>{{ deleteLabel || t('ui.delete') }}</span>
       </button>
     </div>
     <div
@@ -60,6 +60,9 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 const props = withDefaults(defineProps<{
   title: string
@@ -71,7 +74,7 @@ const props = withDefaults(defineProps<{
   /** 默认账户高亮：消费 / 还款 / 两者 */
   accent?: 'none' | 'expense' | 'repay' | 'both'
 }>(), {
-  deleteLabel: '删除',
+  deleteLabel: '',
   accent: 'none',
 })
 
@@ -81,9 +84,9 @@ const emit = defineEmits<{
 }>()
 
 const cornerTitle = computed(() => {
-  if (props.accent === 'both') return '默认消费 · 默认还款'
-  if (props.accent === 'expense') return '默认消费'
-  if (props.accent === 'repay') return '默认还款'
+  if (props.accent === 'both') return t('ui.defaultAccount.both')
+  if (props.accent === 'expense') return t('ui.defaultAccount.expense')
+  if (props.accent === 'repay') return t('ui.defaultAccount.repay')
   return ''
 })
 
@@ -118,8 +121,8 @@ onBeforeUnmount(() => window.removeEventListener(OPEN_EVENT, onCloseAll))
 
 function onPointerDown(e: PointerEvent) {
   if (e.button !== 0) return
-  const t = e.target as HTMLElement | null
-  if (t?.closest?.('a, button, input, textarea, select, .v-selection-control, .no-card-nav')) return
+  const target = e.target as HTMLElement | null
+  if (target?.closest?.('a, button, input, textarea, select, .v-selection-control, .no-card-nav')) return
   tracking = true
   moved = false
   axis = ''
@@ -171,8 +174,8 @@ function onFrontClick(e: MouseEvent) {
     if (offset.value < -10) offset.value = 0
     return
   }
-  const t = e.target as HTMLElement | null
-  if (t?.closest?.('a, button, input, textarea, select, .v-selection-control, .no-card-nav')) return
+  const target = e.target as HTMLElement | null
+  if (target?.closest?.('a, button, input, textarea, select, .v-selection-control, .no-card-nav')) return
   emit('edit')
 }
 

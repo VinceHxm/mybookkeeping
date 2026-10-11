@@ -1,9 +1,9 @@
 <template>
   <v-dialog v-model="open" max-width="520">
     <v-card>
-      <v-card-title>票据识图</v-card-title>
+      <v-card-title>{{ t('recognize.receipt.title') }}</v-card-title>
       <v-card-text>
-        <p class="hint">上传小票 / 支付截图，由 DeepSeek 多模态模型识别</p>
+        <p class="hint">{{ t('recognize.receipt.hint') }}</p>
         <input
           ref="fileInput"
           type="file"
@@ -13,20 +13,26 @@
           @change="onFileChange"
         />
         <div v-if="preview" class="preview mb-3">
-          <img :src="preview" alt="预览" />
+          <img :src="preview" :alt="t('recognize.receipt.preview')" />
         </div>
         <v-btn variant="tonal" block class="mb-3" @click="fileInput?.click()">
           <v-icon start>mdi-image</v-icon>
-          {{ file ? '重新选择图片' : '选择 / 拍摄图片' }}
+          {{ file ? t('recognize.receipt.reselect') : t('recognize.receipt.select') }}
         </v-btn>
-        <v-text-field v-model="hint" label="补充说明（可选）" variant="outlined" hint="如：用招商信用卡付的" persistent-hint />
+        <v-text-field
+          v-model="hint"
+          :label="t('recognize.receipt.extra')"
+          variant="outlined"
+          :hint="t('recognize.receipt.extraHint')"
+          persistent-hint
+        />
         <v-alert v-if="error" type="error" density="compact" class="mt-2">{{ error }}</v-alert>
       </v-card-text>
       <v-card-actions>
         <v-spacer />
-        <v-btn variant="text" @click="open = false">取消</v-btn>
+        <v-btn variant="text" @click="open = false">{{ t('common.cancel') }}</v-btn>
         <v-btn color="primary" :loading="loading" :disabled="!file" @click="recognize">
-          识别并填入
+          {{ t('recognize.receipt.submit') }}
         </v-btn>
       </v-card-actions>
     </v-card>
@@ -35,9 +41,11 @@
 
 <script setup lang="ts">
 import { onUnmounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import http from '../api/http'
 
 const open = defineModel<boolean>({ required: true })
+const { t } = useI18n()
 
 const emit = defineEmits<{
   recognized: [data: any]
@@ -70,7 +78,7 @@ onUnmounted(() => {
 async function recognize() {
   error.value = ''
   if (!file.value) {
-    error.value = '请先选择图片'
+    error.value = t('recognize.receipt.needImage')
     return
   }
   loading.value = true
@@ -88,7 +96,7 @@ async function recognize() {
     } catch { /* 附件可选 */ }
     open.value = false
   } catch (e: any) {
-    error.value = e.message || '识别失败'
+    error.value = e.message || t('recognize.failed')
   } finally {
     loading.value = false
   }

@@ -2,13 +2,13 @@
   <div class="cal">
     <div class="cal-controls">
       <div class="month-nav">
-        <v-btn icon="mdi-chevron-left" variant="text" size="small" aria-label="上个月" @click="shift(-1)" />
-        <span class="month-title">{{ month.format('YYYY年M月') }}</span>
-        <v-btn icon="mdi-chevron-right" variant="text" size="small" aria-label="下个月" :disabled="isCurrentMonth" @click="shift(1)" />
+        <v-btn icon="mdi-chevron-left" variant="text" size="small" :aria-label="t('stats.cal.prevMonth')" @click="shift(-1)" />
+        <span class="month-title">{{ month.format(t('stats.fmt.month')) }}</span>
+        <v-btn icon="mdi-chevron-right" variant="text" size="small" :aria-label="t('stats.cal.nextMonth')" :disabled="isCurrentMonth" @click="shift(1)" />
       </div>
       <v-btn-toggle v-model="kind" mandatory density="compact" color="primary" variant="outlined" divided rounded="lg">
-        <v-btn value="expense" size="small">支出</v-btn>
-        <v-btn value="income" size="small">收入</v-btn>
+        <v-btn value="expense" size="small">{{ t('txType.expense') }}</v-btn>
+        <v-btn value="income" size="small">{{ t('txType.income') }}</v-btn>
       </v-btn-toggle>
     </div>
 
@@ -26,7 +26,7 @@
             class="cell"
             :class="[`lv${c.level}`, { today: c.today, future: c.future }]"
             :disabled="c.future"
-            :title="`${c.date} ${kindLabel} ${yuan(c.amount)}（${c.count} 笔）`"
+            :title="t('stats.cal.cellTip', { date: c.date, kind: kindLabel, amount: yuan(c.amount), count: t('stats.count', { n: c.count }) })"
             @click="openDay(c.date)"
           >
             <span class="cell-day">{{ c.day }}</span>
@@ -37,29 +37,29 @@
           </button>
         </div>
         <div class="cal-legend">
-          <span>少</span>
+          <span>{{ t('stats.cal.less') }}</span>
           <i v-for="lv in 4" :key="lv" :class="`lv${lv}`" />
-          <span>多</span>
+          <span>{{ t('stats.cal.more') }}</span>
         </div>
       </div>
 
       <div class="cal-side surface-card">
         <div class="side-item">
-          <span class="side-label">本月{{ kindLabel }}</span>
+          <span class="side-label">{{ t(`stats.cal.monthTotal.${kind}`) }}</span>
           <span class="side-val" :class="kind === 'income' ? 'amount-income' : 'amount-expense'">{{ yuan(sum) }}</span>
         </div>
         <div class="side-item">
-          <span class="side-label">有{{ kindLabel }}的天数</span>
-          <span class="side-val">{{ activeDays }} / {{ passedDays }} 天</span>
+          <span class="side-label">{{ t(`stats.cal.activeDays.${kind}`) }}</span>
+          <span class="side-val">{{ t('stats.cal.daysValue', { n: activeDays, total: passedDays }) }}</span>
         </div>
         <div class="side-item">
-          <span class="side-label">日均{{ kindLabel }}</span>
+          <span class="side-label">{{ t(`stats.cal.dailyAvg.${kind}`) }}</span>
           <span class="side-val">{{ yuan(Math.round(sum / Math.max(1, passedDays))) }}</span>
         </div>
         <div class="side-item">
-          <span class="side-label">最高的一天</span>
+          <span class="side-label">{{ t('stats.cal.peakDay') }}</span>
           <button v-if="peak" type="button" class="side-val side-link" @click="openDay(peak.date)">
-            {{ dayjs(peak.date).format('M月D日') }} · {{ yuan(peak.amount) }}
+            {{ dayjs(peak.date).format(t('stats.fmt.monthDay')) }} · {{ yuan(peak.amount) }}
           </button>
           <span v-else class="side-val">—</span>
         </div>
@@ -71,6 +71,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import dayjs, { type Dayjs } from 'dayjs'
 import http from '../../api/http'
 import { useAuthStore } from '../../stores/auth'
@@ -87,19 +88,21 @@ interface Point {
 const props = defineProps<{ filter: StatsFilter }>()
 const router = useRouter()
 const auth = useAuthStore()
+const { t, locale } = useI18n()
 
 const month = ref<Dayjs>(initialMonth())
 const kind = ref<'expense' | 'income'>('expense')
 const points = ref<Point[]>([])
 const loading = ref(false)
 
-const kindLabel = computed(() => (kind.value === 'income' ? '收入' : '支出'))
+const kindLabel = computed(() => t(`txType.${kind.value}`))
 const heatColor = computed(() => (kind.value === 'income' ? 'var(--income)' : 'var(--expense)'))
 const isCurrentMonth = computed(() => !month.value.isBefore(dayjs(), 'month'))
 const weekStart = computed(() => auth.profile?.weekStart ?? 1)
 const weekLabels = computed(() => {
-  const names = ['日', '一', '二', '三', '四', '五', '六']
-  return names.map((_, i) => names[(i + weekStart.value) % 7])
+  // dayjs 的 locale 不是响应式的，读一下 locale 让切换语言后重算
+  void locale.value
+  return Array.from({ length: 7 }, (_, i) => dayjs().day((i + weekStart.value) % 7).format('ddd'))
 })
 const lead = computed(() => (month.value.startOf('month').day() - weekStart.value + 7) % 7)
 

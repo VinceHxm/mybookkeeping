@@ -3,38 +3,38 @@
     <div class="form-section__body">
       <MetaHead
         :icon="geo.mode === 'route' ? 'mdi-map-marker-path' : 'mdi-map-marker-outline'"
-        title="地点"
-        subtitle="消费位置或路费起终点，可选"
+        :title="t('location.title')"
+        :subtitle="t('location.subtitle')"
         class="mb-3"
       >
         <v-chip v-if="hasGeo" size="small" color="primary" variant="tonal">
-          {{ geo.mode === 'route' ? '行程' : '位置' }}
+          {{ geo.mode === 'route' ? t('location.route') : t('location.point') }}
         </v-chip>
       </MetaHead>
 
       <button v-if="!hasGeo" type="button" class="loc-empty" @click="showMap = true">
         <v-icon size="28" color="primary">mdi-map-search-outline</v-icon>
         <div class="loc-empty-text">
-          <strong>添加地点</strong>
-          <span>点选地图，或一键定位当前位置</span>
+          <strong>{{ t('location.add') }}</strong>
+          <span>{{ t('location.addSub') }}</span>
         </div>
         <v-icon size="20" color="primary">mdi-chevron-right</v-icon>
       </button>
 
       <div v-else class="loc-filled">
         <div class="loc-preview" @click="showMap = true">
-          <div class="loc-kicker">{{ geo.mode === 'route' ? '已选行程' : '已选位置' }}</div>
+          <div class="loc-kicker">{{ geo.mode === 'route' ? t('location.pickedRoute') : t('location.pickedPoint') }}</div>
           <div class="loc-main">{{ geo.name }}</div>
           <div v-if="geo.mode === 'route' && geo.endName" class="loc-second">→ {{ geo.endName }}</div>
         </div>
         <div class="loc-actions">
           <v-btn variant="tonal" color="primary" @click="showMap = true">
             <v-icon start>mdi-pencil-outline</v-icon>
-            修改
+            {{ t('location.edit') }}
           </v-btn>
           <v-btn variant="text" color="error" @click="clear">
             <v-icon start>mdi-close</v-icon>
-            清除
+            {{ t('location.clear') }}
           </v-btn>
         </div>
       </div>
@@ -66,8 +66,11 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import AmapPicker, { type GeoPickResult } from './AmapPicker.vue'
 import MetaHead from './MetaHead.vue'
+
+const { t } = useI18n()
 
 export interface GeoValue {
   mode: 'point' | 'route' | ''

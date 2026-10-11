@@ -1,3 +1,5 @@
+import { t } from '../i18n'
+
 export type FareFreePeriod = {
   startDate: string
   endDate: string
@@ -60,6 +62,11 @@ export type FareRule = {
   sort?: number
 }
 
+export function cycleLabel(r: Pick<FareRule, 'cycleType' | 'cycleStartDay'>) {
+  if (r.cycleType === 'from_day') return t('fare.cycleFromDay', { day: r.cycleStartDay })
+  return t('fare.cycleCalendar')
+}
+
 export function zheToRate(zhe: string | number) {
   const n = Number(zhe)
   if (!Number.isFinite(n) || n <= 0) return 1
@@ -69,6 +76,12 @@ export function zheToRate(zhe: string | number) {
 export function rateToZhe(rate: number) {
   if (!rate || rate <= 0) return '10'
   return String(Math.round(rate * 10 * 100) / 100)
+}
+
+/** 折率换成百分比（0.9 → 90），供英韩文案显示 */
+export function ratePct(rate: number) {
+  if (!rate || rate <= 0) return 100
+  return Math.round(rate * 1000) / 10
 }
 
 export function normalizeCity(s: string) {

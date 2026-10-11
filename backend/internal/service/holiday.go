@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
+	"mybookkeeping/internal/kv"
 	"mybookkeeping/internal/model"
 )
 
@@ -41,16 +41,16 @@ type HolidayYear struct {
 
 type HolidayService struct {
 	db     *gorm.DB
-	rdb    *redis.Client
+	hot    kv.Store // 可为 nil：已有进程内缓存 + 数据库，热缓存可省
 	client *http.Client
 	mu     sync.Mutex
 	mem    map[int]*HolidayYear
 }
 
-func NewHolidayService(db *gorm.DB, rdb *redis.Client) *HolidayService {
+func NewHolidayService(db *gorm.DB, hot kv.Store) *HolidayService {
 	return &HolidayService{
 		db:  db,
-		rdb: rdb,
+		hot: hot,
 		client: &http.Client{
 			Timeout: 8 * time.Second,
 		},
@@ -70,7 +70,7 @@ type timorDayEntry struct {
 	Date    string `json:"date"`
 }
 
-// Year 只读本地（内存→Redis→MySQL），不自动请求远程。
+// Year 只读本地（内存→Redis→数据库），不自动请求远程。
 func (s *HolidayService) Year(ctx context.Context, year int) (*HolidayYear, error) {
 	if year < 2007 || year > 2100 {
 		return nil, fmt.Errorf("年份无效")
@@ -255,8 +255,8 @@ func (s *HolidayService) invalidateHot(ctx context.Context, year int) {
 	s.mu.Lock()
 	delete(s.mem, year)
 	s.mu.Unlock()
-	if s.rdb != nil {
-		_ = s.rdb.Del(ctx, s.redisKey(year)).Err()
+	if s.hot != nil {
+		_ = s.hot.Del(ctx, s.redisKey(year))
 	}
 }
 
@@ -280,29 +280,29 @@ func (s *HolidayService) redisKey(year int) string {
 }
 
 func (s *HolidayService) fromRedis(ctx context.Context, year int) *HolidayYear {
-	if s.rdb == nil {
+	if s.hot == nil {
 		return nil
 	}
-	b, err := s.rdb.Get(ctx, s.redisKey(year)).Bytes()
-	if err != nil || len(b) == 0 {
+	b, ok, err := s.hot.Get(ctx, s.redisKey(year))
+	if err != nil || !ok || b == "" {
 		return nil
 	}
 	var y HolidayYear
-	if json.Unmarshal(b, &y) != nil || y.Year != year {
+	if json.Unmarshal([]byte(b), &y) != nil || y.Year != year {
 		return nil
 	}
 	return &y
 }
 
 func (s *HolidayService) toRedis(ctx context.Context, y *HolidayYear) {
-	if s.rdb == nil || y == nil || !y.FromDB {
+	if s.hot == nil || y == nil || !y.FromDB {
 		return
 	}
 	b, err := json.Marshal(y)
 	if err != nil {
 		return
 	}
-	_ = s.rdb.Set(ctx, s.redisKey(y.Year), b, holidayHotCacheTTL).Err()
+	_ = s.hot.Set(ctx, s.redisKey(y.Year), string(b), holidayHotCacheTTL)
 }
 
 func (s *HolidayService) fetchRemote(ctx context.Context, year int) (*HolidayYear, error) {

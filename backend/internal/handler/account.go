@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"mybookkeeping/internal/i18n"
 	"mybookkeeping/internal/middleware"
 	"mybookkeeping/internal/service"
 )
@@ -203,7 +204,16 @@ func (a *API) CreditStatement(c *gin.Context) {
 		BadRequest(c, err.Error())
 		return
 	}
+	localizeStatement(c, stmt)
 	OK(c, stmt)
+}
+
+// localizeStatement 只翻译后端兜底的分期名；用户自填名称不在翻译表内，原样返回
+func localizeStatement(c *gin.Context, s *service.CreditStatement) {
+	locale := i18n.FromRequest(c)
+	for i := range s.Installments {
+		s.Installments[i].Name = i18n.T(locale, s.Installments[i].Name)
+	}
 }
 
 // CreditStatements 全部已设账单日的信用卡账单，一次返回
@@ -212,6 +222,9 @@ func (a *API) CreditStatements(c *gin.Context) {
 	if err != nil {
 		ServerError(c, err.Error())
 		return
+	}
+	for i := range list {
+		localizeStatement(c, &list[i])
 	}
 	OK(c, list)
 }
@@ -224,6 +237,7 @@ func (a *API) AccountLedger(c *gin.Context) {
 		BadRequest(c, err.Error())
 		return
 	}
+	ledger.Note = i18n.T(i18n.FromRequest(c), ledger.Note)
 	OK(c, ledger)
 }
 

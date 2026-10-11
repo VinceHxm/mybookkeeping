@@ -1,18 +1,18 @@
 <template>
   <div class="page">
-    <h1 class="page-title">我的</h1>
+    <h1 class="page-title">{{ t('mine.title') }}</h1>
     <v-card class="mb-4 user-card surface-card" rounded="lg" elevation="0">
       <v-card-text>
         <div class="user-row">
           <v-avatar color="primary" size="52" class="mr-3">
-            <span class="avatar-letter">{{ (auth.username || '用').slice(0, 1) }}</span>
+            <span class="avatar-letter">{{ (auth.username || t('mine.defaultUser')).slice(0, 1) }}</span>
           </v-avatar>
           <div>
-            <div class="user">{{ auth.username || '用户' }}</div>
+            <div class="user">{{ auth.username || t('mine.defaultUser') }}</div>
             <div class="muted">
-              <span v-if="auth.isAdmin()" class="role-admin">管理员</span>
-              <span v-else>普通用户</span>
-              · {{ auth.profile?.email || '个人精简账本' }}
+              <span v-if="auth.isAdmin()" class="role-admin">{{ t('mine.admin') }}</span>
+              <span v-else>{{ t('mine.normalUser') }}</span>
+              · {{ auth.profile?.email || t('mine.defaultSub') }}
             </div>
           </div>
         </div>
@@ -20,7 +20,7 @@
     </v-card>
 
     <div class="theme-bar surface-card mb-3 d-md-none">
-      <span class="theme-bar-label">外观</span>
+      <span class="theme-bar-label">{{ t('mine.appearance') }}</span>
       <div class="theme-bar-actions">
         <v-btn
           v-for="opt in themeOptions"
@@ -36,6 +36,13 @@
       </div>
     </div>
 
+    <div class="locale-bar surface-card mb-3">
+      <span class="theme-bar-label">
+        <v-icon size="18" class="mr-1">mdi-translate</v-icon>{{ t('locale.label') }}
+      </span>
+      <LocaleSwitcher />
+    </div>
+
     <v-list rounded="lg" class="menu mb-3 surface-card" elevation="0">
       <v-list-item
         v-for="m in menu"
@@ -48,39 +55,44 @@
       />
     </v-list>
 
-    <v-btn class="mt-2 logout-btn" block color="error" variant="tonal" size="large" @click="onLogout">退出登录</v-btn>
+    <v-btn class="mt-2 logout-btn" block color="error" variant="tonal" size="large" @click="onLogout">{{ t('mine.logout') }}</v-btn>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '../stores/auth'
 import { getStoredTheme, useAppTheme, type ThemePreference } from '../composables/useAppTheme'
+import LocaleSwitcher from '../components/LocaleSwitcher.vue'
 
+const { t } = useI18n()
 const auth = useAuthStore()
 const router = useRouter()
 const { setPreference } = useAppTheme()
 const themePref = ref<ThemePreference>(getStoredTheme())
 
+const menuItem = (to: string, icon: string, key: string) => ({
+  to, icon, title: t(`mine.menu.${key}`), desc: t(`mine.menu.${key}Desc`),
+})
+
 const menu = computed(() => [
-  { to: '/accounts', icon: 'mdi-wallet-outline', title: '账户管理', desc: '余额、信用卡账单、默认账户' },
-  { to: '/categories', icon: 'mdi-shape-outline', title: '分类管理', desc: '收支一级 / 二级分类' },
-  { to: '/tags', icon: 'mdi-tag-outline', title: '标签管理', desc: '跨分类的标记与筛选' },
-  { to: '/templates', icon: 'mdi-flash-outline', title: '记账模板', desc: '首页一键入账' },
-  { to: '/fare-rules', icon: 'mdi-ticket-percent-outline', title: '计费规则', desc: '公交地铁折扣与阶梯' },
-  { to: '/schedules', icon: 'mdi-calendar-clock-outline', title: '周期记账', desc: '房租、订阅等自动入账' },
-  { to: '/settings', icon: 'mdi-cog-outline', title: '设置 / 改密', desc: '外观、偏好、密码' },
-  ...(auth.isAdmin()
-    ? [{ to: '/admin/users', icon: 'mdi-shield-account-outline', title: '用户管理', desc: '角色、停用、重置密码' }]
-    : []),
+  menuItem('/accounts', 'mdi-wallet-outline', 'accounts'),
+  menuItem('/categories', 'mdi-shape-outline', 'categories'),
+  menuItem('/tags', 'mdi-tag-outline', 'tags'),
+  menuItem('/templates', 'mdi-flash-outline', 'templates'),
+  menuItem('/fare-rules', 'mdi-ticket-percent-outline', 'fareRules'),
+  menuItem('/schedules', 'mdi-calendar-clock-outline', 'schedules'),
+  menuItem('/settings', 'mdi-cog-outline', 'settings'),
+  ...(auth.isAdmin() ? [menuItem('/admin/users', 'mdi-shield-account-outline', 'users')] : []),
 ])
 
-const themeOptions: { title: string; value: ThemePreference; icon: string }[] = [
-  { title: '浅', value: 'light', icon: 'mdi-white-balance-sunny' },
-  { title: '深', value: 'dark', icon: 'mdi-weather-night' },
-  { title: '系统', value: 'system', icon: 'mdi-theme-light-dark' },
-]
+const themeOptions = computed<{ title: string; value: ThemePreference; icon: string }[]>(() => [
+  { title: t('theme.lightShort'), value: 'light', icon: 'mdi-white-balance-sunny' },
+  { title: t('theme.darkShort'), value: 'dark', icon: 'mdi-weather-night' },
+  { title: t('theme.systemShort'), value: 'system', icon: 'mdi-theme-light-dark' },
+])
 
 function quickTheme(pref: ThemePreference) {
   themePref.value = pref
@@ -126,6 +138,14 @@ async function onLogout() {
   padding: 12px 14px;
 }
 .theme-bar-label { color: var(--muted); font-size: 0.85rem; font-weight: 600; }
+.locale-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 8px 8px 14px;
+}
+.locale-bar .theme-bar-label { display: inline-flex; align-items: center; }
 .theme-bar-actions { display: flex; flex-wrap: wrap; gap: 4px; }
 .role-admin { color: var(--primary); font-weight: 600; }
 

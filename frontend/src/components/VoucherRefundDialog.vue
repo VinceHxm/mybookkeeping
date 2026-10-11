@@ -1,11 +1,11 @@
 <template>
   <v-dialog v-model="open" max-width="440" scrollable>
     <v-card>
-      <v-card-title>{{ picked ? '团购券退款' : '选择要退款的团购券' }}</v-card-title>
+      <v-card-title>{{ picked ? t('voucher.refundTitle') : t('voucher.pickTitle') }}</v-card-title>
       <v-card-text>
         <template v-if="!picked">
-          <div v-if="listLoading" class="hint">加载中…</div>
-          <div v-else-if="!candidates.length" class="hint">没有待核销的团购券。记支出时打开「团购券」开关即可标记。</div>
+          <div v-if="listLoading" class="hint">{{ t('common.loading') }}</div>
+          <div v-else-if="!candidates.length" class="hint">{{ t('voucher.noPending') }}</div>
           <v-list v-else bg-color="transparent" class="py-0">
             <v-list-item
               v-for="v in candidates"
@@ -30,12 +30,12 @@
           <div class="orig">
             <div class="orig-title">{{ txTitle(picked) }}</div>
             <div class="orig-sub">
-              {{ dayjs(picked.happenedAt).format('YYYY-MM-DD') }} · {{ picked.account?.name }} · 原支付 ¥{{ fenToYuan(picked.amount) }}
+              {{ dayjs(picked.happenedAt).format('YYYY-MM-DD') }} · {{ picked.account?.name }} · {{ t('voucher.origPaid', { amount: `¥${fenToYuan(picked.amount)}` }) }}
             </div>
           </div>
           <v-text-field
             v-model="amountYuan"
-            label="退款金额（元）"
+            :label="t('voucher.refundAmount')"
             type="number"
             inputmode="decimal"
             prefix="¥"
@@ -48,31 +48,30 @@
             :items="accounts.list.filter((a) => !a.archived || a.id === accountId)"
             item-title="name"
             item-value="id"
-            label="退回账户"
+            :label="t('voucher.refundAccount')"
             variant="outlined"
             hide-details
             class="field"
           />
           <NativeDateField
             v-model="happenedLocal"
-            label="退款到账时间"
+            :label="t('voucher.refundTime')"
             type="datetime-local"
             variant="outlined"
             hide-details
             class="field"
           />
-          <p class="hint">
-            信用卡 / 花呗：时间填银行账单上的<strong>记账日</strong>，这样会落到正确的账期，并计入当期已还。
-            保存后会生成一笔「退款」收入，原券标记为已退款；删掉这笔退款可恢复为待核销。
-          </p>
+          <i18n-t keypath="voucher.refundHint" tag="p" class="hint">
+            <template #date><strong>{{ t('voucher.refundHintDate') }}</strong></template>
+          </i18n-t>
         </template>
         <v-alert v-if="error" type="error" density="compact" class="mt-2">{{ error }}</v-alert>
       </v-card-text>
       <v-card-actions>
-        <v-btn v-if="picked && !voucher" variant="text" @click="picked = null">重选</v-btn>
+        <v-btn v-if="picked && !voucher" variant="text" @click="picked = null">{{ t('voucher.repick') }}</v-btn>
         <v-spacer />
-        <v-btn variant="text" @click="open = false">取消</v-btn>
-        <v-btn v-if="picked" color="primary" :loading="saving" @click="submit">确认退款</v-btn>
+        <v-btn variant="text" @click="open = false">{{ t('common.cancel') }}</v-btn>
+        <v-btn v-if="picked" color="primary" :loading="saving" @click="submit">{{ t('voucher.confirm') }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -80,6 +79,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import http from '../api/http'
 import { useAccountStore } from '../stores/account'
@@ -94,6 +94,7 @@ const props = defineProps<{
 const emit = defineEmits<{ refunded: [refund: Transaction, voucherId: number] }>()
 
 const open = defineModel<boolean>({ required: true })
+const { t } = useI18n()
 const accounts = useAccountStore()
 const tx = useTransactionStore()
 
@@ -108,9 +109,9 @@ const error = ref('')
 
 function expireText(d: string) {
   const days = dayjs(d).startOf('day').diff(dayjs().startOf('day'), 'day')
-  if (days < 0) return `已过期 ${-days} 天`
-  if (days === 0) return '今天过期'
-  return `${days} 天后过期`
+  if (days < 0) return t('voucher.expiredDays', { n: -days })
+  if (days === 0) return t('voucher.expireToday')
+  return t('voucher.expireIn', { n: days })
 }
 
 function pick(v: Transaction) {
@@ -151,8 +152,8 @@ async function submit() {
   const v = picked.value
   if (!v) return
   const amount = yuanToFen(amountYuan.value || '0')
-  if (amount <= 0) { error.value = '请输入退款金额'; return }
-  if (amount > v.amount) { error.value = '退款金额不能超过原支付金额'; return }
+  if (amount <= 0) { error.value = t('voucher.enterAmount'); return }
+  if (amount > v.amount) { error.value = t('voucher.overAmount'); return }
   saving.value = true
   error.value = ''
   try {
@@ -164,7 +165,7 @@ async function submit() {
     open.value = false
     emit('refunded', refund, v.id)
   } catch (e: any) {
-    error.value = e?.message || '退款失败'
+    error.value = e?.message || t('voucher.failed')
   } finally {
     saving.value = false
   }

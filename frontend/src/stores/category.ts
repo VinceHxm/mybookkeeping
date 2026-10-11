@@ -71,5 +71,11 @@ export const useCategoryStore = defineStore('category', () => {
     await load()
   }
 
-  return { list, expense, income, expenseOptions, incomeOptions, load, ensure: cache.ensure, create, update, remove }
+  /** 切换语言后默认分类名会变：已加载过就重新拉一次 */
+  async function reloadIfLoaded() {
+    cache.invalidate()
+    if (list.value.length) await load()
+  }
+
+  return { list, expense, income, expenseOptions, incomeOptions, load, ensure: cache.ensure, reloadIfLoaded, create, update, remove }
 })

@@ -3,28 +3,26 @@
     <div class="form-section__body">
       <div v-if="statement" class="repay-stmt mb-2">
         <div class="repay-stmt-row">
-          <span>本期已还<template v-if="(statement.refundAmount || 0) > 0">（含退款 ¥{{ fenToYuan(statement.refundAmount || 0) }}）</template></span><strong>¥{{ fenToYuan(statement.repaidAmount) }}</strong>
+          <span>{{ t('repay.repaid') }}<template v-if="(statement.refundAmount || 0) > 0">{{ t('repay.repaidRefund', { amount: `¥${fenToYuan(statement.refundAmount || 0)}` }) }}</template></span><strong>¥{{ fenToYuan(statement.repaidAmount) }}</strong>
         </div>
         <div class="repay-stmt-row">
-          <span>本期待还</span><strong>¥{{ fenToYuan(statement.periodRemaining) }}</strong>
+          <span>{{ t('repay.periodRemaining') }}</span><strong>¥{{ fenToYuan(statement.periodRemaining) }}</strong>
         </div>
         <div class="repay-stmt-row">
-          <span>{{ settledWithUsage ? '剩余已用' : '还后待还' }}</span>
+          <span>{{ settledWithUsage ? t('repay.remainingUsed') : t('repay.afterPay') }}</span>
           <strong class="warn">¥{{ fenToYuan(statement.remainingAfterPay) }}</strong>
         </div>
         <div class="repay-stmt-row">
-          <span>整体待还</span><strong>¥{{ fenToYuan(totalOutstanding) }}</strong>
+          <span>{{ t('repay.totalOutstanding') }}</span><strong>¥{{ fenToYuan(totalOutstanding) }}</strong>
         </div>
         <div v-if="statement.periodRemaining === 0 && (statement.nextPeriodEstimate || 0) > 0" class="repay-stmt-row">
-          <span>预计下次出账</span><strong>¥{{ fenToYuan(statement.nextPeriodEstimate || 0) }}</strong>
+          <span>{{ t('repay.nextEstimate') }}</span><strong>¥{{ fenToYuan(statement.nextPeriodEstimate || 0) }}</strong>
         </div>
         <div class="repay-stmt-hint">
-          <template v-if="settledWithUsage">
-            本期已还清。「剩余已用」是卡上还欠总额；还款默认按本期待还（现为 0），提前还款可加载整体待还。
-          </template>
-          <template v-else>默认按本期待还预填；提前还款可加载整体待还</template>
+          <template v-if="settledWithUsage">{{ t('repay.settledHint') }}</template>
+          <template v-else>{{ t('repay.defaultHint') }}</template>
           <template v-if="(statement.futureInstallment || 0) > 0">
-            · 尚未出账分期 ¥{{ fenToYuan(statement.futureInstallment) }}
+            {{ t('repay.futureInstallment', { amount: `¥${fenToYuan(statement.futureInstallment || 0)}` }) }}
           </template>
         </div>
       </div>
@@ -37,7 +35,7 @@
         @click="expanded = !expanded"
       >
         <v-icon size="20" color="primary">mdi-credit-card-clock-outline</v-icon>
-        <span class="credit-toggle__title">{{ isCreditExpense ? '分期 / 手续费' : '还款分期 / 利息' }}</span>
+        <span class="credit-toggle__title">{{ isCreditExpense ? t('repay.expenseTitle') : t('repay.repayTitle') }}</span>
         <span class="credit-toggle__summary">{{ summary }}</span>
         <v-icon size="18" class="credit-toggle__chevron">mdi-chevron-down</v-icon>
       </button>
@@ -45,9 +43,7 @@
       <v-expand-transition>
         <div v-show="expanded" class="credit-panel">
           <div class="panel-sub mb-2">
-            {{ isCreditExpense
-              ? '仅影响账单展示拆分；账户余额按上方金额变动'
-              : '建议金额=本期本金份额+利息；可改，保存以手填为准' }}
+            {{ isCreditExpense ? t('repay.expenseSub') : t('repay.repaySub') }}
           </div>
           <div class="period-row mb-2">
             <v-chip-group
@@ -57,12 +53,12 @@
               @update:model-value="onChipPicked"
             >
               <v-chip v-for="p in PERIOD_PRESETS" :key="p" :value="p" size="small" variant="outlined" filter>
-                {{ p === 1 ? (isCreditExpense ? '不分期' : '一次还清') : `${p} 期` }}
+                {{ p === 1 ? (isCreditExpense ? t('repay.noInstallment') : t('repay.payInFull')) : t('repay.periodsN', { n: p }) }}
               </v-chip>
             </v-chip-group>
             <v-text-field
               v-model.number="periods"
-              label="期数"
+              :label="t('repay.periods')"
               type="number"
               min="1"
               max="60"
@@ -75,7 +71,7 @@
           </div>
           <v-text-field
             v-model="interestYuan"
-            label="利息 / 手续费（元）"
+            :label="t('repay.interestLabel')"
             type="number"
             inputmode="decimal"
             variant="outlined"
@@ -86,7 +82,7 @@
             @update:model-value="emit('planChanged')"
           />
           <div v-if="showDeferOption" class="defer-row mt-2">
-            <span class="defer-label">首期出账</span>
+            <span class="defer-label">{{ t('repay.firstStatement') }}</span>
             <v-chip-group
               :model-value="deferCycles"
               mandatory
@@ -94,8 +90,8 @@
               class="period-chips"
               @update:model-value="(v: unknown) => { deferCycles = Number(v) || 0 }"
             >
-              <v-chip :value="0" size="small" variant="outlined" filter>随刷卡 {{ dueLabel(0) }}</v-chip>
-              <v-chip :value="1" size="small" variant="outlined" filter>下期 {{ dueLabel(1) }}</v-chip>
+              <v-chip :value="0" size="small" variant="outlined" filter>{{ t('repay.withPurchase', { date: dueLabel(0) }) }}</v-chip>
+              <v-chip :value="1" size="small" variant="outlined" filter>{{ t('repay.nextCycle', { date: dueLabel(1) }) }}</v-chip>
             </v-chip-group>
           </div>
           <div v-if="hint" class="panel-hint">{{ hint }}</div>
@@ -103,9 +99,9 @@
       </v-expand-transition>
 
       <div v-if="showRepayActions" class="repay-actions mt-2">
-        <v-btn size="small" variant="tonal" color="primary" :loading="repayLoading" @click="emit('suggest')">按本期待还</v-btn>
+        <v-btn size="small" variant="tonal" color="primary" :loading="repayLoading" @click="emit('suggest')">{{ t('repay.suggest') }}</v-btn>
         <v-btn size="small" variant="outlined" color="primary" :disabled="!totalOutstanding" @click="emit('earlyRepay')">
-          提前还款
+          {{ t('repay.earlyRepay') }}
         </v-btn>
       </div>
     </div>
@@ -114,6 +110,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import type { CreditStatement } from '../stores/account'
 import { fenToYuan, firstShareFen, yuanToFen } from '../utils/money'
@@ -144,6 +141,8 @@ const emit = defineEmits<{
   suggest: []
   earlyRepay: []
 }>()
+
+const { t } = useI18n()
 
 const PERIOD_PRESETS = [1, 3, 6, 12, 24]
 const expanded = ref(false)
@@ -177,17 +176,23 @@ function onChipPicked(v: unknown) {
 const summary = computed(() => {
   const parts: string[] = []
   if (periodCount.value > 1) {
-    parts.push(`${periodCount.value} 期`)
+    parts.push(t('repay.periodsN', { n: periodCount.value }))
     if (props.isCreditExpense && props.amountFen > 0) {
-      parts.push(`每期约 ¥${fenToYuan(Math.floor(props.amountFen / periodCount.value))}`)
+      parts.push(t('repay.perPeriod', { amount: yuan(Math.floor(props.amountFen / periodCount.value)) }))
     }
   } else {
-    parts.push(props.isCreditExpense ? '不分期' : '一次还清')
+    parts.push(props.isCreditExpense ? t('repay.noInstallment') : t('repay.payInFull'))
   }
-  if (interestFen.value > 0) parts.push(`${props.isCreditExpense ? '手续费' : '利息'} ¥${fenToYuan(interestFen.value)}`)
-  if (showDeferOption.value) parts.push(`首期 ${dueLabel(deferCycles.value || 0)}`)
+  if (interestFen.value > 0) {
+    parts.push(t(props.isCreditExpense ? 'repay.fee' : 'repay.interest', { amount: yuan(interestFen.value) }))
+  }
+  if (showDeferOption.value) parts.push(t('repay.firstDue', { date: dueLabel(deferCycles.value || 0) }))
   return parts.join(' · ')
 })
+
+function yuan(fen: number) {
+  return `¥${fenToYuan(fen)}`
+}
 
 const hint = computed(() => {
   const n = periodCount.value
@@ -195,19 +200,25 @@ const hint = computed(() => {
     if (n <= 1 || props.amountFen <= 0) return ''
     const first = firstShareFen(props.amountFen, n)
     const rest = Math.floor(props.amountFen / n)
-    return `约首期本金 ¥${fenToYuan(first)}，其后每期 ¥${fenToYuan(rest)}（利息计入首期出账）`
+    return t('repay.expenseHint', { first: yuan(first), rest: yuan(rest) })
   }
   const base = props.repayBaseFen
-  if (base <= 0) return '暂无本期待还，可手填金额；利息单独填写。'
+  if (base <= 0) return t('repay.noBase')
   const principal = firstShareFen(base, n)
   const total = principal + interestFen.value
   if (n <= 1) {
     return interestFen.value > 0
-      ? `建议一次还清：本金 ¥${fenToYuan(principal)} + 利息 ¥${fenToYuan(interestFen.value)} = ¥${fenToYuan(total)}`
-      : `建议还清待还本金 ¥${fenToYuan(principal)}`
+      ? t('repay.suggestFullWithInterest', { principal: yuan(principal), interest: yuan(interestFen.value), total: yuan(total) })
+      : t('repay.suggestFull', { principal: yuan(principal) })
   }
   const rest = Math.floor(base / n)
-  return `本次建议：本金 ¥${fenToYuan(principal)} + 利息 ¥${fenToYuan(interestFen.value)} = ¥${fenToYuan(total)}；其后约 ${n - 1} 期、每期本金约 ¥${fenToYuan(rest)}（下期再记一笔转账）`
+  return t('repay.suggestInstallment', {
+    principal: yuan(principal),
+    interest: yuan(interestFen.value),
+    total: yuan(total),
+    n: n - 1,
+    rest: yuan(rest),
+  })
 })
 </script>
 

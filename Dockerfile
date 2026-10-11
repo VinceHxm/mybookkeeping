@@ -26,11 +26,14 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /out/server ./cmd/serv
 FROM docker.m.daocloud.io/library/alpine:3.20
 RUN apk add --no-cache ca-certificates tzdata \
  && addgroup -S -g 1000 app && adduser -S -G app -u 1000 app \
- && mkdir -p /app/public && chown -R app:app /app
+ && mkdir -p /app/public /app/data && chown -R app:app /app
 WORKDIR /app
 ENV TZ=Asia/Shanghai \
     CONFIG_FILE=/app/.env \
-    SERVER_ADDR=:8080
+    SERVER_ADDR=:8080 \
+    DATA_DIR=/app/data
+# DB_DRIVER=sqlite 时数据库文件与附件都在这里，挂载数据卷即可持久化
+VOLUME ["/app/data"]
 COPY --from=be-builder --chown=app:app /out/server /app/server
 COPY --from=be-builder --chown=app:app /out/init-user /app/init-user
 COPY --from=fe-builder --chown=app:app /src/dist /app/public

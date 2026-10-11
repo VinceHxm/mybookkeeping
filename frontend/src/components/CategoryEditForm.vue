@@ -2,19 +2,16 @@
   <div class="form-sections">
     <section class="form-section">
       <header class="form-section__head">
-        <h3 class="form-section__title">基本信息</h3>
+        <h3 class="form-section__title">{{ t('categories.form.basicInfo') }}</h3>
       </header>
       <div class="form-section__body">
-        <IconPicker v-model="form.icon" title="分类图标" fallback="mdi-shape" />
-        <v-text-field v-model="form.name" label="名称" variant="outlined" hide-details class="field" />
+        <IconPicker v-model="form.icon" :title="t('categories.form.icon')" fallback="mdi-shape" />
+        <v-text-field v-model="form.name" :label="t('ui.name')" variant="outlined" hide-details class="field" />
         <v-select
           v-if="!categoryId"
           v-model="form.kind"
-          :items="[
-            { title: '支出', value: 'expense' },
-            { title: '收入', value: 'income' },
-          ]"
-          label="类型"
+          :items="kindItems"
+          :label="t('categories.form.type')"
           variant="outlined"
           hide-details
           class="field"
@@ -24,7 +21,7 @@
           :items="parentOptions"
           item-title="name"
           item-value="id"
-          label="父分类（可选）"
+          :label="t('categories.form.parent')"
           clearable
           variant="outlined"
           hide-details
@@ -33,28 +30,29 @@
         />
         <v-text-field
           v-model.number="form.sort"
-          label="排序"
+          :label="t('ui.sort')"
           type="number"
           variant="outlined"
           hide-details
           class="field field--last"
         />
         <p v-if="categoryId && hasChildren" class="form-section__tip">
-          该分类下已有子分类，不可再挂到其他父分类下。
+          {{ t('categories.form.hasChildrenTip') }}
         </p>
       </div>
     </section>
 
     <div v-if="categoryId" class="danger-zone">
-      <div class="danger-title">危险操作</div>
-      <p class="danger-tip">删除分类不可恢复；若有子分类或流水将无法删除。</p>
-      <v-btn color="error" variant="outlined" block @click="emit('delete')">删除此分类</v-btn>
+      <div class="danger-title">{{ t('ui.dangerZone') }}</div>
+      <p class="danger-tip">{{ t('categories.form.deleteTip') }}</p>
+      <v-btn color="error" variant="outlined" block @click="emit('delete')">{{ t('categories.form.deleteThis') }}</v-btn>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import IconPicker from './IconPicker.vue'
 import { useCategoryStore, type Category } from '../stores/category'
 
@@ -69,6 +67,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{ saved: []; delete: [] }>()
 
+const { t } = useI18n()
 const categories = useCategoryStore()
 const saving = ref(false)
 const form = reactive({
@@ -83,8 +82,13 @@ const hasChildren = computed(() =>
   !!props.categoryId && categories.list.some((c) => c.parentId === props.categoryId),
 )
 
+const kindItems = computed(() => [
+  { title: t('txType.expense'), value: 'expense' },
+  { title: t('txType.income'), value: 'income' },
+])
+
 const parentOptions = computed(() => [
-  { id: null as any, name: '无（一级分类）' },
+  { id: null as any, name: t('categories.form.noParent') },
   ...categories.list.filter(
     (c) =>
       c.kind === form.kind &&

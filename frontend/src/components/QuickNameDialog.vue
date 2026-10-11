@@ -15,8 +15,8 @@
       </v-card-text>
       <v-card-actions>
         <v-spacer />
-        <v-btn variant="text" @click="open = false">取消</v-btn>
-        <v-btn color="primary" :loading="saving" @click="submit">创建并选用</v-btn>
+        <v-btn variant="text" @click="open = false">{{ t('common.cancel') }}</v-btn>
+        <v-btn color="primary" :loading="saving" @click="submit">{{ t('txEdit.quickName.create') }}</v-btn>
       </v-card-actions>
     </v-card>
   </v-dialog>
@@ -24,6 +24,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
   title: string
@@ -34,6 +35,7 @@ const props = defineProps<{
 }>()
 
 const open = defineModel<boolean>({ required: true })
+const { t } = useI18n()
 
 const name = ref('')
 const saving = ref(false)
@@ -47,14 +49,14 @@ watch(open, (v) => {
 
 async function submit() {
   const n = name.value.trim()
-  if (!n) { error.value = `请输入${props.label}`; return }
+  if (!n) { error.value = t('txEdit.quickName.required', { label: props.label }); return }
   saving.value = true
   error.value = ''
   try {
     await props.save(n)
     open.value = false
   } catch (e: any) {
-    error.value = e?.message || '创建失败'
+    error.value = e?.message || t('txEdit.quickName.failed')
   } finally {
     saving.value = false
   }

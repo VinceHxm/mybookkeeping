@@ -2,31 +2,32 @@
   <div class="login-shell">
     <div class="login-hero d-none d-md-flex">
       <div class="hero-inner">
-        <div class="logo">记</div>
-        <h1>我的账本</h1>
-        <p>个人精简记账 · 快记优先</p>
+        <div class="logo">{{ t('app.logo') }}</div>
+        <h1>{{ t('app.name') }}</h1>
+        <p>{{ t('app.loginTagline') }}</p>
       </div>
     </div>
     <div class="login-panel">
       <div class="panel-inner">
         <div class="brand d-md-none">
-          <div class="logo">记</div>
-          <h1>我的账本</h1>
+          <div class="logo">{{ t('app.logo') }}</div>
+          <h1>{{ t('app.name') }}</h1>
         </div>
-        <h2 class="panel-title">登录</h2>
+        <h2 class="panel-title">{{ t('auth.login') }}</h2>
         <v-card class="form surface-card" elevation="0" rounded="lg">
           <v-card-text>
-            <v-text-field v-model="username" label="用户名" variant="outlined" density="comfortable" />
-            <v-text-field v-model="password" label="密码" type="password" variant="outlined" density="comfortable" @keyup.enter="onLogin" />
+            <v-text-field v-model="username" :label="t('auth.username')" variant="outlined" density="comfortable" />
+            <v-text-field v-model="password" :label="t('auth.password')" type="password" variant="outlined" density="comfortable" @keyup.enter="onLogin" />
             <v-alert v-if="error" type="error" density="compact" class="mb-3">{{ error }}</v-alert>
-            <v-btn color="primary" block size="large" :loading="loading" class="hero-cta" @click="onLogin">登录</v-btn>
+            <v-btn color="primary" block size="large" :loading="loading" class="hero-cta" @click="onLogin">{{ t('auth.login') }}</v-btn>
             <div class="links">
-              <router-link to="/register">注册账号</router-link>
-              <router-link to="/forgot-password">忘记密码</router-link>
+              <router-link to="/register">{{ t('auth.registerAccount') }}</router-link>
+              <router-link to="/forgot-password">{{ t('auth.forgotPassword') }}</router-link>
             </div>
           </v-card-text>
         </v-card>
         <div class="login-theme">
+          <LocaleSwitcher />
           <v-btn
             v-for="opt in themeOptions"
             :key="opt.value"
@@ -45,11 +46,14 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '../stores/auth'
 import { getStoredTheme, useAppTheme, type ThemePreference } from '../composables/useAppTheme'
+import LocaleSwitcher from '../components/LocaleSwitcher.vue'
 
+const { t } = useI18n()
 const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
@@ -60,11 +64,11 @@ const loading = ref(false)
 const error = ref('')
 const themePref = ref<ThemePreference>(getStoredTheme())
 
-const themeOptions: { title: string; value: ThemePreference; icon: string }[] = [
-  { title: '浅色', value: 'light', icon: 'mdi-white-balance-sunny' },
-  { title: '深色', value: 'dark', icon: 'mdi-weather-night' },
-  { title: '系统', value: 'system', icon: 'mdi-theme-light-dark' },
-]
+const themeOptions = computed<{ title: string; value: ThemePreference; icon: string }[]>(() => [
+  { title: t('theme.light'), value: 'light', icon: 'mdi-white-balance-sunny' },
+  { title: t('theme.dark'), value: 'dark', icon: 'mdi-weather-night' },
+  { title: t('theme.systemShort'), value: 'system', icon: 'mdi-theme-light-dark' },
+])
 
 function setTheme(pref: ThemePreference) {
   themePref.value = pref
@@ -84,7 +88,7 @@ async function onLogin() {
     syncFromProfile(data.user)
     await router.replace((route.query.redirect as string) || '/')
   } catch (e: any) {
-    error.value = e.message || '登录失败'
+    error.value = e.message || t('auth.loginFailed')
   } finally {
     loading.value = false
   }

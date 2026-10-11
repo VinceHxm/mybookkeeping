@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import http from '../api/http'
+import { t } from '../i18n'
 
 export interface Attachment {
   id: number
@@ -12,10 +13,8 @@ export interface Attachment {
 /** 团购券状态：'' 非券 | pending 待核销 | used 已核销 | refunded 已退款 */
 export type VoucherStatus = '' | 'pending' | 'used' | 'refunded'
 
-export const voucherStatusLabel: Record<Exclude<VoucherStatus, ''>, string> = {
-  pending: '待核销',
-  used: '已核销',
-  refunded: '已退款',
+export function voucherStatusLabel(status: VoucherStatus): string {
+  return status ? t(`voucher.status.${status}`) : ''
 }
 
 export const voucherStatusColor: Record<Exclude<VoucherStatus, ''>, string> = {
@@ -139,9 +138,9 @@ export const useTransactionStore = defineStore('transaction', () => {
     await http.delete(`/transactions/${id}`)
   }
 
-  function patchLocal(t: Transaction) {
-    const i = list.value.findIndex((x) => x.id === t.id)
-    if (i >= 0) list.value[i] = t
+  function patchLocal(item: Transaction) {
+    const i = list.value.findIndex((x) => x.id === item.id)
+    if (i >= 0) list.value[i] = item
   }
 
   async function setVoucherStatus(id: number, status: 'pending' | 'used') {

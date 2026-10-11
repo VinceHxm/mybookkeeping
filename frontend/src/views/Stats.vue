@@ -1,7 +1,7 @@
 <template>
   <div class="page stats-page">
     <div class="stats-head">
-      <h1 class="page-title">统计</h1>
+      <h1 class="page-title">{{ t('stats.title') }}</h1>
       <span class="range-text">{{ rangeText }}</span>
     </div>
 
@@ -19,7 +19,7 @@
       </div>
       <v-select
         v-model="accountId"
-        :items="[{ id: 0, name: '全部账户' }, ...accounts.list]"
+        :items="[{ id: 0, name: t('stats.allAccounts') }, ...accounts.list]"
         item-title="name"
         item-value="id"
         density="compact"
@@ -30,20 +30,20 @@
       />
     </div>
     <div v-if="preset === 'custom'" class="custom-range">
-      <NativeDateField v-model="from" label="开始" density="compact" variant="outlined" hide-details class="f" />
-      <NativeDateField v-model="to" label="结束" density="compact" variant="outlined" hide-details class="f" />
+      <NativeDateField v-model="from" :label="t('stats.from')" density="compact" variant="outlined" hide-details class="f" />
+      <NativeDateField v-model="to" :label="t('stats.to')" density="compact" variant="outlined" hide-details class="f" />
     </div>
 
     <StatsOverviewCards :filter="filter" />
 
     <v-tabs v-model="tab" color="primary" class="stats-tabs" :grow="!isDesktop" density="comfortable">
       <v-tab
-        v-for="t in tabs"
-        :key="t.value"
-        :value="t.value"
-        :prepend-icon="width >= 600 ? t.icon : undefined"
+        v-for="tb in tabs"
+        :key="tb.value"
+        :value="tb.value"
+        :prepend-icon="width >= 600 ? tb.icon : undefined"
         class="stats-tab"
-      >{{ t.label }}</v-tab>
+      >{{ tb.label }}</v-tab>
     </v-tabs>
     <div class="tab-body">
       <KeepAlive>
@@ -57,6 +57,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAccountStore } from '../stores/account'
 import { useBreakpoint } from '../composables/useBreakpoint'
 import type { StatsFilter } from '../utils/stats'
@@ -73,21 +74,19 @@ type Tab = 'breakdown' | 'trend' | 'calendar' | 'map' | 'assets'
 
 const STATE_KEY = 'mbk_stats_state'
 
-const presets: { value: Preset; label: string }[] = [
-  { value: 'month', label: '本月' },
-  { value: 'lastMonth', label: '上月' },
-  { value: 'last3', label: '近3月' },
-  { value: 'year', label: '今年' },
-  { value: 'lastYear', label: '去年' },
-  { value: 'custom', label: '自定义' },
-]
-const tabs: { value: Tab; label: string; icon: string }[] = [
-  { value: 'breakdown', label: '构成', icon: 'mdi-chart-donut' },
-  { value: 'trend', label: '趋势', icon: 'mdi-chart-bar' },
-  { value: 'calendar', label: '日历', icon: 'mdi-calendar-month-outline' },
-  { value: 'map', label: '地点', icon: 'mdi-map-marker-radius-outline' },
-  { value: 'assets', label: '资产', icon: 'mdi-finance' },
-]
+const PRESETS: Preset[] = ['month', 'lastMonth', 'last3', 'year', 'lastYear', 'custom']
+const TAB_ICONS: Record<Tab, string> = {
+  breakdown: 'mdi-chart-donut',
+  trend: 'mdi-chart-bar',
+  calendar: 'mdi-calendar-month-outline',
+  map: 'mdi-map-marker-radius-outline',
+  assets: 'mdi-finance',
+}
+const { t } = useI18n()
+const presets = computed(() => PRESETS.map((value) => ({ value, label: t(`stats.presets.${value}`) })))
+const tabs = computed(() =>
+  (Object.keys(TAB_ICONS) as Tab[]).map((value) => ({ value, label: t(`stats.tabs.${value}`), icon: TAB_ICONS[value] })),
+)
 const tabComponents = {
   breakdown: StatsBreakdown,
   trend: StatsTrend,
@@ -119,9 +118,9 @@ const filter = computed<StatsFilter>(() => {
 
 const rangeText = computed(() => {
   const f = dayjs(filter.value.from)
-  const t = dayjs(filter.value.to)
-  const fmt = f.year() === t.year() && f.year() === dayjs().year() ? 'M月D日' : 'YYYY年M月D日'
-  return `${f.format(fmt)} – ${t.format(fmt)}`
+  const e = dayjs(filter.value.to)
+  const fmt = t(f.year() === e.year() && f.year() === dayjs().year() ? 'stats.fmt.monthDay' : 'stats.fmt.fullDate')
+  return `${f.format(fmt)} – ${e.format(fmt)}`
 })
 
 function readState(): Partial<{ preset: Preset; from: string; to: string; accountId: number; tab: Tab }> {

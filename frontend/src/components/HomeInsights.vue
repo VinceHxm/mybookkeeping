@@ -1,11 +1,11 @@
 <template>
   <section class="insights surface-card">
     <div class="ins-head">
-      <h2 class="ins-title">本月支出构成</h2>
-      <router-link class="ins-more" to="/stats">统计 <v-icon size="14">mdi-chevron-right</v-icon></router-link>
+      <h2 class="ins-title">{{ t('insights.categoryTitle') }}</h2>
+      <router-link class="ins-more" to="/stats">{{ t('insights.toStats') }} <v-icon size="14">mdi-chevron-right</v-icon></router-link>
     </div>
 
-    <div v-if="!cats.length" class="ins-empty">{{ data ? '本月还没有支出' : '加载中…' }}</div>
+    <div v-if="!cats.length" class="ins-empty">{{ data ? t('insights.noExpense') : t('common.loading') }}</div>
     <ul v-else class="cat-list">
       <li v-for="(c, i) in cats" :key="c.id">
         <router-link class="cat-row" :to="catRoute(c)">
@@ -19,8 +19,8 @@
     </ul>
 
     <div class="ins-head ins-head--sub">
-      <h2 class="ins-title">近 7 天支出</h2>
-      <span class="ins-sum">日均 {{ yuan(avg7) }}</span>
+      <h2 class="ins-title">{{ t('insights.weekTitle') }}</h2>
+      <span class="ins-sum">{{ t('insights.dailyAvg', { amount: yuan(avg7) }) }}</span>
     </div>
     <div class="week">
       <router-link
@@ -29,7 +29,7 @@
         class="day"
         :class="{ 'day--today': d.today }"
         :to="{ path: '/transactions', query: { from: d.key, to: d.key, type: 'expense' } }"
-        :title="`${d.key} 支出 ${yuan(d.expense)}`"
+        :title="t('insights.dayTip', { date: d.key, amount: yuan(d.expense) })"
       >
         <span class="day-val">{{ d.expense ? compactYuan(d.expense) : '' }}</span>
         <span class="day-track"><i :style="{ height: dayHeight(d.expense) }" /></span>
@@ -41,6 +41,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import dayjs from 'dayjs'
 import { CHART_PALETTE } from '../composables/useChartTheme'
 import { compactYuan, yuan } from '../utils/stats'
@@ -55,8 +56,7 @@ export interface HomeInsightsData {
 }
 
 const props = defineProps<{ data: HomeInsightsData | null }>()
-
-const WEEKDAY = ['日', '一', '二', '三', '四', '五', '六']
+const { t } = useI18n()
 
 const total = computed(() => props.data?.categories?.total || 0)
 const points = computed(() => props.data?.week || [])
@@ -79,7 +79,7 @@ const week = computed(() => {
       key,
       expense: byKey.get(key) || 0,
       today: key === today,
-      label: key === today ? '今天' : `周${WEEKDAY[d.day()]}`,
+      label: key === today ? t('insights.today') : d.format('ddd'),
     }
   })
 })

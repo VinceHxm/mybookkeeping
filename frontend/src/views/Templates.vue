@@ -2,37 +2,37 @@
   <div class="page">
     <div class="toolbar">
       <v-btn icon="mdi-arrow-left" variant="text" to="/mine" />
-      <h1>记账模板</h1>
+      <h1>{{ t('templates.title') }}</h1>
       <v-btn icon="mdi-plus" variant="text" color="primary" @click="openCreate" />
     </div>
-    <p class="page-hint">记一笔可一键套用。绑定计费规则时，模板金额会作为原价计算建议价。</p>
+    <p class="page-hint">{{ t('templates.hint') }}</p>
 
     <div class="card-grid">
     <EntityCard
-      v-for="t in list"
-      :key="t.id"
-      :title="t.name"
-      :icon="t.icon || txTypeIcon(t.type)"
-      @edit="openEdit(t)"
-      @delete="askDelete(t)"
+      v-for="tpl in list"
+      :key="tpl.id"
+      :title="tpl.name"
+      :icon="tpl.icon || txTypeIcon(tpl.type)"
+      @edit="openEdit(tpl)"
+      @delete="askDelete(tpl)"
     >
       <template #badges>
-        <v-chip size="x-small" variant="tonal" color="primary">{{ typeLabel(t.type) }}</v-chip>
+        <v-chip size="x-small" variant="tonal" color="primary">{{ typeLabel(tpl.type) }}</v-chip>
       </template>
       <template #meta>
-        <div v-if="t.amount">金额 ¥{{ fenToYuan(t.amount) }}</div>
-        <div v-if="t.fareRule">规则 {{ t.fareRule.name }}</div>
-        <div v-if="geoLabel(t)">地点 {{ geoLabel(t) }}</div>
-        <div v-if="t.remark">备注 {{ t.remark }}</div>
+        <div v-if="tpl.amount">{{ t('templates.metaAmount', { amount: `¥${fenToYuan(tpl.amount)}` }) }}</div>
+        <div v-if="tpl.fareRule">{{ t('templates.metaRule', { name: tpl.fareRule.name }) }}</div>
+        <div v-if="geoLabel(tpl)">{{ t('templates.metaPlace', { name: geoLabel(tpl) }) }}</div>
+        <div v-if="tpl.remark">{{ t('templates.metaRemark', { text: tpl.remark }) }}</div>
       </template>
     </EntityCard>
     </div>
-    <div v-if="!list.length" class="empty-tip">暂无模板，点右上角添加</div>
+    <div v-if="!list.length" class="empty-tip">{{ t('templates.empty') }}</div>
 
     <!-- 宽屏：弹窗编辑 -->
     <v-dialog v-if="!isMobile" v-model="dialog" max-width="520" scrollable>
       <v-card>
-        <v-card-title>{{ editing ? '编辑模板' : '新建模板' }}</v-card-title>
+        <v-card-title>{{ editing ? t('templates.titleEdit') : t('templates.titleNew') }}</v-card-title>
         <v-card-text>
           <TemplateEditForm
             v-if="dialog"
@@ -45,8 +45,8 @@
         </v-card-text>
         <v-card-actions>
           <v-spacer />
-          <v-btn variant="text" @click="dialog = false">取消</v-btn>
-          <v-btn color="primary" :loading="dialogFormRef?.saving" @click="onDialogSave">保存</v-btn>
+          <v-btn variant="text" @click="dialog = false">{{ t('common.cancel') }}</v-btn>
+          <v-btn color="primary" :loading="dialogFormRef?.saving" @click="onDialogSave">{{ t('common.save') }}</v-btn>
         </v-card-actions>
       </v-card>
     </v-dialog>
@@ -63,6 +63,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import http from '../api/http'
 import EntityCard from '../components/EntityCard.vue'
 import DeleteConfirmDialog from '../components/DeleteConfirmDialog.vue'
@@ -71,6 +72,7 @@ import { fenToYuan, typeLabel } from '../utils/money'
 import { txTypeIcon } from '../utils/icons'
 import { useBreakpoint } from '../composables/useBreakpoint'
 
+const { t } = useI18n()
 const router = useRouter()
 const { isMobile } = useBreakpoint()
 
@@ -82,9 +84,9 @@ const confirmOpen = ref(false)
 const pendingDelete = ref<Template | null>(null)
 const deleting = ref(false)
 
-function geoLabel(t: Template) {
-  if (t.geoMode === 'route' && t.geoName && t.geoEndName) return `${t.geoName} → ${t.geoEndName}`
-  return t.geoName || (t.geoLng != null ? '已选位置' : '')
+function geoLabel(tpl: Template) {
+  if (tpl.geoMode === 'route' && tpl.geoName && tpl.geoEndName) return `${tpl.geoName} → ${tpl.geoEndName}`
+  return tpl.geoName || (tpl.geoLng != null ? t('templates.pickedLocation') : '')
 }
 
 async function reload() {
@@ -103,12 +105,12 @@ function openCreate() {
   dialog.value = true
 }
 
-function openEdit(t: Template) {
+function openEdit(tpl: Template) {
   if (isMobile.value) {
-    router.push(`/templates/${t.id}/edit`)
+    router.push(`/templates/${tpl.id}/edit`)
     return
   }
-  editing.value = t
+  editing.value = tpl
   dialog.value = true
 }
 
@@ -121,8 +123,8 @@ async function onDialogSaved() {
   await reload()
 }
 
-function askDelete(t: Template) {
-  pendingDelete.value = t
+function askDelete(tpl: Template) {
+  pendingDelete.value = tpl
   confirmOpen.value = true
 }
 
