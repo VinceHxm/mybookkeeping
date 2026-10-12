@@ -7,7 +7,9 @@ WORKDIR /src
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
-RUN npm run build
+# NAS（飞牛等）上传的文件权限位可能是 000、靠 ACL 授权；构建上下文不带 ACL，
+# public/ 原样拷入 dist 后运行时的非 root 用户读不到，统一放开读权限
+RUN npm run build && chmod -R u+rwX,go+rX dist
 
 # ---- backend ----
 FROM docker.m.daocloud.io/library/golang:1.22-alpine AS be-builder

@@ -140,6 +140,7 @@
     </section>
 
     <div v-if="flash" class="home-flash" role="status">{{ flash }}</div>
+    <InstallHint />
 
     <v-dialog v-model="confirmOpen" max-width="360">
       <v-card class="confirm-card">
@@ -190,6 +191,7 @@ import type { CreditRepayReminder } from '../stores/account'
 import { amountClass, fenToYuan, formatForeign, formatMoney, txSubCategory, txTitle, typeLabel } from '../utils/money'
 import type { Template } from '../components/TemplateEditForm.vue'
 import HomeInsights, { type HomeInsightsData } from '../components/HomeInsights.vue'
+import InstallHint from '../components/InstallHint.vue'
 import { useBreakpoint } from '../composables/useBreakpoint'
 
 const { t } = useI18n()
@@ -694,9 +696,10 @@ watch(wide, (isWide) => {
   padding: 8px 12px 14px !important;
 }
 
+/* 高度不够时先压缩可内部滚动的流水列表，避免裁掉上方的模板按钮 */
 .home-bottom {
-  flex: 0 1 auto;
-  min-height: 0;
+  flex: 0 20 auto;
+  min-height: 132px;
   max-height: clamp(168px, 34vh, 340px);
   display: flex;
   flex-direction: column;
@@ -812,8 +815,10 @@ watch(wide, (isWide) => {
   }
 }
 
-/* 矮屏（带浏览器工具栏的手机）：大按钮缩小、模板改单行横滑 */
-@media (max-width: 959px) and (max-height: 780px) {
+/* 矮屏（带浏览器工具栏的手机）：大按钮缩小、模板改单行横滑；
+   主屏幕 App 模式视口虽高，但状态栏与底部安全区占位更多，放宽到 900px */
+@media (max-width: 959px) and (max-height: 780px),
+  (max-width: 959px) and (max-height: 900px) and (display-mode: standalone) {
   .summary { padding: 8px 10px; }
   .summary-cell { padding: 2px 8px; }
   .big { font-size: clamp(1.2rem, 4.6vw, 1.5rem); margin-top: 2px; }

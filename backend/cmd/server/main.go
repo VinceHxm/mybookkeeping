@@ -4,7 +4,10 @@ import (
 	"context"
 	"crypto/rand"
 	"log"
+	"mime"
+	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -297,8 +300,24 @@ func serveFrontend(r *gin.Engine) {
 	if _, err := os.Stat(public); err != nil {
 		return
 	}
+	_ = mime.AddExtensionType(".webmanifest", "application/manifest+json")
 	r.Static("/assets", filepath.Join(public, "assets"))
 	r.NoRoute(func(c *gin.Context) {
+		if c.Request.Method == http.MethodGet || c.Request.Method == http.MethodHead {
+			rel := path.Clean("/" + c.Request.URL.Path)
+			if rel != "/" && !strings.HasPrefix(rel, "/api/") {
+				f := filepath.Join(public, filepath.FromSlash(rel))
+				if st, err := os.Stat(f); err == nil && !st.IsDir() {
+					// Service Worker 与 manifest 需每次校验，否则新版本无法及时生效
+					if rel == "/sw.js" || rel == "/registerSW.js" || rel == "/manifest.webmanifest" {
+						c.Header("Cache-Control", "no-cache")
+					}
+					c.File(f)
+					return
+				}
+			}
+		}
+		c.Header("Cache-Control", "no-cache")
 		c.File(filepath.Join(public, "index.html"))
 	})
 }
