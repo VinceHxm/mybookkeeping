@@ -10,6 +10,7 @@ import * as components from 'vuetify/components'
 import * as directives from 'vuetify/directives'
 import { en, ja, ko, zhHans } from 'vuetify/locale'
 
+import '@fontsource-variable/outfit'
 import './styles.css'
 import { getStoredTheme, resolveThemeMode, syncDocumentTheme } from './composables/useAppTheme'
 import { currentLocale, i18n, type AppLocale } from './i18n'

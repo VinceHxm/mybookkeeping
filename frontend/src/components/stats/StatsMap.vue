@@ -296,7 +296,7 @@ onUnmounted(() => {
   border: 2px solid #fff;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
   color: #fff;
-  font: 600 11px/1 'Outfit', 'Noto Sans SC', sans-serif;
+  font: 600 11px/1 'Outfit Variable', 'PingFang SC', 'Microsoft YaHei', sans-serif;
   white-space: nowrap;
   cursor: pointer;
   transition: transform 0.15s ease;

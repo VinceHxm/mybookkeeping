@@ -1,5 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;600;700&family=Outfit:wght@500;600;700&display=swap');
-
 :root,
 [data-theme='light'] {
   --bg: #eef5f0;
@@ -21,8 +19,8 @@
   --nav-rail-width: 232px;
   --radius-md: 14px;
   --radius-lg: 18px;
-  --font-ui: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  --font-display: 'Outfit', 'Noto Sans SC', sans-serif;
+  --font-ui: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  --font-display: 'Outfit Variable', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 
   /* 安全区 / 动态视口（各机型默认浏览器） */
   --sat: env(safe-area-inset-top, 0px);
@@ -102,6 +100,13 @@ body {
   :root {
     --page-max: 1120px;
     --content-pad-x: 28px;
+  }
+}
+
+/* 主屏幕 App 模式：底部安全区 34px 偏高，收到 18px 仍能避开 Home 横条（距底约 8~13px） */
+@media (display-mode: standalone) {
+  :root {
+    --sab: min(env(safe-area-inset-bottom, 0px), 18px);
   }
 }
 
@@ -435,6 +440,11 @@ a.link-primary:hover,
   max-height: none !important;
   padding-bottom: var(--sab) !important;
   box-sizing: border-box !important;
+}
+
+html.ios-standalone .v-bottom-navigation.nav {
+  top: calc(var(--app-height) - var(--nav-total-h)) !important;
+  bottom: auto !important;
 }
 
 .v-bottom-navigation.nav .v-btn {
