@@ -7,8 +7,9 @@ export default defineConfig({
   plugins: [
     vue(),
     VitePWA({
-      registerType: 'autoUpdate',
-      injectRegister: 'script-defer',
+      // 由 src/pwa.ts 手动注册并决定刷新时机（表单页不打断）
+      registerType: 'prompt',
+      injectRegister: false,
       includeAssets: ['favicon.ico', 'favicon.svg', 'apple-touch-icon-180x180.png', 'apple-touch-icon.png'],
       manifest: {
         name: '我的账本',

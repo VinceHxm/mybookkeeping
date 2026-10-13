@@ -10,16 +10,25 @@
     <div class="te-layout">
     <div class="te-main">
 
-    <div v-if="!isEdit" class="ai-row mb-3">
-      <v-btn variant="tonal" color="secondary" class="flex1" to="/transactions/recognize">
-        <v-icon start>mdi-robot</v-icon>
-        {{ t('txEdit.textRecognize') }}
-      </v-btn>
-      <v-btn variant="tonal" color="secondary" class="flex1" @click="showAI = true">
-        <v-icon start>mdi-camera</v-icon>
-        {{ t('txEdit.receiptRecognize') }}
-      </v-btn>
-    </div>
+    <section v-if="!isEdit" class="ai-hero mb-4">
+      <div class="ai-hero__head">
+        <span class="ai-hero__badge"><v-icon size="20">mdi-creation</v-icon></span>
+        <div class="ai-hero__text">
+          <strong>{{ t('txEdit.aiTitle') }}</strong>
+          <span>{{ t('txEdit.aiSubtitle') }}</span>
+        </div>
+      </div>
+      <div class="ai-hero__actions">
+        <v-btn variant="flat" class="ai-hero__btn flex1" to="/transactions/recognize">
+          <v-icon start>mdi-text-recognition</v-icon>
+          {{ t('txEdit.textRecognize') }}
+        </v-btn>
+        <v-btn variant="flat" class="ai-hero__btn flex1" @click="showAI = true">
+          <v-icon start>mdi-camera-outline</v-icon>
+          {{ t('txEdit.receiptRecognize') }}
+        </v-btn>
+      </div>
+    </section>
 
     <div v-if="!isEdit && templates.length" class="tpls mb-3">
       <v-chip
@@ -32,40 +41,33 @@
       >{{ tpl.name }}</v-chip>
     </div>
 
-    <v-btn-toggle v-model="uiMode" mandatory color="primary" class="mb-2 w100" divided>
-      <v-btn value="flow" class="flex1">{{ t('txEdit.modeFlow') }}</v-btn>
-      <v-btn value="transfer" class="flex1">{{ t('txType.transfer') }}</v-btn>
-      <v-btn value="repay" class="flex1">{{ t('txEdit.modeRepay') }}</v-btn>
-    </v-btn-toggle>
-
-    <div v-if="uiMode === 'flow'" class="flow-sub mb-3">
-      <v-btn-toggle v-model="flowKind" mandatory color="primary" density="comfortable" class="flow-kind" divided>
-        <v-btn value="expense" class="flex1" size="small">{{ t('txType.expense') }}</v-btn>
-        <v-btn value="income" class="flex1" size="small">{{ t('txType.income') }}</v-btn>
-      </v-btn-toggle>
+    <div class="kind-tabs" role="tablist">
+      <button
+        v-for="k in kindOptions"
+        :key="k.value"
+        type="button"
+        role="tab"
+        class="kind-tab"
+        :class="[`kind-tab--${k.value}`, { 'is-active': kind === k.value }]"
+        :aria-selected="kind === k.value"
+        @click="kind = k.value"
+      >{{ k.label }}</button>
     </div>
-    <div v-if="!isEdit && uiMode === 'flow' && flowKind === 'income'" class="mb-3">
-      <v-btn variant="tonal" color="info" block @click="refundOpen = true">
-        <v-icon start>mdi-ticket-percent-outline</v-icon>
-        {{ t('txEdit.refundFromVoucher') }}
-      </v-btn>
+    <div class="mode-sub mb-3">
+      <i18n-t v-if="uiMode === 'repay'" keypath="txEdit.repayHint" tag="p" class="mode-hint">
+        <template #bold><strong>{{ t('txEdit.repayHintBold') }}</strong></template>
+      </i18n-t>
+      <p v-else-if="uiMode === 'transfer'" class="mode-hint">{{ t('txEdit.transferHint') }}</p>
+      <v-btn
+        v-else-if="!isEdit && kind === 'income'"
+        variant="text"
+        color="info"
+        size="small"
+        class="refund-entry"
+        prepend-icon="mdi-ticket-percent-outline"
+        @click="refundOpen = true"
+      >{{ t('txEdit.refundFromVoucher') }}</v-btn>
     </div>
-    <i18n-t v-else-if="uiMode === 'repay'" keypath="txEdit.repayHint" tag="p" class="mode-hint mb-3">
-      <template #bold><strong>{{ t('txEdit.repayHintBold') }}</strong></template>
-    </i18n-t>
-    <p v-else class="mode-hint mb-3">{{ t('txEdit.transferHint') }}</p>
-
-    <FareRuleSection
-      v-if="!isEdit && uiMode === 'flow' && flowKind === 'expense'"
-      v-model:enabled="fareEnabled"
-      v-model:rule-id="form.fareRuleId"
-      :items="fareRuleItems"
-      :loading="farePreviewLoading"
-      :hint="fareHint"
-      @toggle="onFareToggle"
-      @picked="onFareRulePicked"
-      @apply="applySuggestedFare(true)"
-    />
 
     <div v-if="wasPending" class="pending-box mb-3">
       <div class="pending-title">
@@ -82,50 +84,24 @@
       />
     </div>
 
-    <v-text-field
-      v-model="amountYuan"
-      :label="wasPending && keepPending ? t('txEdit.amountEstimated') : t('txEdit.amount')"
-      type="number"
-      inputmode="decimal"
-      variant="outlined"
-      hide-details
-      class="amount-field mb-3"
-      prefix="¥"
-      @update:model-value="repay.onAmountManualEdit"
-    />
+    <label class="amount-card mb-4" :class="`amount-card--${kind}`">
+      <span class="amount-card__label">
+        {{ wasPending && keepPending ? t('txEdit.amountEstimated') : t('txEdit.amount') }}
+      </span>
+      <v-text-field
+        v-model="amountYuan"
+        type="number"
+        inputmode="decimal"
+        variant="plain"
+        placeholder="0.00"
+        hide-details
+        class="amount-field"
+        prefix="¥"
+        @update:model-value="repay.onAmountManualEdit"
+      />
+    </label>
 
-    <section v-if="form.type !== 'transfer'" class="form-section mb-3">
-      <div class="form-section__body">
-        <ForeignPaymentFields
-          v-model:enabled="fxEnabled"
-          v-model:currency="fxCurrency"
-          v-model:amount-yuan="fxAmountYuan"
-          :cny-fen="yuanToFen(amountYuan || '0')"
-          :estimated="wasPending && keepPending"
-        />
-      </div>
-    </section>
-
-    <CreditExtrasPanel
-      v-if="showCreditExtras"
-      v-model:periods="installmentPeriods"
-      v-model:interest-yuan="interestYuan"
-      v-model:defer-cycles="form.installmentDeferCycles"
-      :billing-day="creditBillingDay"
-      :happened-at="happenedLocal"
-      :statement="repay.statement.value"
-      :total-outstanding="repay.totalOutstanding.value"
-      :is-credit-expense="isCreditExpense"
-      :show-repay-actions="repayActive"
-      :repay-loading="repay.loading.value"
-      :amount-fen="yuanToFen(amountYuan || '0')"
-      :repay-base-fen="repay.baseFen.value"
-      @plan-changed="repay.onPlanChanged"
-      @suggest="repay.apply(true)"
-      @early-repay="repay.applyEarlyRepay"
-    />
-
-    <section class="form-section mb-3">
+    <section class="form-section details-section mb-3">
       <header class="form-section__head">
         <h3 class="form-section__title">{{ t('txEdit.details') }}</h3>
       </header>
@@ -165,7 +141,10 @@
           <v-btn icon="mdi-plus" variant="tonal" color="primary" :title="t('txEdit.addCategory')" @click="showQuickCategory = true" />
         </div>
 
-        <div class="form-field-row field">
+        <v-text-field v-model="form.remark" :label="t('txEdit.remark')" variant="outlined" hide-details class="field" />
+        <NativeDateField v-model="happenedLocal" :label="t('txEdit.time')" type="datetime-local" variant="outlined" hide-details class="field" />
+
+        <div class="form-field-row field field--last">
           <v-select
             v-model="form.tagIds"
             :items="tags.list"
@@ -181,9 +160,75 @@
           />
           <v-btn icon="mdi-plus" variant="tonal" color="primary" :title="t('txEdit.addTag')" @click="showQuickTag = true" />
         </div>
+      </div>
+    </section>
 
-        <v-text-field v-model="form.remark" :label="t('txEdit.remark')" variant="outlined" hide-details class="field" />
-        <NativeDateField v-model="happenedLocal" :label="t('txEdit.time')" type="datetime-local" variant="outlined" hide-details class="field field--last" />
+    <CreditExtrasPanel
+      v-if="showCreditExtras"
+      v-model:periods="installmentPeriods"
+      v-model:interest-yuan="interestYuan"
+      v-model:defer-cycles="form.installmentDeferCycles"
+      :billing-day="creditBillingDay"
+      :happened-at="happenedLocal"
+      :statement="repay.statement.value"
+      :total-outstanding="repay.totalOutstanding.value"
+      :is-credit-expense="isCreditExpense"
+      :show-repay-actions="repayActive"
+      :repay-loading="repay.loading.value"
+      :amount-fen="yuanToFen(amountYuan || '0')"
+      :repay-base-fen="repay.baseFen.value"
+      @plan-changed="repay.onPlanChanged"
+      @suggest="repay.apply(true)"
+      @early-repay="repay.applyEarlyRepay"
+    />
+
+    <div v-if="refundOfId" class="refund-link mb-3">
+      <v-icon size="16">mdi-ticket-percent-outline</v-icon>
+      <span class="flex1">{{ t('txEdit.refundLink') }}</span>
+      <v-btn size="small" variant="text" color="primary" :to="`/transactions/${refundOfId}`">{{ t('txEdit.viewVoucher') }}</v-btn>
+    </div>
+    </div>
+
+    <aside class="te-side">
+    <button
+      type="button"
+      class="more-toggle mb-3"
+      :class="{ 'is-open': moreOpen }"
+      :aria-expanded="moreOpen"
+      @click="moreOpen = !moreOpen"
+    >
+      <v-icon size="20" color="primary">mdi-tune-variant</v-icon>
+      <span class="more-toggle__text">
+        <strong>{{ t('txEdit.moreOptions') }}</strong>
+        <span>{{ moreSummary }}</span>
+      </span>
+      <span v-if="activeExtrasCount" class="more-toggle__count">{{ t('txEdit.moreActive', { n: activeExtrasCount }) }}</span>
+      <v-icon size="20" class="more-toggle__chevron">mdi-chevron-down</v-icon>
+    </button>
+
+    <v-expand-transition>
+    <div v-show="moreOpen" class="more-body">
+    <FareRuleSection
+      v-if="showFareRule"
+      v-model:enabled="fareEnabled"
+      v-model:rule-id="form.fareRuleId"
+      :items="fareRuleItems"
+      :loading="farePreviewLoading"
+      :hint="fareHint"
+      @toggle="onFareToggle"
+      @picked="onFareRulePicked"
+      @apply="applySuggestedFare(true)"
+    />
+
+    <section v-if="form.type !== 'transfer'" class="form-section mb-3">
+      <div class="form-section__body">
+        <ForeignPaymentFields
+          v-model:enabled="fxEnabled"
+          v-model:currency="fxCurrency"
+          v-model:amount-yuan="fxAmountYuan"
+          :cny-fen="yuanToFen(amountYuan || '0')"
+          :estimated="wasPending && keepPending"
+        />
       </div>
     </section>
 
@@ -239,29 +284,11 @@
       </div>
     </section>
 
-    <div v-if="refundOfId" class="refund-link mb-3">
-      <v-icon size="16">mdi-ticket-percent-outline</v-icon>
-      <span class="flex1">{{ t('txEdit.refundLink') }}</span>
-      <v-btn size="small" variant="text" color="primary" :to="`/transactions/${refundOfId}`">{{ t('txEdit.viewVoucher') }}</v-btn>
-    </div>
-
-    <FareRuleSection
-      v-if="isEdit"
-      v-model:enabled="fareEnabled"
-      v-model:rule-id="form.fareRuleId"
-      :items="fareRuleItems"
-      :loading="farePreviewLoading"
-      :hint="fareHint"
-      @toggle="onFareToggle"
-      @picked="onFareRulePicked"
-      @apply="applySuggestedFare(true)"
-    />
-    </div>
-
-    <aside class="te-side">
     <AttachmentUpload v-model="attachmentIds" :existing="existingAttachments" />
 
     <LocationSection v-model:geo="geo" />
+    </div>
+    </v-expand-transition>
     </aside>
     </div>
 
@@ -463,6 +490,51 @@ const creditBillingDay = computed(() =>
 )
 const repayActive = computed(() => isCreditRepay.value || isRepayMode.value)
 const showCreditExtras = computed(() => isCreditExpense.value || repayActive.value)
+
+type Kind = 'expense' | 'income' | 'transfer' | 'repay'
+/** 顶部平铺的四个类型，映射回 uiMode + flowKind */
+const kind = computed<Kind>({
+  get: () => (uiMode.value === 'flow' ? flowKind.value : uiMode.value),
+  set: (k) => {
+    if (k === 'expense' || k === 'income') {
+      flowKind.value = k
+      uiMode.value = 'flow'
+    } else {
+      uiMode.value = k
+    }
+  },
+})
+const kindOptions = computed<{ value: Kind; label: string }[]>(() => [
+  { value: 'expense', label: t('txType.expense') },
+  { value: 'income', label: t('txType.income') },
+  { value: 'transfer', label: t('txType.transfer') },
+  { value: 'repay', label: t('txEdit.modeRepay') },
+])
+
+const showFareRule = computed(() => isEdit.value || kind.value === 'expense')
+const moreOpen = ref(false)
+const activeExtrasCount = computed(() =>
+  [
+    showFareRule.value && fareEnabled.value,
+    form.type !== 'transfer' && fxEnabled.value,
+    form.type === 'expense' && voucherOn.value,
+    attachmentIds.value.length > 0,
+    form.geoLng != null,
+  ].filter(Boolean).length,
+)
+const moreSummary = computed(() =>
+  [
+    showFareRule.value && t('txEdit.fareRule.title'),
+    form.type !== 'transfer' && t('fx.title'),
+    form.type === 'expense' && t('txEdit.voucher'),
+    t('attachment.title'),
+    t('location.title'),
+  ].filter(Boolean).join(' · '),
+)
+/** 模板 / 识图 / 编辑回显带出了额外项时自动展开，避免用户看不到已填内容 */
+watch(activeExtrasCount, (n, prev) => {
+  if (n > (prev ?? 0)) moreOpen.value = true
+}, { immediate: true })
 
 const repay = useRepaySuggestion({
   amountYuan,
@@ -923,12 +995,176 @@ async function onDelete() {
 .toolbar h1 { font-size: 1.15rem; margin: 0; }
 .w100 { width: 100%; }
 .flex1 { flex: 1; min-width: 0; }
-.ai-row { display: flex; gap: 8px; }
-.amount-field :deep(input) {
-  font-size: 2rem;
-  font-weight: 700;
+.ai-hero {
+  padding: 14px;
+  border-radius: var(--radius-lg);
+  color: #fff;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.22), transparent 55%),
+    linear-gradient(135deg, #1b7f5a 0%, #2a9d8f 60%, #3a86c8 100%);
+  box-shadow: 0 10px 24px rgba(27, 127, 90, 0.22);
+}
+.ai-hero__head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; min-width: 0; }
+.ai-hero__badge {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.2);
+}
+.ai-hero__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ai-hero__text strong { font-size: 1rem; letter-spacing: 0.02em; }
+.ai-hero__text span { font-size: 0.76rem; line-height: 1.4; opacity: 0.88; overflow-wrap: anywhere; }
+.ai-hero__actions { display: flex; gap: 8px; }
+.ai-hero__btn {
+  background: rgba(255, 255, 255, 0.94) !important;
+  color: #146247 !important;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+[data-theme='dark'] .ai-hero {
+  background:
+    radial-gradient(circle at 100% 0%, rgba(255, 255, 255, 0.12), transparent 55%),
+    linear-gradient(135deg, #16654a 0%, #1f7a70 60%, #2c6a9e 100%);
+  box-shadow: none;
+}
+[data-theme='dark'] .ai-hero__btn {
+  background: rgba(255, 255, 255, 0.14) !important;
+  color: #fff !important;
+}
+
+.kind-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: rgba(var(--v-theme-on-surface), 0.06);
+}
+.kind-tab {
+  height: 38px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+.kind-tab.is-active {
+  background: var(--surface-solid);
+  color: var(--primary);
+  box-shadow: 0 2px 8px rgba(21, 38, 31, 0.1);
+}
+.kind-tab--expense.is-active { color: var(--expense); }
+[data-theme='dark'] .kind-tab.is-active {
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+.mode-sub { padding-top: 8px; }
+.mode-sub:empty { padding-top: 0; }
+.refund-entry { margin-left: -8px; }
+
+.amount-card {
+  display: block;
+  padding: 12px 16px 6px;
+  border-radius: var(--radius-lg);
+  border: 1.5px solid color-mix(in srgb, var(--primary) 35%, transparent);
+  background: color-mix(in srgb, var(--primary-soft) 70%, var(--surface-solid));
+  cursor: text;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.amount-card:focus-within {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+.amount-card--expense {
+  border-color: color-mix(in srgb, var(--expense) 35%, transparent);
+  background: color-mix(in srgb, var(--expense) 8%, var(--surface-solid));
+}
+.amount-card--expense:focus-within {
+  border-color: var(--expense);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--expense) 16%, transparent);
+}
+.amount-card__label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+/* 全局有 iOS 防缩放的 16px !important，金额需显式覆盖；前缀与输入同高才能垂直对齐 */
+.amount-field :deep(.v-field__input),
+.amount-field :deep(.v-text-field__prefix) {
+  min-height: 64px;
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: 1.1;
   font-family: var(--font-display);
+}
+.amount-field :deep(input.v-field__input) {
+  font-size: 2.75rem !important;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+.amount-field :deep(.v-text-field__prefix) {
+  font-size: 1.75rem;
+  font-weight: 600;
+  opacity: 0.75;
+}
+.amount-card--expense .amount-field :deep(input),
+.amount-card--expense .amount-field :deep(.v-text-field__prefix) { color: var(--expense); }
+.amount-card--income .amount-field :deep(input),
+.amount-card--income .amount-field :deep(.v-text-field__prefix) { color: var(--income); }
+
+.details-section .form-section__title { color: var(--muted); font-weight: 600; }
+
+.more-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px dashed color-mix(in srgb, var(--primary) 30%, transparent);
+  border-radius: 14px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.more-toggle.is-open { border-style: solid; border-color: var(--surface-border); }
+.more-toggle__text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.more-toggle__text strong { font-size: 0.92rem; }
+.more-toggle__text span {
+  font-size: 0.74rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.more-toggle__count {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+.more-toggle__chevron { transition: transform 0.2s ease; color: var(--muted); }
+.more-toggle.is-open .more-toggle__chevron { transform: rotate(180deg); }
+
+/* 宽屏右栏空间充足，额外选项常驻展开 */
+@media (min-width: 1200px) {
+  .more-toggle { pointer-events: none; border: 0; padding: 0 2px; }
+  .more-toggle__chevron { display: none; }
+  .more-body { display: block !important; height: auto !important; }
 }
 .tpls {
   display: flex;
@@ -1026,15 +1262,6 @@ async function onDelete() {
   background: color-mix(in srgb, #3b82c4 12%, transparent);
 }
 [data-theme='dark'] .refund-link { color: #9cc7ef; }
-.flow-sub {
-  display: flex;
-  justify-content: stretch;
-}
-.flow-kind {
-  width: 100%;
-  border-radius: 12px;
-  overflow: hidden;
-}
 .mode-hint {
   margin: 0;
   font-size: 0.8rem;

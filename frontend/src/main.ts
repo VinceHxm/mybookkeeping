@@ -14,6 +14,7 @@ import '@fontsource-variable/outfit'
 import './styles.css'
 import { getStoredTheme, resolveThemeMode, syncDocumentTheme } from './composables/useAppTheme'
 import { currentLocale, i18n, type AppLocale } from './i18n'
+import { setupPwaUpdate } from './pwa'
 
 const bootMode = syncDocumentTheme(getStoredTheme())
 
@@ -80,6 +81,8 @@ const vuetify = createVuetify({
 })
 
 createApp(App).use(createPinia()).use(i18n).use(router).use(vuetify).mount('#app')
+
+setupPwaUpdate(router)
 
 watch(i18n.global.locale, (l) => {
   vuetify.locale.current.value = VUETIFY_LOCALE[l as AppLocale]
